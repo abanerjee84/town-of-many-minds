@@ -54,6 +54,10 @@ const trips = (from, to) => Array.from({ length: 8 }, () => ({ from, to, weight:
   const hotspot = new Map([[g.idx(9, 1), { visits: 20, delay: 12 }]]);
   const hotspotChoice = chooseRoadExtension(g, runs, { cells: hotspot, trips: [] }, roadComponents(g));
   assert.equal(hotspotChoice, null, 'a same-component shortcut may not be justified by a hotspot alone');
+
+  const flowing = new Map([[g.idx(3, 5), { visits: 120, delay: 0 }]]);
+  assert.equal(chooseRoadExtension(g, [longSpur], { cells: flowing, trips: [] }, roadComponents(g)), null,
+    'throughput without delay must not create a hotspot street');
 }
 
 {
@@ -66,6 +70,49 @@ const trips = (from, to) => Array.from({ length: 8 }, () => ({ from, to, weight:
   assert.equal(choice.reason, 'connects trips');
   assert.equal(chooseRoadExtension(g, [longSpur, shortcut], { cells: new Map(), trips: [] },
     roadComponents(g)).reason, 'joins networks');
+
+  const measuredRun = { cells: [[3, 2], [3, 3], [3, 4]], joins: true, junctionDelta: 2 };
+  const measured = new Map([[g.idx(3, 1), { visits: 4, delay: 8 }]]);
+  const hotspotChoice = chooseRoadExtension(g, [shortcut, measuredRun], { cells: measured, trips: [] }, roadComponents(g));
+  assert.deepEqual(hotspotChoice.cells, measuredRun.cells,
+    'a measured delayed corridor outranks a generic component join when OD history is sparse');
+  assert.equal(hotspotChoice.reason, 'relieves measured queue');
+}
+
+{
+  // A delayed road cell in the middle of a straight corridor may justify one
+  // carefully aligned bypass, but only when the run reconnects to another
+  // street. This is the demand-directed exception to the road-end rule.
+  const g = new Grid(14, 12);
+  for (let x = 1; x <= 10; x++) {
+    g.setKind(x, 3, CELL_KIND.ROAD);
+    g.setKind(x, 8, CELL_KIND.ROAD);
+  }
+  g.computeRoadMask();
+  const demand = { cells: new Map([[g.idx(4, 3), { visits: 5, delay: 10 }]]), trips: [] };
+  const town = {
+    grid: g,
+    roadGraphVersion: 1,
+    buildingAt: () => null,
+    resources: { ownsCell: () => false },
+    traffic: { roadDemandSnapshot: () => demand }
+  };
+  const growth = Object.create(GrowthSystem.prototype);
+  growth.town = town;
+  growth.claims = new Set();
+  const branchRuns = growth.roadRuns([4, 4], { demand, allowMeasuredBranches: true });
+  const branch = branchRuns.find((run) => run.measuredBranch);
+  assert.ok(branch, 'a measured middle-corridor bypass must reconnect to a street');
+  assert.equal(branch.junctionDelta, 2, 'the bypass records both deliberate junctions');
+  assert.deepEqual(chooseRoadExtension(g, [branch], demand, roadComponents(g)).cells, branch.cells,
+    'the planner can select the demand-directed bypass');
+  const selected = growth.selectRoadExtension();
+  assert.deepEqual(selected?.cells, branch.cells,
+    'the live growth selector forwards measured pressure into road-run generation');
+  assert.equal(growth.roadSelectionValid(selected), true,
+    'the final construction validator preserves the measured bypass quote');
+  assert.equal(growth.roadRuns([4, 4]).length, 0,
+    'the same middle branch remains unavailable without measured demand');
 }
 
 {

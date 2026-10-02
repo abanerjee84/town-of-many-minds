@@ -86,6 +86,17 @@ Updated 2026-10-03 after the tourism, hotel/resort, and hospitality-economy audi
 - [x] Added tourism growth gates: hotels require population and positive measured demand; resorts require an existing hotel, stronger demand, and high hotel occupancy. This prevents destination capacity from arriving before the town has a functioning visitor economy.
 - [x] Added Council tourism evidence with visitors, occupied/free rooms, demand, appeal, occupancy, and nightly revenue. The Council can now compare hospitality investment with weather, mood, approval, and existing attractions.
 
+## Current sprint (2026-10-03, congestion-directed street planning)
+
+- [x] Audited the complete `EXTEND_STREET` path from traffic demand sampling through GrowthSystem candidate generation, graph scoring, finance, stale-selection validation, and asphalt commit.
+- [x] Made measured road-cell delay the location signal. High visits with zero delay no longer qualify as a hotspot, and sparse OD history now selects a delayed corridor before a generic component join.
+- [x] Added a strict demand-qualified bypass for a delayed straight corridor: it can connect a middle road cell to a nearby street within the four-tile order, records its two deliberate junctions, and remains unavailable without current measured pressure.
+- [x] Kept same-component loop closures behind positive measured OD relief; topology and hotspot evidence alone cannot create a loop. Ordinary extensions remain aligned to degree-one road ends and opposing road gaps.
+- [x] Fixed a four-tile connector edge case where the planner stopped before inspecting the road immediately beyond the maximum run, silently rejecting a valid full-length reconnection.
+- [x] Added regression coverage for flowing-but-undelayed traffic, sparse-history hotspot priority, live bypass generation/selection, and the no-demand middle-branch guard in `scripts/_road_extension_check.mjs`.
+- [x] Ran a bounded 200-day forced road horizon for seeds 42 and 1337: both stayed at one connected component with zero unacquired roads, zero off-road/unmarked vehicles, clean accounting audits, and no arbitrary `EXTEND_STREET` order while completed-trip evidence remained empty.
+- [ ] Re-run the full 800-day seed matrix after a longer browser soak and compare congestion relief, component count, unacquired roads, and off-road vehicles against the prior baseline.
+
 ## Regression coverage
 
 - [x] `npm run build`

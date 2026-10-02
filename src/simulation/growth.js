@@ -11,7 +11,7 @@ import { XS_CLASS_ORDER, XS_CLASS_LABEL, classIndex } from '../kits/roads/crossS
 import { ORDER as RESOURCE_ORDER, SITE_LABEL, spurPath, MAX_SPUR_LENGTH } from '../kits/resources/resourceKit.js';
 import { snapshotProjectWorld, restoreProjectWorld } from './projectSnapshot.js';
 import { DIRS } from '../core/grid.js';
-import { chooseRoadExtension, sameComponentClosure } from './roadExtensionPlanner.js';
+import { chooseRoadExtension, sameComponentClosure, roadCellPressure, MIN_HOTSPOT_PRESSURE } from './roadExtensionPlanner.js';
 import { constructionBlock, constructionBlockQuote } from '../kits/constructionBlocks.js';
 import { civicVerticalCap } from '../kits/civic/civicKit.js';
 import { agriculturalSetbackConflict, resourceSetbackConflict, educationCampusConflict } from '../placement/siteRules.js';
@@ -3579,7 +3579,7 @@ export class GrowthSystem {
    *   `cells`  — the run. A single tile is only worth ordering when it joins
    *              something; otherwise an order lays 3–4 tiles of new street.
    */
-  roadRuns(anchor) {
+  roadRuns(anchor, options = {}) {
     if (!anchor) return [];
     const t = this.town;
     const g = t.grid;
@@ -3591,6 +3591,12 @@ export class GrowthSystem {
       !t.resources?.ownsCell(x, y) &&
       !this.claims.has(`${x},${y}`);
     const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    const demandCells = options.demand?.cells;
+    const allowMeasuredBranches = options.allowMeasuredBranches === true && demandCells?.get;
+    const pressureAt = (x, y) => {
+      if (!allowMeasuredBranches || !g.isRoad(x, y)) return 0;
+      return roadCellPressure(demandCells.get(g.idx(x, y)));
+    };
     const nbrs = [[0, -1], [1, 0], [0, 1], [-1, 0]];
     const opposing = dirs.filter(([dx, dy]) => g.isRoad(anchor[0] + dx, anchor[1] + dy));
     const wasRoad = (x, y) => g.inBounds(x, y) && g.isRoad(x, y);
@@ -3643,7 +3649,11 @@ export class GrowthSystem {
         opposing.some(([ox, oy]) => ox === dx && oy === dy) &&
         opposing.some(([ox, oy]) => ox === -dx && oy === -dy);
       let joins = axisBridge;
-      while (cells.length < EXTEND_STREET_TILES) {
+      // Inspect the cell immediately beyond the four-tile cap as well. A
+      // connector may legitimately spend all four new tiles and then land on
+      // an existing road; stopping the loop before that check silently turned
+      // a valid bypass into a rejected spur.
+      while (true) {
         const [px, py] = cells[cells.length - 1];
         const nx = px + dx;
         const ny = py + dy;
@@ -3651,6 +3661,7 @@ export class GrowthSystem {
           if (cells.length > 1) joins = true;
           break;
         }
+        if (cells.length >= EXTEND_STREET_TILES) break;
         if (!free(nx, ny)) break;
         cells.push([nx, ny]);
       }
@@ -3685,9 +3696,18 @@ export class GrowthSystem {
       const startsAtRoadEnd = backRoad && roadDegree(back[0], back[1]) === 1;
       const end = cells[cells.length - 1];
       const forwardRoad = g.isRoad(end[0] + dx, end[1] + dy);
+      // A straight bypass from the middle of a delayed corridor is the one
+      // deliberate exception to the road-end rule. It is only generated when
+      // the source cell has measured delay and the run actually reconnects to
+      // another street. The planner still has to prove OD relief (or a real
+      // component join) before construction, so this cannot become a generic
+      // branch generator.
+      const sourcePressure = pressureAt(back[0], back[1]);
+      const measuredBranch = sourcePressure >= MIN_HOTSPOT_PRESSURE && backRoad && roadDegree(back[0], back[1]) === 2 &&
+        firstRoads === 1 && joins && forwardRoad;
       const startOk = cells.length === 1 && joins
         ? firstRoads === 2 && backRoad && forwardRoad
-        : firstRoads === 1 && startsAtRoadEnd;
+        : firstRoads === 1 && (startsAtRoadEnd || measuredBranch);
       const endOk = !joins ? lastRoads === 0 : lastRoads >= 1 && forwardRoad;
       // A corridor that closes onto two already-busy junctions creates a
       // compact lattice of crossings rather than a useful street. Keep
@@ -3719,12 +3739,16 @@ export class GrowthSystem {
       // multi-junction shortcut before demand scoring can reward it.
       if (!shapeOk || !bridgeEndsOpen || busyEndpoint) continue;
       const delta = junctionDelta(cells);
-      if (delta > 1) continue;
+      // A measured middle-corridor bypass necessarily creates a junction at
+      // both its source and destination. That two-junction shape is allowed
+      // only for this demand-qualified connector; unmeasured runs keep the
+      // one-junction cap that prevents checkerboard paving.
+      if (delta > 1 && !measuredBranch) continue;
       // Length is the point of the order, a join is worth a nudge (EXTEND_STREET
       // may either connect two roads or add a run), but every junction it lays
       // costs more than the tile that caused it.
       const score = cells.length * 2 - delta * 6 + (joins ? 4 : 0);
-      runs.push({ cells, joins, junctionDelta: delta, score });
+      runs.push({ cells, joins, junctionDelta: delta, score, measuredBranch: !!measuredBranch, sourcePressure });
     }
     return runs;
   }
@@ -3751,7 +3775,8 @@ export class GrowthSystem {
       (!this.town.perimeter || this.town.perimeter.isAcquired(x, y)) &&
       !this.town.buildingAt(x, y) && !this.town.resources?.ownsCell(x, y) &&
       !this.claims.has(`${x},${y}`))) return false;
-    return this.roadRuns([ax, ay]).some((run) =>
+    const demand = this.town.traffic?.roadDemandSnapshot?.() || { cells: new Map(), trips: [] };
+    return this.roadRuns([ax, ay], { demand, allowMeasuredBranches: true }).some((run) =>
       (run.joins || run.cells.length >= EXTEND_STREET_TILES - 1) &&
       run.cells.length === selection.cells.length &&
       run.cells.every(([x, y], i) => x === selection.cells[i][0] && y === selection.cells[i][1]));
@@ -3795,7 +3820,7 @@ export class GrowthSystem {
         if (grid.isRoad(x + dx, y + dy)) roads++;
       }
       if (roads < 1 || roads > 3) return;
-      for (const run of this.roadRuns([x, y])) {
+      for (const run of this.roadRuns([x, y], { demand, allowMeasuredBranches: true })) {
         if (!run.joins && run.cells.length < EXTEND_STREET_TILES - 1) continue;
         runs.push(run);
       }
