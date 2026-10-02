@@ -14,6 +14,7 @@ export const SETTINGS_DEFAULTS = Object.freeze({
   glowIntensity: 1,
   councilTemperature: 0.15,
   autoCouncil: true,
+  fitTown: true,
   defaultSpeed: 100,
   cameraYaw: 34.5,
   cameraPitch: 64,
@@ -49,6 +50,7 @@ function normalise(patch = {}) {
       ? Math.round(clamp(temperature, 0, 1) * 100) / 100
       : SETTINGS_DEFAULTS.councilTemperature,
     autoCouncil: patch.autoCouncil !== false,
+    fitTown: patch.fitTown !== false,
     defaultSpeed: [0, 1, 2, 4, 10, 20, 50, 100].includes(speed)
       ? speed
       : SETTINGS_DEFAULTS.defaultSpeed,

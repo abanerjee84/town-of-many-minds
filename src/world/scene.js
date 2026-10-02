@@ -352,6 +352,44 @@ export class SceneManager {
     this.cameraYaw = yaw;
   }
 
+  /**
+   * Frame the complete acquired town envelope without changing the current
+   * orbit direction. The fit toggle calls this when the perimeter grows, so
+   * expansion remains visible while manual orbit and pan still feel natural.
+   */
+  fitTown(bounds, grid, { padding = 1.35 } = {}) {
+    if (!bounds || !grid || ![bounds.minX, bounds.minY, bounds.maxX, bounds.maxY].every(Number.isFinite)) return null;
+    const min = grid.cellToWorld(bounds.minX, bounds.minY);
+    const max = grid.cellToWorld(bounds.maxX, bounds.maxY);
+    const width = Math.max(CELL, (bounds.maxX - bounds.minX + 1) * CELL);
+    const depth = Math.max(CELL, (bounds.maxY - bounds.minY + 1) * CELL);
+    const target = {
+      x: (min.x + max.x) / 2,
+      z: (min.z + max.z) / 2
+    };
+    const currentPitch = this.controls.getPolarAngle();
+    const currentYaw = currentPitch < 0.0001 ? this.cameraYaw : this.controls.getAzimuthalAngle();
+    const polar = THREE.MathUtils.clamp(currentPitch, 0, this.controls.maxPolarAngle);
+    const diagonal = Math.hypot(width, depth);
+    const distance = THREE.MathUtils.clamp(
+      diagonal * Number(padding || 1.35),
+      this.controls.minDistance,
+      this.controls.maxDistance
+    );
+    const horizontal = Math.sin(polar) * distance;
+    this.controls.target.set(target.x, 0, target.z);
+    this.camera.up.copy(this.homeUp);
+    this.camera.position.set(
+      target.x + Math.sin(currentYaw) * horizontal,
+      Math.cos(polar) * distance,
+      target.z + Math.cos(currentYaw) * horizontal
+    );
+    this.camera.lookAt(target.x, 0, target.z);
+    this.controls.update();
+    this.cameraYaw = currentYaw;
+    return { ...target, distance, bounds: { ...bounds } };
+  }
+
   render() {
     this.controls.update();
     this.renderer.render(this.scene, this.camera);

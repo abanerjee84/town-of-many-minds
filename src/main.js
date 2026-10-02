@@ -33,10 +33,35 @@ const interaction = new Interaction({
   clock
 });
 
+let fitTownEnabled = getSettings().fitTown !== false;
+const fitTownButton = document.getElementById('fit-town');
+
+function updateFitTownControl() {
+  if (!fitTownButton) return;
+  fitTownButton.classList.toggle('active', fitTownEnabled);
+  fitTownButton.setAttribute('aria-pressed', String(fitTownEnabled));
+  fitTownButton.title = fitTownEnabled
+    ? 'Auto-fit the whole acquired town as it expands'
+    : 'Keep the current camera framing';
+}
+
+function fitTownToView() {
+  const bounds = town.perimeter?.stats?.().bounds;
+  if (!bounds) return null;
+  const pose = sceneMgr.fitTown(bounds, town.grid);
+  updateCameraReadout();
+  return pose;
+}
+updateFitTownControl();
+
 // The pale ground is the acquired town perimeter. The broader dark skirt is
 // future land; each successful acquisition expands the visible buildable
 // surface so perimeter growth is legible in the world, not only in the HUD.
-const syncPlayableGround = () => sceneMgr.setPlayableBounds(town.perimeter?.stats?.().bounds, town.grid);
+const syncPlayableGround = () => {
+  const bounds = town.perimeter?.stats?.().bounds;
+  sceneMgr.setPlayableBounds(bounds, town.grid);
+  if (fitTownEnabled) fitTownToView();
+};
 events.on('land-acquired', syncPlayableGround);
 events.on('land-released', syncPlayableGround);
 
@@ -58,7 +83,7 @@ function updateCameraReadout() {
   pan.textContent = `x ${controls.target.x.toFixed(1)} · z ${controls.target.z.toFixed(1)}`;
 }
 
-function applySettingsToRuntime({ speed = false, camera = false, population = false } = {}) {
+function applySettingsToRuntime({ speed = false, camera = false, population = false, fit = false } = {}) {
   const settings = getSettings();
   // SIM is a shared runtime contract used by lifecycle admission and citizen
   // spawning. Apply the persisted cap before the first generate() call and on
@@ -66,6 +91,9 @@ function applySettingsToRuntime({ speed = false, camera = false, population = fa
   if (population || SIM.maxCitizens !== settings.maxPopulation) SIM.maxCitizens = settings.maxPopulation;
   if (speed) clock.speed = settings.defaultSpeed;
   if (camera) sceneMgr.applyCameraDefaults(settings);
+  fitTownEnabled = settings.fitTown !== false;
+  updateFitTownControl();
+  if (fit && fitTownEnabled) fitTownToView();
   if (town.governance) {
     town.governance.temperature = settings.councilTemperature;
     town.governance.auto = settings.autoCouncil;
@@ -237,7 +265,7 @@ function renderSettings() {
   bindCameraNumber('setting-camera-target-z', 'cameraTargetZ');
   document.getElementById('settings-reset').addEventListener('click', () => {
     resetSettings();
-    applySettingsToRuntime({ speed: true, camera: true, population: true });
+    applySettingsToRuntime({ speed: true, camera: true, population: true, fit: true });
     renderSettings();
   });
   modal.classList.remove('hidden');
@@ -288,10 +316,10 @@ document.getElementById('seed-input').addEventListener('keydown', (e) => {
 document.getElementById('reset-town').addEventListener('click', () => {
   const seed = currentSeed();
   town.fullReset(seed);
-  syncPlayableGround();
   clock.reset();
   sceneMgr.resetView();
-  applySettingsToRuntime({ speed: true, camera: true, population: true });
+  applySettingsToRuntime({ speed: true, camera: true, population: true, fit: true });
+  syncPlayableGround();
   hud.clearLog();
   interaction.select(null);
   const s = town.stats();
@@ -301,20 +329,11 @@ document.getElementById('reset-town').addEventListener('click', () => {
   });
 });
 
-document.getElementById('view-centre').addEventListener('click', () => {
-  const junctions = town.grid.roadCells().filter(([x, y]) => town.grid.roadDegree(x, y) >= 3);
-  let centre = null;
-  let best = Infinity;
-  for (const cell of junctions) {
-    const p = town.grid.cellToWorld(cell[0], cell[1]);
-    const d = p.x * p.x + p.z * p.z;
-    if (d < best) {
-      best = d;
-      centre = p;
-    }
-  }
-  sceneMgr.focusCentre(centre?.x || 0, centre?.z || 0, getSettings());
-  updateCameraReadout();
+fitTownButton?.addEventListener('click', () => {
+  fitTownEnabled = !fitTownEnabled;
+  updateSettings({ fitTown: fitTownEnabled });
+  updateFitTownControl();
+  if (fitTownEnabled) fitTownToView();
 });
 
 const cameraActions = {
@@ -325,7 +344,7 @@ const cameraActions = {
   'zoom-in': () => sceneMgr.nudgeCamera({ zoom: -20 }),
   'zoom-out': () => sceneMgr.nudgeCamera({ zoom: 20 }),
   'camera-home': () => sceneMgr.resetView(),
-  'camera-centre': () => document.getElementById('view-centre').click()
+  'camera-fit': () => fitTownToView()
 };
 const cameraPresets = {
   iso: { yaw: 45, pitch: 55, zoom: 360 },

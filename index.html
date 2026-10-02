@@ -321,8 +321,9 @@
         padding: 4px 7px;
       }
       #tools #reset-town { flex: none; }
-      #tools #view-centre { flex: none; color: #79c0ff; }
-      #tools #view-centre:hover { color: #fff; }
+      #tools #fit-town { flex: none; color: #79c0ff; }
+      #tools #fit-town:hover { color: #fff; }
+      #tools #fit-town.active { background: #238636; border-color: #2ea043; color: #fff; }
       #tools #settings-toggle {
         flex: none;
         min-width: 31px;
@@ -436,7 +437,7 @@
            buttons' vertical hit target. */
         #tools .tool-grid button { padding: 5px 0; }
         #tools .speed-row button { padding: 4px; }
-        #tools #view-centre,
+        #tools #fit-town,
         #tools #reset-town,
         #tools #settings-toggle { padding: 4px 6px; }
       }
@@ -1269,7 +1270,7 @@
       <button class="camera-tool" data-camera-action="zoom-in" title="Zoom in 20 metres" aria-label="Zoom in">＋</button>
       <button class="camera-tool" data-camera-action="zoom-out" title="Zoom out 20 metres" aria-label="Zoom out">−</button>
       <span class="camera-divider" aria-hidden="true"></span>
-      <button class="camera-tool" data-camera-action="camera-centre" title="Focus town centre" aria-label="Focus town centre">◎</button>
+      <button class="camera-tool" data-camera-action="camera-fit" title="Fit the whole town" aria-label="Fit the whole town">◎</button>
       <button class="camera-tool" data-camera-action="camera-home" title="Restore camera defaults" aria-label="Restore camera defaults">⌂</button>
       <span class="camera-divider" aria-hidden="true"></span>
       <button class="camera-tool camera-preset" data-camera-preset="iso" title="Isometric view" aria-label="Isometric view">ISO</button>
@@ -1298,7 +1299,7 @@
         <input id="seed-input" value="1337" spellcheck="false" aria-label="Town seed" />
         <button id="regen" title="Regenerate town">Regen</button>
       </div>
-      <button id="view-centre" title="Top-down view of the town-centre junction">Town Centre</button>
+      <button id="fit-town" class="active" type="button" aria-pressed="true" title="Keep the whole acquired town in view">Fit Town</button>
       <button id="settings-toggle" title="Open simulation settings" aria-label="Open simulation settings">⚙</button>
       <button id="reset-town" title="Reset town, clock, camera and log">Reset</button>
     </div>

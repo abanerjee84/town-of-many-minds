@@ -3479,12 +3479,30 @@ export class GrowthSystem {
     for (const [x, y] of spur) {
       if (!g.inBounds(x, y)) continue;
       if (g.isRoad(x, y)) continue;
+      // Access roads are real construction too. Remove canopy and understory
+      // before changing the cell kind so a tree can never render in asphalt.
+      this.town.clearProps(x, y);
       g.setKind(x, y, CELL_KIND.ROAD);
       g.zone[g.idx(x, y)] = null;
       g.owner[g.idx(x, y)] = null;
     }
     this.town.rebuildStatic();
     return true;
+  }
+
+  /** Clear vegetation from a construction footprint before work begins. */
+  clearConstructionSite(plan, cell = null) {
+    const raw = plan?.cells?.length ? plan.cells : (cell ? [cell] : []);
+    const cells = [...new Set(raw.map(([x, y]) => `${x},${y}`))]
+      .map((key) => key.split(',').map(Number));
+    let felled = 0;
+    for (const [x, y] of cells) felled += this.town.clearProps(x, y);
+    if (felled) {
+      events.emit('log', {
+        text: `Construction clears ${felled} tree${felled === 1 ? '' : 's'} — ${felled * 4} lumber to the storehouse.`
+      });
+    }
+    return felled;
   }
 
   commitSpur(plan) {
@@ -4565,7 +4583,11 @@ export class GrowthSystem {
       return false;
     }
     let ok = false;
-    try { this.commitSpur(plan); ok = !!plan.run(cell, plan.target, plan); }
+    try {
+      this.clearConstructionSite(plan, cell);
+      this.commitSpur(plan);
+      ok = !!plan.run(cell, plan.target, plan);
+    }
     catch (error) { this.lastBlock = error?.message || 'project_execution_failed'; }
     if (!ok) {
       // An executor that returns falsy WITHOUT throwing is still a failure, and
@@ -4646,6 +4668,7 @@ export class GrowthSystem {
     }
     const beforeSpur = snapshotProjectWorld(this.town);
     try {
+      this.clearConstructionSite(plan, cell);
       this.commitSpur(plan);
       if (!this.reserveSiteLand(plan)) throw new Error(this.lastBlock || 'site land acquisition failed');
     }

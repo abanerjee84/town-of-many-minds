@@ -2,7 +2,7 @@ import { chromium } from 'playwright';
 
 const URL = process.env.APP_URL || 'http://localhost:5174';
 const REQUIRED_IDS = [
-  'hud', 'tools', 'tool-grid', 'seed-input', 'regen', 'reset-town',
+  'hud', 'tools', 'tool-grid', 'seed-input', 'regen', 'reset-town', 'fit-town',
   'settings-toggle', 'camera-toolbar', 'camera-readout', 'camera-orbit', 'camera-zoom', 'camera-pan',
   'stat-pop', 'stat-bld', 'stat-treasury', 'council', 'council-feedback',
   'council-thought', 'council-learning', 'society-feedback', 'society-feedback-summary',
@@ -32,6 +32,13 @@ const result = await page.evaluate((required) => {
     cameraToolbar: {
       actions: [...document.querySelectorAll('#camera-toolbar [data-camera-action]')].map((el) => el.dataset.cameraAction),
       presets: [...document.querySelectorAll('#camera-toolbar [data-camera-preset]')].map((el) => el.dataset.cameraPreset)
+    },
+    fitTown: {
+      pressed: document.getElementById('fit-town')?.getAttribute('aria-pressed'),
+      active: document.getElementById('fit-town')?.classList.contains('active'),
+      stored: JSON.parse(localStorage.getItem('town3.settings') || '{}').fitTown,
+      target: window.sceneMgr.controls.target.toArray(),
+      bounds: town.perimeter?.stats?.().bounds || null
     }
   };
   return { missing, stats };
@@ -47,6 +54,11 @@ await page.evaluate(() => {
 await page.click('#reset-town');
 const resetCameraTarget = await page.evaluate(() => window.sceneMgr.controls.target.toArray());
 result.stats.resetCameraTarget = resetCameraTarget;
+result.stats.resetFitTown = await page.evaluate(() => ({
+  pressed: document.getElementById('fit-town')?.getAttribute('aria-pressed'),
+  target: window.sceneMgr.controls.target.toArray(),
+  bounds: window.town.perimeter?.stats?.().bounds || null
+}));
 await page.click('[data-camera-action="orbit-right"]');
 result.stats.cameraToolbarMutation = await page.evaluate(() => ({
   readout: document.getElementById('camera-orbit')?.textContent,
@@ -57,13 +69,28 @@ result.stats.cameraPresetMutation = await page.evaluate(() => ({
   orbit: document.getElementById('camera-orbit')?.textContent,
   zoom: document.getElementById('camera-zoom')?.textContent
 }));
-await page.click('#view-centre');
-result.stats.townCentreCamera = await page.evaluate(() => ({
-  target: window.sceneMgr.controls.target.toArray(),
-  yaw: window.sceneMgr.controls.getAzimuthalAngle() * 180 / Math.PI,
-  pitch: window.sceneMgr.controls.getPolarAngle() * 180 / Math.PI,
-  zoom: window.sceneMgr.camera.position.distanceTo(window.sceneMgr.controls.target)
+await page.click('#fit-town');
+result.stats.fitTownOff = await page.evaluate(() => ({
+  pressed: document.getElementById('fit-town')?.getAttribute('aria-pressed'),
+  stored: JSON.parse(localStorage.getItem('town3.settings') || '{}').fitTown
 }));
+await page.click('#fit-town');
+result.stats.fitTownOn = await page.evaluate(() => ({
+  pressed: document.getElementById('fit-town')?.getAttribute('aria-pressed'),
+  stored: JSON.parse(localStorage.getItem('town3.settings') || '{}').fitTown
+}));
+await page.evaluate(() => {
+  const cell = window.town.perimeter?.frontierCells?.(1)?.[0];
+  if (cell) window.town.perimeter.acquire([cell], { charge: false });
+});
+result.stats.expansionFit = await page.evaluate(() => {
+  const bounds = window.town.perimeter?.stats?.().bounds;
+  return {
+    target: window.sceneMgr.controls.target.toArray(),
+    bounds,
+    zoom: window.sceneMgr.camera.position.distanceTo(window.sceneMgr.controls.target)
+  };
+});
 await page.click('#reset-town');
 
 await page.click('#settings-toggle');
@@ -128,7 +155,8 @@ result.stats.settingsReset = await page.evaluate(() => ({
   stored: JSON.parse(localStorage.getItem('town3.settings') || '{}').residentsPerTilePerFloor,
   targetX: window.sceneMgr.controls.target.x,
   targetZ: window.sceneMgr.controls.target.z,
-  zoom: window.sceneMgr.camera.position.distanceTo(window.sceneMgr.controls.target)
+  zoom: window.sceneMgr.camera.position.distanceTo(window.sceneMgr.controls.target),
+  fitTown: JSON.parse(localStorage.getItem('town3.settings') || '{}').fitTown
 }));
 await page.click('#modal-close');
 await page.setViewportSize({ width: 1024, height: 768 });
@@ -136,7 +164,8 @@ result.stats.ribbon1024 = await page.evaluate(() => {
   const tools = document.getElementById('tools').getBoundingClientRect();
   const settings = document.getElementById('settings-toggle').getBoundingClientRect();
   const reset = document.getElementById('reset-town').getBoundingClientRect();
-  return { overflow: settings.right > tools.right + 1 || reset.right > tools.right + 1 };
+  const fit = document.getElementById('fit-town').getBoundingClientRect();
+  return { overflow: settings.right > tools.right + 1 || reset.right > tools.right + 1 || fit.right > tools.right + 1 };
 });
 
 const failures = [
@@ -147,11 +176,12 @@ const failures = [
   ...(!result.stats.providerHooks ? ['council/provider hooks are not exposed'] : []),
   ...(result.stats.cameraToolbar?.actions?.length !== 8 || result.stats.cameraToolbar?.presets?.join(',') !== 'iso,top,north,east' ? ['camera toolbar is missing a nudge or preset control'] : []),
   ...(result.stats.cameraToolbarMutation?.readout?.includes('NaN') || result.stats.cameraPresetMutation?.orbit?.includes('NaN') ? ['camera toolbar produced an invalid pose'] : []),
-  ...(Math.abs((result.stats.initialCameraTarget?.[0] ?? 0) + 20) > 0.01 ? ['initial camera target is not horizontally centred for the HUD'] : []),
-  ...(Math.abs((result.stats.initialCameraTarget?.[2] ?? 0) + 40) > 0.01 ? ['initial camera target is not the wide overview pivot'] : []),
-  ...(Math.abs((result.stats.resetCameraTarget?.[0] ?? 0) + 20) > 0.01 ? ['reset did not restore the horizontal overview pivot'] : []),
-  ...(Math.abs((result.stats.resetCameraTarget?.[2] ?? 0) + 40) > 0.01 ? ['reset did not restore the wide overview pivot'] : []),
-  ...(Math.abs((result.stats.townCentreCamera?.yaw ?? 0) - 34.5) > 0.5 || Math.abs((result.stats.townCentreCamera?.pitch ?? 0) - 64) > 0.5 || Math.abs((result.stats.townCentreCamera?.zoom ?? 0) - 228) > 1 ? ['Town Centre did not use configured camera values'] : []),
+  ...(result.stats.fitTown?.pressed !== 'true' || !result.stats.fitTown?.active ? ['Fit Town is not enabled by default'] : []),
+  ...(result.stats.fitTownOff?.pressed !== 'false' || result.stats.fitTownOff?.stored !== false ? ['Fit Town toggle did not persist off'] : []),
+  ...(result.stats.fitTownOn?.pressed !== 'true' || result.stats.fitTownOn?.stored !== true ? ['Fit Town toggle did not persist on'] : []),
+  ...(result.stats.fitTown?.bounds && Math.abs((result.stats.fitTown?.target?.[0] ?? 0) - (((result.stats.fitTown.bounds.minX + result.stats.fitTown.bounds.maxX) / 2 - 49.5) * 4)) > 8 ? ['initial camera did not fit the acquired town bounds'] : []),
+  ...(result.stats.expansionFit?.bounds && (Math.abs((result.stats.expansionFit.target?.[0] ?? 0) - (((result.stats.expansionFit.bounds.minX + result.stats.expansionFit.bounds.maxX) / 2 - 49.5) * 4)) > 8 || Math.abs((result.stats.expansionFit.target?.[2] ?? 0) - (((result.stats.expansionFit.bounds.minY + result.stats.expansionFit.bounds.maxY) / 2 - 49.5) * 4)) > 8) ? ['Fit Town did not reframe after perimeter growth'] : []),
+  ...(result.stats.settingsReset?.fitTown !== true ? ['settings restore defaults did not re-enable Fit Town'] : []),
   ...(!result.stats.settings?.open ? ['settings modal did not open'] : []),
   ...(result.stats.settings?.residents !== '3' ? ['settings modal has the wrong residential density default'] : []),
   ...(result.stats.settings?.maxPopulation !== '1000' ? ['settings modal has the wrong maximum population default'] : []),
@@ -168,7 +198,7 @@ const failures = [
   ...(result.stats.settingsMutation?.maxPopulation !== 900 ? ['maximum population setting did not persist'] : []),
   ...(result.stats.temperatureMutation?.stored !== 1 || result.stats.temperatureMutation?.runtime !== 1 ? ['temperature 1.0 did not persist or reach the live Council'] : []),
   ...(result.stats.settingsReset?.residents !== '3' || result.stats.settingsReset?.maxPopulation !== '1000' || result.stats.settingsReset?.stored !== 3 ? ['settings restore defaults did not persist'] : []),
-  ...(Math.abs((result.stats.settingsReset?.targetX ?? 0) + 20) > 0.01 || Math.abs((result.stats.settingsReset?.targetZ ?? 0) + 40) > 0.01 || Math.abs((result.stats.settingsReset?.zoom ?? 0) - 228) > 1 ? ['settings restore defaults did not restore camera defaults'] : []),
+  ...(result.stats.settingsReset?.fitTown !== true || Math.abs((result.stats.settingsReset?.targetX ?? 0) - (((result.stats.resetFitTown?.bounds?.minX + result.stats.resetFitTown?.bounds?.maxX) / 2 - 49.5) * 4)) > 8 || Math.abs((result.stats.settingsReset?.targetZ ?? 0) - (((result.stats.resetFitTown?.bounds?.minY + result.stats.resetFitTown?.bounds?.maxY) / 2 - 49.5) * 4)) > 8 ? ['settings restore defaults did not restore Fit Town framing'] : []),
   ...(result.stats.ribbon1024?.overflow ? ['bottom ribbon controls overflow at 1024px'] : []),
   ...pageErrors.map((message) => `page error: ${message}`)
 ];

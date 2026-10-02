@@ -43,9 +43,9 @@ Updated 2026-10-02 after the population-cap, factory-archetype, fuel-siting, fou
 - [x] Extended the Council temperature setting and runtime clamp to 0–1.0; the Settings slider now reaches 1.0 and the UI regression verifies persistence and live wiring.
 - [x] Settings are validated at the simulation boundary: residential density affects new homes and vertical growth, glow and council controls apply live, and Reset/re-generation reapply the chosen council and speed settings without corrupting the founding five-bed contract.
 - [x] Added centered camera readouts immediately above the bottom ribbon for live orbit yaw/tilt, zoom distance, and right-drag pan target X/Z. Camera defaults are persisted alongside the other settings (34.5° yaw, 64° tilt, 228 m distance, target -20/-40) and are restored on load and Reset; tilt now permits a true 0° top-down audit while retaining the requested yaw in the readout.
-- [x] Town Centre now uses the configured camera yaw, tilt, and zoom while changing only the focus pivot; it no longer replaces the user's camera values with a fixed height.
+- [x] Replaced Town Centre with a persisted Fit Town toggle, enabled by default. It frames the complete acquired perimeter after load, Reset, land acquisition, and growth while preserving the current orbit orientation; the camera rail also exposes a one-shot fit action.
 - [x] Settings is now a vertically scrollable, searchable modal with Simulation, Council, Visuals, and Camera sections; search hides unrelated sections without losing the live controls.
-- [x] Added a compact Blender-style vertical camera rail beside the left HUD with orbit, tilt, zoom, home, town-centre, and ISO/TOP/N/E presets; Playwright verifies the rail geometry and that every pose updates the readout without NaN values.
+- [x] Added a compact Blender-style vertical camera rail beside the left HUD with orbit, tilt, zoom, home, whole-town fit, and ISO/TOP/N/E presets; Playwright verifies the rail geometry and that every pose updates the readout without NaN values.
 - [x] Road demand keeps a bounded completed-trip history, samples live vehicle pressure, and memoizes planner input only while its measured state is unchanged. Hotspot fallback now prevents persistent congestion from starving `EXTEND_STREET` when OD trips are sparse.
 - [x] Added 100× simulation speed to the ribbon, Clock, and validated Settings default; Reset and reload now restore 100×.
 - [x] Agriculture yards now start as exact 7×4 rectangles (28 tiles) and expand to 8×5 and 9×6 tiers for farms, livestock, and poultry, with matching catalogue footprints.
@@ -54,6 +54,7 @@ Updated 2026-10-02 after the population-cap, factory-archetype, fuel-siting, fou
 - [x] Added a compact Council evidence panel beside Decisions. It shows the latest model thought, delayed self-learning lesson count/pending observations, and the latest resource-upgrade feedback without prescribing a Council trait.
 - [x] Refit the narrow 1024px ribbon after adding 100× so all speed, seed, camera, Settings, and Reset controls remain contained.
 - [x] Footways are now explicit pedestrian-access work. The growth ranking no longer invents them as filler, and target selection excludes park/public parcels and requires a useful inland link; the Road tool can convert an intentional footway cell to asphalt.
+- [x] Construction and road access now fell trees before reservation/paving. `BUILD_SITE` footprints and `EXTEND_STREET` spurs clear vegetation, credit four lumber per tree, and restore the forest/lumber state on rollback; no tree prop may remain on a building or asphalt cell.
 - [x] Added a synchronous `GovernanceSystem.forceRequest()` test boundary. Horizon probes can inject a deterministic intent through the real parser, planner, finance, decision ledger, and learning path without an LLM request or cadence wait.
 - [x] Added `--fast` modes (`test:metropolis-fast`, `test:road-horizon-fast`) and `HORIZON_*_REQUEST_EVERY` controls so long runs evaluate/force requests periodically instead of sweeping the planner every day.
 - [x] Population ceiling is now 1,000 by default and is persisted as a validated Settings control; lifecycle admission, reports, Reset, and headless runs read the same live `SIM.maxCitizens` value.
@@ -87,7 +88,7 @@ Updated 2026-10-02 after the population-cap, factory-archetype, fuel-siting, fou
 - [x] `node scripts/_governor_parser_check.mjs` (including `EXPAND_STREET` aliases)
 - [x] `node scripts/_buildings_check.mjs` (floor-area staffing monotonicity and post-market sanity)
 - [x] UI probe opens the Settings modal and verifies the documented defaults and controls.
-- [x] UI probe verifies camera readouts, pan-target wiring, camera defaults, section filtering, Town Centre-compatible camera state, and ribbon containment at 1024px.
+- [x] UI probe verifies camera readouts, pan-target wiring, camera defaults, section filtering, Fit Town persistence/perimeter framing, and ribbon containment at 1024px.
 - [x] Added `scripts/_council_prompt_check.mjs` / `npm run test:prompt`; it checks the emergent-traits wording, dynamic learning context, catalogue exposure, lesson creation, and the 4,000-token approximation cap.
 - [x] Added `scripts/_resource_feedback_check.mjs` / `npm run test:resources`; it upgrades a real founding farm, checks the 40-cell tier-2 yard, verifies the world pulse, and verifies the HUD `UPDATE_RESOURCE` notice and Council evidence panel.
 - [x] Added `scripts/_resource_neighbour_check.mjs` / `npm run test:resource-neighbour`; it checks the two-tile rule in both directions, the industrial exception, clean seed-1337 founding placement, and Council survey rejection.
@@ -112,6 +113,7 @@ Updated 2026-10-02 after the population-cap, factory-archetype, fuel-siting, fou
 - [x] Added a shared `foliageKit` with tree, pine, and low-shrub variants plus a `prop.foliage` construction block. The founding envelope receives about 50 intentional canopy specimens and a 12-cell understory layer, while natural woodland remains governed by ForestSystem.
 - [x] Linked plantation, road/building/bulldozer deforestation, and natural tree fall to one timber ledger. Every felled tree returns four lumber units, natural fall is day based and bounded, and `Town.stats().forest` exposes coverage, planted, felled, natural falls, and timber recovered.
 - [x] Added `npm run test:forest`; it verifies seed-1337 coverage, deforestation lumber credit, player/council plantation accounting, natural fall, and no page errors.
+- [x] Added `npm run test:vegetation-clear`; seed 1337 verifies both a building footprint and a road expansion fell an obstructing tree and credited the lumber ledger.
 - [x] Re-ran the deterministic 800-day seed-1337 forest horizon after the foliage-kit balance: 580 natural falls, 2,320 lumber recovered, no renderer errors, and a valid town; weekly batching reduced tree coverage 19%→13% while the 12-cell decorative understory remained.
 
 ## Optional operator experiments (require external provider credentials)
