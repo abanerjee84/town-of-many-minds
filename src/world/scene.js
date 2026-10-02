@@ -261,6 +261,59 @@ export class SceneManager {
     this.cameraYaw = this.homeAzimuth;
   }
 
+  /** Move to an absolute camera angle while keeping the current focus target. */
+  setCameraPose({ yaw = 34.5, pitch = 64, zoom = 228, targetX, targetZ } = {}) {
+    const controls = this.controls;
+    const target = controls.target.clone();
+    if (Number.isFinite(Number(targetX))) target.x = Number(targetX);
+    if (Number.isFinite(Number(targetZ))) target.z = Number(targetZ);
+    const azimuth = THREE.MathUtils.degToRad(Number(yaw) || 0);
+    const polar = THREE.MathUtils.degToRad(THREE.MathUtils.clamp(Number(pitch) || 0, 0, 80));
+    const distance = THREE.MathUtils.clamp(Number(zoom) || 228, controls.minDistance, controls.maxDistance);
+    const horizontal = Math.sin(polar) * distance;
+    controls.target.copy(target);
+    this.camera.up.copy(this.homeUp);
+    this.camera.position.set(
+      target.x + Math.sin(azimuth) * horizontal,
+      target.y + Math.cos(polar) * distance,
+      target.z + Math.cos(azimuth) * horizontal
+    );
+    this.camera.lookAt(target);
+    controls.update();
+    this.cameraYaw = azimuth;
+  }
+
+  /** Apply a small viewport nudge without changing the saved Settings pose. */
+  nudgeCamera({ yaw = 0, pitch = 0, zoom = 0, panX = 0, panZ = 0 } = {}) {
+    const controls = this.controls;
+    const currentPitch = controls.getPolarAngle();
+    const currentYaw = currentPitch < 0.0001 ? this.cameraYaw : controls.getAzimuthalAngle();
+    const wrapYaw = (value) => ((value + Math.PI) % (Math.PI * 2)) - Math.PI;
+    const nextYaw = wrapYaw(currentYaw + THREE.MathUtils.degToRad(Number(yaw) || 0));
+    const nextPitch = THREE.MathUtils.degToRad(THREE.MathUtils.clamp(
+      THREE.MathUtils.radToDeg(currentPitch) + (Number(pitch) || 0), 0, 80
+    ));
+    const distance = THREE.MathUtils.clamp(
+      this.camera.position.distanceTo(controls.target) + (Number(zoom) || 0),
+      controls.minDistance,
+      controls.maxDistance
+    );
+    const target = controls.target.clone();
+    target.x += Number(panX) || 0;
+    target.z += Number(panZ) || 0;
+    const horizontal = Math.sin(nextPitch) * distance;
+    controls.target.copy(target);
+    this.camera.up.copy(this.homeUp);
+    this.camera.position.set(
+      target.x + Math.sin(nextYaw) * horizontal,
+      target.y + Math.cos(nextPitch) * distance,
+      target.z + Math.cos(nextYaw) * horizontal
+    );
+    this.camera.lookAt(target);
+    controls.update();
+    this.cameraYaw = nextYaw;
+  }
+
   /**
    * Frame a point with the home view's polar angle, azimuth and up vector, so
    * the orbit behaves exactly like the default view - only the pivot moves.

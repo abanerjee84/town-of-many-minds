@@ -317,6 +317,35 @@ document.getElementById('view-centre').addEventListener('click', () => {
   updateCameraReadout();
 });
 
+const cameraActions = {
+  'orbit-left': () => sceneMgr.nudgeCamera({ yaw: -15 }),
+  'orbit-right': () => sceneMgr.nudgeCamera({ yaw: 15 }),
+  'tilt-up': () => sceneMgr.nudgeCamera({ pitch: -10 }),
+  'tilt-down': () => sceneMgr.nudgeCamera({ pitch: 10 }),
+  'zoom-in': () => sceneMgr.nudgeCamera({ zoom: -20 }),
+  'zoom-out': () => sceneMgr.nudgeCamera({ zoom: 20 }),
+  'camera-home': () => sceneMgr.resetView(),
+  'camera-centre': () => document.getElementById('view-centre').click()
+};
+const cameraPresets = {
+  iso: { yaw: 45, pitch: 55, zoom: 260 },
+  top: { yaw: 0, pitch: 0, zoom: 300 },
+  north: { yaw: 0, pitch: 64, zoom: 228 },
+  east: { yaw: 90, pitch: 64, zoom: 228 }
+};
+for (const button of document.querySelectorAll('#camera-toolbar [data-camera-action]')) {
+  button.addEventListener('click', () => {
+    cameraActions[button.dataset.cameraAction]?.();
+    updateCameraReadout();
+  });
+}
+for (const button of document.querySelectorAll('#camera-toolbar [data-camera-preset]')) {
+  button.addEventListener('click', () => {
+    sceneMgr.setCameraPose(cameraPresets[button.dataset.cameraPreset]);
+    updateCameraReadout();
+  });
+}
+
 document.getElementById('settings-toggle').addEventListener('click', renderSettings);
 
 generate(currentSeed());

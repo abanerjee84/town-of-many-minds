@@ -371,6 +371,55 @@
         font-weight: 600;
         font-variant-numeric: tabular-nums;
       }
+      /* A narrow Blender-style viewport rail in the gutter beside the HUD. */
+      #camera-toolbar {
+        position: fixed;
+        top: 16px;
+        left: 310px;
+        z-index: 8;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        padding: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.11);
+        border-radius: 8px;
+        background: rgba(15, 20, 28, 0.84);
+        backdrop-filter: blur(8px);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+        user-select: none;
+      }
+      #camera-toolbar .camera-tool {
+        width: 28px;
+        height: 25px;
+        padding: 0;
+        display: grid;
+        place-items: center;
+        color: #b7c3d0;
+        border-color: rgba(255, 255, 255, 0.08);
+        border-radius: 5px;
+        font-size: 14px;
+        line-height: 1;
+      }
+      #camera-toolbar .camera-tool:hover,
+      #camera-toolbar .camera-tool:focus-visible {
+        color: #fff;
+        border-color: rgba(88, 166, 255, 0.65);
+        background: rgba(88, 166, 255, 0.2);
+        outline: none;
+      }
+      #camera-toolbar .camera-preset {
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+      #camera-toolbar .camera-divider {
+        height: 1px;
+        margin: 1px 3px;
+        background: rgba(255, 255, 255, 0.12);
+      }
+      @media (max-width: 1100px) {
+        #camera-toolbar { top: 78px; }
+      }
       /* The ribbon has to survive 1024px, where eleven tool buttons, six speed
          buttons, the seed field, Town Centre and Reset leave the row ~90px
          short. The two pieces that carry no action — the BUILD caption and the
@@ -1208,6 +1257,25 @@
       <span class="camera-chip"><span class="cam-label">Orbit</span><b id="camera-orbit">34.5° yaw · 64.0° tilt</b></span>
       <span class="camera-chip"><span class="cam-label">Zoom</span><b id="camera-zoom">228 m</b></span>
       <span class="camera-chip" title="Right-drag to pan"><span class="cam-label">Pan · R-drag</span><b id="camera-pan">x -20.0 · z -40.0</b></span>
+    </div>
+
+    <div id="camera-toolbar" role="toolbar" aria-label="Camera controls">
+      <button class="camera-tool" data-camera-action="orbit-left" title="Orbit left 15 degrees" aria-label="Orbit left">↶</button>
+      <button class="camera-tool" data-camera-action="orbit-right" title="Orbit right 15 degrees" aria-label="Orbit right">↷</button>
+      <span class="camera-divider" aria-hidden="true"></span>
+      <button class="camera-tool" data-camera-action="tilt-up" title="Tilt up 10 degrees" aria-label="Tilt up">▲</button>
+      <button class="camera-tool" data-camera-action="tilt-down" title="Tilt down 10 degrees" aria-label="Tilt down">▼</button>
+      <span class="camera-divider" aria-hidden="true"></span>
+      <button class="camera-tool" data-camera-action="zoom-in" title="Zoom in 20 metres" aria-label="Zoom in">＋</button>
+      <button class="camera-tool" data-camera-action="zoom-out" title="Zoom out 20 metres" aria-label="Zoom out">−</button>
+      <span class="camera-divider" aria-hidden="true"></span>
+      <button class="camera-tool" data-camera-action="camera-centre" title="Focus town centre" aria-label="Focus town centre">◎</button>
+      <button class="camera-tool" data-camera-action="camera-home" title="Restore camera defaults" aria-label="Restore camera defaults">⌂</button>
+      <span class="camera-divider" aria-hidden="true"></span>
+      <button class="camera-tool camera-preset" data-camera-preset="iso" title="Isometric view" aria-label="Isometric view">ISO</button>
+      <button class="camera-tool camera-preset" data-camera-preset="top" title="Top-down view" aria-label="Top-down view">TOP</button>
+      <button class="camera-tool camera-preset" data-camera-preset="north" title="North-facing view" aria-label="North-facing view">N</button>
+      <button class="camera-tool camera-preset" data-camera-preset="east" title="East-facing view" aria-label="East-facing view">E</button>
     </div>
 
     <div id="tools" class="panel">

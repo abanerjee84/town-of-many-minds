@@ -3,7 +3,7 @@ import { chromium } from 'playwright';
 const URL = process.env.APP_URL || 'http://localhost:5174';
 const REQUIRED_IDS = [
   'hud', 'tools', 'tool-grid', 'seed-input', 'regen', 'reset-town',
-  'settings-toggle', 'camera-readout', 'camera-orbit', 'camera-zoom', 'camera-pan',
+  'settings-toggle', 'camera-toolbar', 'camera-readout', 'camera-orbit', 'camera-zoom', 'camera-pan',
   'stat-pop', 'stat-bld', 'stat-treasury', 'council', 'council-feedback',
   'council-thought', 'council-learning', 'society-feedback', 'society-feedback-summary',
   'society-feedback-detail', 'society-feedback-election', 'speed-100', 'inspector'
@@ -28,7 +28,11 @@ const result = await page.evaluate((required) => {
     initialCameraTarget: window.sceneMgr.controls.target.toArray(),
     cameraOrbit: document.getElementById('camera-orbit')?.textContent,
     cameraZoom: document.getElementById('camera-zoom')?.textContent,
-    cameraPan: document.getElementById('camera-pan')?.textContent
+    cameraPan: document.getElementById('camera-pan')?.textContent,
+    cameraToolbar: {
+      actions: [...document.querySelectorAll('#camera-toolbar [data-camera-action]')].map((el) => el.dataset.cameraAction),
+      presets: [...document.querySelectorAll('#camera-toolbar [data-camera-preset]')].map((el) => el.dataset.cameraPreset)
+    }
   };
   return { missing, stats };
 }, REQUIRED_IDS);
@@ -43,6 +47,16 @@ await page.evaluate(() => {
 await page.click('#reset-town');
 const resetCameraTarget = await page.evaluate(() => window.sceneMgr.controls.target.toArray());
 result.stats.resetCameraTarget = resetCameraTarget;
+await page.click('[data-camera-action="orbit-right"]');
+result.stats.cameraToolbarMutation = await page.evaluate(() => ({
+  readout: document.getElementById('camera-orbit')?.textContent,
+  yaw: window.sceneMgr.controls.getAzimuthalAngle() * 180 / Math.PI
+}));
+await page.click('[data-camera-preset="iso"]');
+result.stats.cameraPresetMutation = await page.evaluate(() => ({
+  orbit: document.getElementById('camera-orbit')?.textContent,
+  zoom: document.getElementById('camera-zoom')?.textContent
+}));
 await page.click('#view-centre');
 result.stats.townCentreCamera = await page.evaluate(() => ({
   target: window.sceneMgr.controls.target.toArray(),
@@ -121,6 +135,8 @@ const failures = [
   ...(result.stats.buildings <= 0 ? ['town did not initialise buildings'] : []),
   ...(result.stats.catalogue && !result.stats.catalogue.ok ? ['construction catalogue audit failed'] : []),
   ...(!result.stats.providerHooks ? ['council/provider hooks are not exposed'] : []),
+  ...(result.stats.cameraToolbar?.actions?.length !== 8 || result.stats.cameraToolbar?.presets?.join(',') !== 'iso,top,north,east' ? ['camera toolbar is missing a nudge or preset control'] : []),
+  ...(result.stats.cameraToolbarMutation?.readout?.includes('NaN') || result.stats.cameraPresetMutation?.orbit?.includes('NaN') ? ['camera toolbar produced an invalid pose'] : []),
   ...(Math.abs((result.stats.initialCameraTarget?.[0] ?? 0) + 20) > 0.01 ? ['initial camera target is not horizontally centred for the HUD'] : []),
   ...(Math.abs((result.stats.initialCameraTarget?.[2] ?? 0) + 40) > 0.01 ? ['initial camera target is not the wide overview pivot'] : []),
   ...(Math.abs((result.stats.resetCameraTarget?.[0] ?? 0) + 20) > 0.01 ? ['reset did not restore the horizontal overview pivot'] : []),

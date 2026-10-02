@@ -25,6 +25,7 @@ const result = await page.evaluate(() => {
   const restructureParsed = window.parseIntent('RESTRUCTURE THE BUILDING');
   const landPlan = window.planFor(t, 'land');
   const landQuote = landPlan ? t.growth.quote(landPlan) : null;
+  const landGateClosed = t.growth.vacantAcquiredPlots(1) > 0 && !landPlan;
 
   // Commission a transit hub through the normal building painter in the test
   // town, then let the route system procure/spawn its first registered bus.
@@ -72,7 +73,7 @@ const result = await page.evaluate(() => {
       land: landParsed.intent,
       restructure: restructureParsed.intent
     },
-    landPlan: !!landPlan, landQuoteOk: !!landQuote?.ok,
+    landPlan: !!landPlan, landQuoteOk: !!landQuote?.ok, landGateClosed,
     transitBuilt: !!transitBuilding, transit: transport,
     recyclingCap: !!recycling && recycling.floors === 2 && upgradeProbe?.target !== recycling && restructureProbe?.target !== recycling,
     restructure: !!restructured && restructured.floors > beforeFloors,
@@ -97,7 +98,7 @@ if (result.parser.transit !== 'BUILD_TRANSIT') failures.push('BUILD_TRANSIT pars
 if (result.parser.transitFacility !== 'busdepot') failures.push('BUILD_TRANSIT facility parser');
 if (result.parser.land !== 'ACQUIRE_LAND') failures.push('ACQUIRE_LAND parser');
 if (result.parser.restructure !== 'RESTRUCTURE_BUILDING') failures.push('RESTRUCTURE_BUILDING parser');
-if (!result.landPlan || !result.landQuoteOk) failures.push('land plan quote');
+if (!result.landGateClosed) failures.push('land exhaustion gate');
 if (!result.transitBuilt || !result.transit.ready || result.transit.fleet < 1) failures.push('transit route/fleet');
 if (!result.recyclingCap) failures.push('civic vertical cap');
 if (!result.restructure) failures.push('restructure');

@@ -84,7 +84,7 @@ const NULL_PLAN_DETAIL = {
   ANNEX_EDGE: 'the edge is already annexed',
   // Phase 9.
   BUILD_BRIDGE: 'no river gap is left to span',
-  ACQUIRE_LAND: 'no unacquired frontier tiles remain, or the reserve is too low',
+  ACQUIRE_LAND: 'acquired serviced land is not exhausted, or no unacquired frontier tiles remain, or the reserve is too low',
   RESTRUCTURE_BUILDING: 'no occupied building has a safe higher floor to add'
 };
 
@@ -501,7 +501,7 @@ const PROMPT_BODY = [
   'and a finished programme applies one of these gains: ' + LEVER_IDS.map((k) => `${k} (${LEVERS[k].hint})`).join(' · ') +
     '. The next programme is always the town\u2019s own weakest number, printed on the Research line,',
   'EXTEND_STREET (also EXPAND_STREET) chooses a legal run only when congestion is above the road gate and observed trips or a disconnected component justify it; the council chooses whether to order it, not its coordinates,',
-  'ACQUIRE_LAND buys the surveyed frontier tiles when the town needs room; it is priced per fresh tile and must leave the public reserve intact,',
+  'ACQUIRE_LAND buys surveyed frontier tiles only after the current acquired land has no usable serviced plot left; it is priced per fresh tile and must leave the public reserve intact,',
   'BUILD_TRANSIT (optional spec: facility=busdepot|transit) commissions a bus depot or transit hub, after which registered buses can serve marked stops; read coverage and ridership before expanding the fleet,',
   'RESTRUCTURE_BUILDING clears and rebuilds one eligible occupied lot with a safe additional floor; it preserves the footprint and facility and records the demolition,',
   'UPGRADE_ROAD widens the longest eligible straight corridor one rung up the ladder ' +
@@ -560,7 +560,7 @@ const PROMPT_BODY = [
   // ends, so a plain (redundant) crossing also needs the declaration.
   'PAVE_PLAZA, ADD_PARKING, REZONE, UPZONE, CLEAR_LOT, ANNEX_EDGE and BUILD_BRIDGE are also always available —' +
     ' the planner only lists PAVE_PLAZA/ADD_PARKING when a square or a bay is wanted and BUILD_BRIDGE when a gap would reconnect two road ends,',
-  'ACQUIRE_LAND and RESTRUCTURE_BUILDING are discretionary Feasible-now rows when frontier or renewal candidates exist; they stay out of the demand fallback,',
+  'ACQUIRE_LAND and RESTRUCTURE_BUILDING are discretionary Feasible-now rows only when the frontier is needed (all acquired serviced land is exhausted) or renewal candidates exist; they stay out of the demand fallback,',
   'PARK_LAND, PAVE_PLAZA, IMAGINE_ARCHETYPE, a filler floor, a comfortable-town RENOVATE and a WING are amenity work: they show up in Feasible now but never in Priority —',
   'TIERUP only reaches Priority while unemployment is above ' + UNEMPLOYMENT_PCT + '%, since it grows shop capacity without a new lot,',
   'when Priority reads "none outstanding", reply NO_ACTION rather than inventing work.',

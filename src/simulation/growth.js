@@ -1087,6 +1087,7 @@ export function planFor(town, type, opts = {}) {
     }
     case 'land': {
       const growth = town.growth;
+      if (!growth?.landNeeded?.()) return null;
       let target = null;
       const population = town.pedestrians?.citizens?.length || 0;
       if (population >= 80 && !town.buildings.some((b) => b.purpose === 'industrial')) {
@@ -1900,12 +1901,10 @@ export class GrowthSystem {
     const firstWorksDeficit = !this.town.industry?.factories?.().length && this.town.industry?.deficitProduct?.();
     const civicDemand = s.pop > s.civicCount * CIVIC_PER_POP || !!civicExpansionNeed(this.town) ||
       (!!this.town.resources?.stats?.().waste && !this.town.buildings.some((b) => b.facility === 'recycling'));
-    // A few empty one-cell plots do not satisfy a campus or works order. Keep
-    // acquiring a contiguous frontier until a progression footprint can
-    // actually be placed, otherwise the council can spend the whole horizon
-    // upgrading the core while colleges and factories remain impossible to
-    // site. The request is still explicit ACQUIRE_LAND; this is only the
-    // feasibility gate that decides when that request is needed.
+    // Land purchase is a last resort. A campus or works footprint may be hard
+    // to fit, but the council must use every currently acquired serviced plot
+    // before it buys a frontier tile. This keeps ACQUIRE_LAND tied to genuine
+    // exhaustion rather than letting a preferred building jump the queue.
     const hasSitedFootprint = (type, opts) => {
       const plan = planFor(this.town, type, opts);
       return !!plan && !!this.siteForFootprint(plan);
@@ -1917,9 +1916,9 @@ export class GrowthSystem {
         !hasSitedFootprint('civic', { facility: 'university' }));
     const worksNeed = s.pop >= 80 && !this.town.buildings.some((b) => b.purpose === 'industrial') &&
       this.factoryRoom() && !hasSitedFootprint('factory');
-    const vacant = this.vacantAcquiredPlots(2);
-    return vacant < 2 && (housingPressure || !!strainedProduct || !!firstWorksDeficit || civicDemand || educationNeed || worksNeed) ||
-      (educationNeed || worksNeed);
+    const vacant = this.vacantAcquiredPlots(1);
+    if (vacant > 0) return false;
+    return housingPressure || !!strainedProduct || !!firstWorksDeficit || civicDemand || educationNeed || worksNeed;
   }
 
   /**
@@ -2655,7 +2654,7 @@ export class GrowthSystem {
       case 'footway':
         return 'no landlocked parcel needs a path';
       case 'land':
-        if (this.vacantAcquiredPlots(2) >= 2) return 'acquired land still has usable serviced plots';
+        if (this.vacantAcquiredPlots(1) >= 1) return 'acquired land still has usable serviced plots';
         if ((s.pressure || 0) < 0.9 && !this.town.industry?.missingConstructionProduct?.()) return 'housing and material pressure are below the land-shortage gate';
         return 'the town has no unacquired frontier tiles or the reserve is too low';
       case 'restructure':
