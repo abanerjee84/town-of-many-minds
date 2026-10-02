@@ -2925,8 +2925,12 @@ export class GrowthSystem {
         }
         if (!ok || cells.length !== cols * rows) continue;
         // Parcels: the block must contain at least one parcel's street-facing
-        // cell (so it sits on the street, like findCell's front-cell rule);
-        // without acquisition the whole parcels must be buildable and free.
+        // cell (so it sits on the street, like findCell's front-cell rule).
+        // Vacancy is checked per footprint cell above. A parcel can contain
+        // two cells, one already occupied and one still free; rejecting the
+        // whole parcel here made a 3x3 factory campus impossible whenever it
+        // crossed a normal 1–2-cell subdivision. Acquisition remains the only
+        // path allowed to clear an occupied footprint cell.
         const blockSet = new Set(cells.map(([cx, cy]) => `${cx},${cy}`));
         const parcelSet = new Set();
         for (const [cx, cy] of cells) {
@@ -2937,9 +2941,12 @@ export class GrowthSystem {
         for (const p of parcelSet) {
           const bc = t.parcels.buildableCell(p);
           if (bc && blockSet.has(`${bc[0]},${bc[1]}`)) frontIn = true;
-          if (!acquire) {
-            if (!p.buildable || this.plotBusy(p)) { frontIn = false; break; }
-          }
+        // A large campus may legitimately span the interior of a vacant
+        // block. `buildable` is parcel-level metadata and is false for a
+        // landlocked parcel even when another cell in this footprint fronts
+        // the road. The access check below is the real network requirement;
+        // only protected park/public parcels must remain off limits.
+        if (p.type === 'park' || p.type === 'public') { frontIn = false; break; }
         }
         if (!frontIn) continue;
         let frontage = 0;
@@ -3687,10 +3694,9 @@ export class GrowthSystem {
   }
 
   /**
-   * An EMPTY cell of a frontage-less parcel: paving one of them gives the
-   * neighbouring cells a street, which turns them into buildable plots after
-   * `parcels.build` runs. One test, so the ranked picker and the cheap
-   * "is there room?" probe can never disagree.
+   * An EMPTY interior cell that can become a logical street anchor. Paving it
+   * gives neighbouring land a new frontage after `parcels.build` runs. One
+   * test, so the ranked picker and the cheap "is there room?" probe agree.
    */
   expandCandidate(x, y) {
     const t = this.town;
@@ -3698,7 +3704,14 @@ export class GrowthSystem {
     if (g.kindAt(x, y) !== CELL_KIND.EMPTY) return false;
     if (t.buildingAt(x, y) || t.resources?.ownsCell(x, y) || this.claims.has(`${x},${y}`)) return false;
     const parcel = t.parcels?.at(x, y);
-    return !!parcel && parcel.frontage.length === 0;
+    if (!parcel || parcel.type === 'park' || parcel.type === 'public') return false;
+    // A parcel's frontage is an aggregate property. An outer block can have
+    // one road-facing cell and hundreds of interior cells; treating all of it
+    // as "already fronted" made the planner report no room while a whole
+    // vacant hinterland remained. Keep the actual frontage cell for buildings
+    // and allow a deeper free cell to be surveyed as a logical street anchor.
+    const bc = t.parcels.buildableCell(parcel);
+    return !bc || bc[0] !== x || bc[1] !== y;
   }
 
   /**
@@ -3768,16 +3781,21 @@ export class GrowthSystem {
   }
 
   /**
-   * Expansion candidates: EMPTY cells of frontage-less parcels — paving one
+   * Expansion candidates: EMPTY interior cells in vacant land — paving one
    * of them gives the neighbouring cells a street, which turns them into
-   * buildable plots after `parcels.build` runs. Ranked by how far they push the
+   * useful plots after `parcels.build` runs. Ranked by how far they push the
    * built area outward, so the town grows from its own edge rather than
    * towards an arbitrary point in the middle of the map.
    */
-  findExpandCells(zone) {
+  findExpandCells(zone, limit = 6) {
     const t = this.town;
     const g = t.grid;
-    const want = { house: ZONE.RESIDENTIAL, shop: ZONE.COMMERCIAL, civic: ZONE.CIVIC }[zone] || null;
+    const want = {
+      house: ZONE.RESIDENTIAL,
+      shop: ZONE.COMMERCIAL,
+      civic: ZONE.CIVIC,
+      factory: ZONE.INDUSTRIAL
+    }[zone] || null;
     const reach = this.paveableCells();
     if (!reach.length) return [];
 
@@ -3799,7 +3817,46 @@ export class GrowthSystem {
       out.push({ x, y, score });
     }
     out.sort((a, b) => b.score - a.score);
-    return out.slice(0, 6);
+    return out.slice(0, Math.max(1, limit));
+  }
+
+  /**
+   * Project a road link on the in-memory grid and ask the real footprint
+   * survey whether it unlocks the requested plan. This is deliberately a
+   * grid/parcels overlay rather than `town.expandTown()`: no renderer,
+   * resource rebuild, treasury charge, or permanent road is touched while the
+   * council is surveying alternatives.
+   */
+  projectExpansion(plan, cells) {
+    if (!plan || !cells?.length) return null;
+    const t = this.town;
+    const g = t.grid;
+    const kind = g.kind.slice();
+    const zone = g.zone.slice();
+    const owner = g.owner.slice();
+    const rngState = this.rng.getState();
+    try {
+      for (const [x, y] of cells) {
+        if (!g.inBounds(x, y) || g.kindAt(x, y) !== CELL_KIND.EMPTY ||
+            t.buildingAt(x, y) || t.resources?.ownsCell(x, y) || this.claims.has(`${x},${y}`)) return null;
+        g.setKind(x, y, CELL_KIND.ROAD);
+        g.zone[g.idx(x, y)] = null;
+        g.owner[g.idx(x, y)] = null;
+      }
+      // ParcelKit is the source of truth for multi-cell frontage and vacant
+      // interior land. Rebuild only that derived map for the projection.
+      t.parcels.build(t, t.rng.fork(2027));
+      this.rng.setState(rngState);
+      const block = this.siteForFootprint(plan);
+      return block ? { block } : null;
+    } finally {
+      g.kind.set(kind);
+      g.zone.splice(0, g.zone.length, ...zone);
+      g.owner.splice(0, g.owner.length, ...owner);
+      g.recountKinds?.();
+      t.parcels.build(t, t.rng.fork(2027));
+      this.rng.setState(rngState);
+    }
   }
 
   /**
@@ -3807,11 +3864,21 @@ export class GrowthSystem {
    * the link `planConnectedRoad` draws from it to the network. Pure — it
    * touches nothing, so a quote can price the tiles it would take.
    */
-  expandPreview(zone) {
+  expandPreview(zoneOrPlan) {
     const g = this.town.grid;
-    for (const c of this.findExpandCells(zone)) {
+    const plan = zoneOrPlan && typeof zoneOrPlan === 'object' ? zoneOrPlan : null;
+    const zone = plan ? (plan.zone || plan.type) : zoneOrPlan;
+    const hasFootprint = !!(plan?.footprintCandidates || plan?.footprint);
+    const candidates = this.findExpandCells(zone, hasFootprint ? 24 : 6);
+    for (const c of candidates) {
       const cells = planConnectedRoad(g, c.x, c.y);
-      if (cells && cells.length) return { anchor: [c.x, c.y], cells };
+      if (!cells || !cells.length) continue;
+      if (plan?.footprintCandidates || plan?.footprint) {
+        const projected = this.projectExpansion(plan, cells);
+        if (!projected) continue;
+        return { anchor: [c.x, c.y], cells, block: projected.block };
+      }
+      return { anchor: [c.x, c.y], cells };
     }
     return null;
   }
@@ -3823,16 +3890,37 @@ export class GrowthSystem {
    * The caller re-runs its own site search afterwards, so the expansion and
    * the search it unlocks are one decision.
    */
-  expandFor(zone) {
+  expandFor(zoneOrPlan) {
     const t = this.town;
-    for (const c of this.findExpandCells(zone)) {
+    const plan = zoneOrPlan && typeof zoneOrPlan === 'object' ? zoneOrPlan : null;
+    const zone = plan ? (plan.zone || plan.type) : zoneOrPlan;
+    const preview = this.expandPreview(zoneOrPlan);
+    if (preview) {
+      const paved = t.expandTown(preview.anchor[0], preview.anchor[1]);
+      if (paved) {
+        const text = 'The town expands: a new street opens.';
+        this.history.push(text);
+        if (this.history.length > 8) this.history.shift();
+        events.emit('log', { text });
+        return { anchor: preview.anchor, cells: paved, block: preview.block || null };
+      }
+    }
+    // A stale preview can fail if the player or another project claimed a
+    // cell between survey and execution. Re-scan the remaining candidates,
+    // but only accept a route that still unlocks the requested footprint.
+    const hasFootprint = !!(plan?.footprintCandidates || plan?.footprint);
+    for (const c of this.findExpandCells(zone, hasFootprint ? 24 : 6)) {
+      const cells = planConnectedRoad(t.grid, c.x, c.y);
+      if (!cells || !cells.length) continue;
+      const projected = plan ? this.projectExpansion(plan, cells) : null;
+      if (plan && !projected) continue;
       const paved = t.expandTown(c.x, c.y);
       if (!paved) continue;
       const text = 'The town expands: a new street opens.';
       this.history.push(text);
       if (this.history.length > 8) this.history.shift();
       events.emit('log', { text });
-      return { anchor: [c.x, c.y], cells: paved };
+      return { anchor: [c.x, c.y], cells: paved, block: projected?.block || null };
     }
     return null;
   }
@@ -3954,15 +4042,23 @@ export class GrowthSystem {
       if (NO_EXPAND.has(plan.type)) return refuse();
       let paved = null;
       if (dryRun) {
-        const preview = this.expandPreview(plan.zone);
+        const preview = this.expandPreview(plan);
         if (!preview) return refuse();
         paved = preview.cells;
+        if (preview.block) {
+          block = preview.block;
+          cell = block.cell;
+        }
       } else {
-        const expanded = this.expandFor(plan.zone);
+        const expanded = this.expandFor(plan);
         if (!expanded) return refuse();
         paved = expanded.cells;
+        if (expanded.block) {
+          block = expanded.block;
+          cell = block.cell;
+        }
         if (plan.footprintCandidates || plan.footprint) {
-          block = this.siteForFootprint(plan);
+          block ||= this.siteForFootprint(plan);
           if (block) cell = block.cell;
         }
         if (strictFootprint && !cell) return refuse();

@@ -22,7 +22,8 @@
     "test:road-horizon": "node scripts/_road_horizon_check.mjs",
     "test:road-horizon-fast": "node scripts/_road_horizon_check.mjs --fast",
     "test:road": "node scripts/_road_extension_check.mjs",
-    "test:vehicle-parking": "node scripts/_vehicle_parking_check.mjs"
+    "test:vehicle-parking": "node scripts/_vehicle_parking_check.mjs",
+    "test:factory-site": "node scripts/_factory_site_regression.mjs"
   },
   "dependencies": {
     "three": "^0.169.0"
