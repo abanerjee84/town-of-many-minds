@@ -37,6 +37,18 @@ function councilTemperature(value, fallback = DEFAULT_COUNCIL_TEMPERATURE) {
   return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : fallback;
 }
 
+function emptyCongestionWindow(clock = null) {
+  return {
+    weighted: 0,
+    seconds: 0,
+    sum: 0,
+    samples: 0,
+    min: Infinity,
+    max: -Infinity,
+    from: clock ? { day: Number(clock.day) || 0, hour: Number(clock.hour) || 0 } : null
+  };
+}
+
 /**
  * The town the free `parseIntent` reads policy state from. The council is a
  * singleton per town in practice, and the probes parse against a live one, so
@@ -501,7 +513,7 @@ const PROMPT_BODY = [
   'each bucket is limited by its own basis — ' + BUCKET_IDS.map((id) => `${BUCKETS[id].label} needs ${BUCKETS[id].hint}`).join(' · ') + ',',
   'and a finished programme applies one of these gains: ' + LEVER_IDS.map((k) => `${k} (${LEVERS[k].hint})`).join(' · ') +
     '. The next programme is always the town\u2019s own weakest number, printed on the Research line,',
-  'EXTEND_STREET (also EXPAND_STREET) chooses a legal run only when congestion is above the road gate and observed trips or a disconnected component justify it; graph planning uses connected components, weighted shortest paths, measured OD relief, and a deterministic frontage/continuation foresight tie-break; the council chooses whether to order it, not its coordinates,',
+  'EXTEND_STREET (also EXPAND_STREET) chooses a legal run only when the congestion average since the previous sitting is above the road gate and observed trips or a disconnected component justify it; the report also shows the instantaneous value, range, duration, and sample count for context; graph planning uses connected components, weighted shortest paths, measured OD relief, and a deterministic frontage/continuation foresight tie-break; the council chooses whether to order it, not its coordinates,',
   'ACQUIRE_LAND buys surveyed frontier tiles only after the current acquired land has no usable serviced plot left; it is priced per fresh tile and must leave the public reserve intact,',
   'BUILD_TRANSIT (optional spec: facility=busdepot|transit) commissions a bus depot or transit hub, after which registered buses can serve marked stops; read coverage and ridership before expanding the fleet,',
   'RESTRUCTURE_BUILDING clears and rebuilds one eligible occupied lot with a safe additional floor; it preserves the footprint and facility and records the demolition,',
@@ -1283,8 +1295,77 @@ export class GovernanceSystem {
     // measured before/after state and is fed back as evidence, never as a new
     // rule or a hidden reward signal.
     this.learning = new CouncilLearning();
+    // Congestion is accumulated continuously between sittings. A Council
+    // should see the traffic it experienced over the whole interval, not only
+    // the frame on which its meeting happened.
+    this.congestionWindow = emptyCongestionWindow();
+    this.lastCongestionInterval = null;
     // null clears the HUD council card along with the decision history.
     events.emit('council', null);
+  }
+
+  /**
+   * Sample live traffic for the current inter-sitting window. `dt` is game
+   * seconds, so the average is time-weighted and does not depend on render
+   * frame frequency or simulation speed.
+   */
+  sampleCongestion(dt, clock) {
+    const traffic = this.town.traffic;
+    if (!traffic) return;
+    const current = Number(traffic.congestion);
+    if (!Number.isFinite(current)) return;
+    const w = this.congestionWindow || (this.congestionWindow = emptyCongestionWindow(clock));
+    if (!w.from && clock) w.from = { day: Number(clock.day) || 0, hour: Number(clock.hour) || 0 };
+    const seconds = Math.max(0, Number(dt) || 0);
+    w.sum += current;
+    w.samples += 1;
+    w.min = Math.min(w.min, current);
+    w.max = Math.max(w.max, current);
+    if (seconds > 0) {
+      w.weighted += current * seconds;
+      w.seconds += seconds;
+    }
+  }
+
+  /** Close the interval that ended at a Council sitting. */
+  closeCongestionWindow(clock) {
+    const w = this.congestionWindow || emptyCongestionWindow(clock);
+    const current = Number(this.town.traffic?.congestion);
+    const average = w.seconds > 0
+      ? w.weighted / w.seconds
+      : w.samples > 0
+        ? w.sum / w.samples
+        : (Number.isFinite(current) ? current : 0);
+    this.lastCongestionInterval = {
+      average: Math.round(average * 1000) / 1000,
+      instantaneous: Number.isFinite(current) ? Math.round(current * 1000) / 1000 : 0,
+      min: w.samples ? Math.round(w.min * 1000) / 1000 : Math.round(average * 1000) / 1000,
+      max: w.samples ? Math.round(w.max * 1000) / 1000 : Math.round(average * 1000) / 1000,
+      samples: w.samples,
+      intervalHours: Math.round((w.seconds / 3600) * 100) / 100,
+      from: w.from,
+      to: clock ? { day: Number(clock.day) || 0, hour: Number(clock.hour) || 0 } : null
+    };
+    this.congestionWindow = emptyCongestionWindow(clock);
+    return this.lastCongestionInterval;
+  }
+
+  /** Evidence used by the report and growth gates at the next sitting. */
+  congestionEvidence() {
+    const current = Number(this.town.traffic?.congestion);
+    const instantaneous = Number.isFinite(current) ? current : 0;
+    const interval = this.lastCongestionInterval;
+    return {
+      average: interval ? interval.average : instantaneous,
+      instantaneous: interval ? interval.instantaneous : Math.round(instantaneous * 1000) / 1000,
+      min: interval?.min ?? Math.round(instantaneous * 1000) / 1000,
+      max: interval?.max ?? Math.round(instantaneous * 1000) / 1000,
+      samples: interval?.samples || 0,
+      intervalHours: interval?.intervalHours || 0,
+      hasInterval: !!interval,
+      from: interval?.from || null,
+      to: interval?.to || null
+    };
   }
 
   report() {
@@ -1292,8 +1373,13 @@ export class GovernanceSystem {
     const eco = t.economy ? t.economy.stats() : null;
     const lc = t.lifecycle ? t.lifecycle.stats() : null;
     const mb = t.traffic ? t.traffic.mobilityStats() : null;
+    const congestion = this.congestionEvidence();
+    // Growth and road planning consume the same closed interval average that
+    // is printed below. The live traffic object remains available as the
+    // instantaneous context value.
+    const councilMobility = mb ? { ...mb, congestion: congestion.average } : mb;
     const roadDemand = t.traffic?.roadDemandSnapshot?.() || null;
-    const roadPlan = mb && mb.congestion > CONGESTION_GATE ? t.growth?.selectRoadExtension?.() : null;
+    const roadPlan = councilMobility && councilMobility.congestion > CONGESTION_GATE ? t.growth?.selectRoadExtension?.() : null;
     const gr = t.growth ? t.growth.stats() : null;
     const ut = t.utilities ? t.utilities.stats() : null;
     const ind = t.industry ? t.industry.stats() : null;
@@ -1432,9 +1518,11 @@ export class GovernanceSystem {
       eco?.budget
         ? `Budget: reserve $${Math.round(eco.budget.reserveTransfers)} · construction $${Math.round(eco.budget.construction)} · operations $${Math.round(eco.budget.operations)} · policy $${Math.round(eco.budget.policyPrograms)} · debt $${Math.round(eco.budget.debtService)} · burn $${Math.round(eco.projectedDailyBurn)}/day`
         : '',
-      mb ? `Congestion ${Math.round(mb.congestion * 100)}% · parking demand ${mb.parkingDemand}/${mb.parkingSupply} (forecast) · ${mb.parkingTaken} taken · trips ${mb.trips}` : '',
-      mb && mb.congestion > CONGESTION_GATE
-        ? `Road planning: ${roadPlan ? `${roadPlan.cells.length} tiles, ${roadPlan.reason}${roadPlan.benefit != null ? `, benefit ${Math.round(roadPlan.benefit)}` : ''}` : 'no legal measured extension'}${mb.congestion >= ROAD_EMERGENCY_GATE ? ' · EMERGENCY priority' : ''} · completed observations ${roadDemand?.trips?.length || 0}`
+      mb
+        ? `Congestion average ${Math.round(congestion.average * 100)}% over ${congestion.intervalHours}h (${congestion.samples} samples) · current ${Math.round(congestion.instantaneous * 100)}% · range ${Math.round(congestion.min * 100)}–${Math.round(congestion.max * 100)}% · parking demand ${mb.parkingDemand}/${mb.parkingSupply} (forecast) · ${mb.parkingTaken} taken · trips ${mb.trips}`
+        : '',
+      councilMobility && councilMobility.congestion > CONGESTION_GATE
+        ? `Road planning: ${roadPlan ? `${roadPlan.cells.length} tiles, ${roadPlan.reason}${roadPlan.benefit != null ? `, benefit ${Math.round(roadPlan.benefit)}` : ''}` : 'no legal measured extension'}${councilMobility.congestion >= ROAD_EMERGENCY_GATE ? ' · EMERGENCY priority' : ' · congestion priority'} · completed observations ${roadDemand?.trips?.length || 0}`
         : '',
       inc
         ? `Emergency: ${inc.open} open${Object.keys(inc.byKind).length ? ` (${Object.entries(inc.byKind).map(([k, n]) => `${n} ${k}`).join(' · ')})` : ''} · ${inc.taken} claimed${Object.keys(inc.byState || {}).length ? ` [${Object.entries(inc.byState).map(([k, n]) => `${n} ${k}`).join(' · ')}]` : ''} · fleet ${fleet.emergency} emergency · ${fleet.service} service · ${fleet.civilian} civilian${inc.emergency ? ' · DECLARED' : ''}`
@@ -2541,6 +2629,7 @@ export class GovernanceSystem {
 
   update(dt, clock) {
     if (!this.enabled || !clock) return;
+    this.sampleCongestion(dt, clock);
     // Convene whenever the configured daily slot turns over. Day rollover is a
     // slot boundary too, so a 2/day setting means roughly 00:00 and 12:00.
     const sittingsPerDay = clampSittingsPerDay(this.sittingsPerDay);
@@ -2551,6 +2640,7 @@ export class GovernanceSystem {
     this.lastDay = clock.day;
     this.lastSlot = slot;
     this.town.clockDay = clock.day;
+    if (!first) this.closeCongestionWindow(clock);
     // Let choices age into observations before the next sitting. The memory
     // is bounded and deterministic, so a long run cannot grow without limit.
     this.learning.observe(this.town, clock.day);
@@ -2612,6 +2702,7 @@ export class GovernanceSystem {
       temperature: this.temperature,
       sittingsPerDay: clampSittingsPerDay(this.sittingsPerDay),
       cadenceHours: 24 / clampSittingsPerDay(this.sittingsPerDay),
+      congestion: this.congestionEvidence(),
       available: this.available,
       pending: this.pending,
       lastError: this.lastError,

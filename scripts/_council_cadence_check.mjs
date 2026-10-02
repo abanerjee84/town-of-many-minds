@@ -37,13 +37,56 @@ const result = await page.evaluate(async () => {
   g.auto = true;
   g.sittingsPerDay = 4;
   for (const [day, hour] of [[1, 7.5], [1, 12], [1, 18], [2, 0], [2, 6]]) await tick(day, hour);
-  return { twiceDaily, fourDaily: g.llmCalls, cadenceHours: g.stats().cadenceHours };
+  const fourDaily = g.llmCalls;
+  const fourDailyCadenceHours = g.stats().cadenceHours;
+
+  // The Council should receive a time-weighted congestion interval rather than
+  // the one instantaneous value present on the sitting frame. Disable model
+  // calls for this deterministic evidence probe and feed three one-hour
+  // samples between two twice-daily sitting boundaries.
+  g.reset();
+  g.enabled = true;
+  g.auto = false;
+  g.sittingsPerDay = 2;
+  const congestionSample = (value, dt, day, hour) => {
+    window.town.traffic.congestion = value;
+    g.update(dt, clock(day, hour));
+  };
+  congestionSample(0.2, 3600, 1, 7.5);
+  congestionSample(0.8, 3600, 1, 8.5);
+  congestionSample(0.4, 3600, 1, 12);
+  const congestion = g.congestionEvidence();
+  const report = g.report();
+  const originalRoadSelector = window.town.growth.selectRoadExtension;
+  window.town.growth.selectRoadExtension = () => ({ cells: [[1, 1], [2, 1], [3, 1]], reason: 'cadence test' });
+  window.town.traffic.congestion = 0.8;
+  g.lastCongestionInterval = {
+    average: 0.8, instantaneous: 0.8, min: 0.2, max: 0.8,
+    samples: 3, intervalHours: 3, from: null, to: null
+  };
+  const ranked = window.town.growth.ranked();
+  const topRank = ranked[0]?.type || null;
+  window.town.growth.selectRoadExtension = originalRoadSelector;
+  g.enabled = false;
+  return {
+    twiceDaily,
+    fourDaily,
+    cadenceHours: fourDailyCadenceHours,
+    congestion,
+    reportHasAverage: /Congestion average 47% over 3h/.test(report),
+    topRank
+  };
 });
 
 const failures = [
   ...(result.twiceDaily !== 3 ? [`expected three calls across day-1 noon and day-2's two slots, got ${result.twiceDaily}`] : []),
   ...(result.fourDaily !== 4 ? [`expected four calls with four sittings/day, got ${result.fourDaily}`] : []),
   ...(result.cadenceHours !== 6 ? [`expected four-sitting cadence to be six hours, got ${result.cadenceHours}`] : []),
+  ...(Math.abs(result.congestion?.average - 0.467) > 0.002 ? [`expected time-weighted congestion average near 0.467, got ${result.congestion?.average}`] : []),
+  ...(result.congestion?.samples !== 3 ? [`expected three interval samples, got ${result.congestion?.samples}`] : []),
+  ...(result.congestion?.intervalHours !== 3 ? [`expected three game hours in the interval, got ${result.congestion?.intervalHours}`] : []),
+  ...(!result.reportHasAverage ? ['Council report did not present the closed congestion average'] : []),
+  ...(result.topRank !== 'road' ? [`expected EXTEND_STREET to outrank other gates under congestion, got ${result.topRank}`] : []),
   ...pageErrors.map((message) => `page error: ${message}`)
 ];
 

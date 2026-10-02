@@ -1806,6 +1806,11 @@ export class GrowthSystem {
         .map(([kind]) => kind);
       utilityStats.strained = [...new Set([...(utilityStats.strained || []), ...coverageStrain])];
     }
+    const liveMobility = t.traffic ? t.traffic.mobilityStats() : null;
+    const congestionEvidence = t.governance?.congestionEvidence?.();
+    const mobility = liveMobility && congestionEvidence
+      ? { ...liveMobility, congestion: congestionEvidence.average, instantaneousCongestion: congestionEvidence.instantaneous }
+      : liveMobility;
     return {
       capacity,
       pop,
@@ -1815,7 +1820,7 @@ export class GrowthSystem {
       parks: parkCells,
       pressure: capacity ? pop / capacity : 0,
       economy: t.economy ? t.economy.stats() : null,
-      mobility: t.traffic ? t.traffic.mobilityStats() : null,
+      mobility,
       utilities: utilityStats
     };
   }
@@ -2229,14 +2234,22 @@ export class GrowthSystem {
         // stronger tie-break than commerce polish so a long run cannot spend
         // every sitting on shop tiers while all buildings remain low-rise.
         const heightPriority = type === 'upgrade' && s.pop >= 60 && !!this.progressionTarget();
-        const roadEmergency = (type === 'road' || type === 'roadup') && (s.mobility?.congestion || 0) >= ROAD_EMERGENCY_GATE;
+        const congestion = s.mobility?.congestion || 0;
+        const roadEmergency = (type === 'road' || type === 'roadup') && congestion >= ROAD_EMERGENCY_GATE;
+        // A legal EXTEND_STREET candidate is the direct network response to a
+        // congestion average above the gate. Give it a dedicated priority
+        // band so utilities, housing, and other gates cannot consume the
+        // sitting while a measured road remedy is available.
+        const congestionPriority = type === 'road' && congestion > CONGESTION_GATE
+          ? 100 + Math.min(40, Math.max(0, (congestion - CONGESTION_GATE) * 100))
+          : 0;
         out.push({
           type,
           need,
           // Once the first town cohort exists, earned progression competes
           // with ordinary civic infill. This keeps long runs from repeatedly
           // selecting new one-storey shells while floors/wings wait forever.
-          score: band + Math.min(1, need) + (earnedProgression ? 4 : 0) + (heightPriority ? 6 : 0) + (roadEmergency ? 20 : 0),
+          score: band + Math.min(1, need) + (earnedProgression ? 4 : 0) + (heightPriority ? 6 : 0) + (roadEmergency ? 20 : 0) + congestionPriority,
           opts,
           amenity
         });
