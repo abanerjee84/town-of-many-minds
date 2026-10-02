@@ -35,28 +35,36 @@ export class PerimeterSystem {
     const g = this.town.grid;
     let minX = g.w - 1; let minY = g.h - 1;
     let maxX = 0; let maxY = 0; let seen = 0;
+    let envelopeSeen = 0;
     const occupied = [];
+    // Resource yards are acquired municipal assets, but their access spurs
+    // deliberately sit beyond the compact founding neighbourhood. Keep them
+    // in `acquired` while measuring the initial town footprint from the in-core
+    // roads, buildings, and public cells only.
+    const core = this.town.core;
+    const inCore = (x, y) => !core || (x >= core.x0 && x <= core.x1 && y >= core.y0 && y <= core.y1);
+    const mark = (cell, includeEnvelope = true) => {
+      if (!cell || !g.inBounds(cell[0], cell[1])) return;
+      const [x, y] = cell;
+      occupied.push(cell);
+      seen++;
+      if (!includeEnvelope) return;
+      minX = Math.min(minX, x); minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+      envelopeSeen++;
+    };
     for (const building of this.town.buildings || []) {
       for (const cell of building.footprint?.length ? building.footprint : [building.cell]) {
-        if (!cell || !g.inBounds(cell[0], cell[1])) continue;
-        minX = Math.min(minX, cell[0]); minY = Math.min(minY, cell[1]);
-        maxX = Math.max(maxX, cell[0]); maxY = Math.max(maxY, cell[1]);
-        occupied.push(cell);
-        seen++;
+        mark(cell, true);
       }
     }
     // Founding resource sites are municipal assets too. Include their exact
-    // cells in the initial ledger so a farm, reservoir or power yard is never
-    // rendered outside the town's own boundary. This keeps the envelope tight
-    // around the complete founding settlement while leaving the open cells
-    // between assets for future acquisition.
+    // cells in the initial ledger so a farm, reservoir or power yard is owned
+    // from day one. These remote municipal assets do not widen the compact
+    // neighbourhood envelope; the open land between them remains frontier.
     for (const site of this.town.resources?.sites || []) {
       for (const cell of site.cells || (site.cell ? [site.cell] : [])) {
-        if (!cell || !g.inBounds(cell[0], cell[1])) continue;
-        minX = Math.min(minX, cell[0]); minY = Math.min(minY, cell[1]);
-        maxX = Math.max(maxX, cell[0]); maxY = Math.max(maxY, cell[1]);
-        occupied.push(cell);
-        seen++;
+        mark(cell, false);
       }
     }
     // Public green/plaza cells are already commissioned town land. Seeding
@@ -65,20 +73,15 @@ export class PerimeterSystem {
     g.forEach((x, y) => {
       const kind = g.kindAt(x, y);
       if (kind !== CELL_KIND.PARK && kind !== CELL_KIND.PLAZA) return;
-      minX = Math.min(minX, x); minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
-      occupied.push([x, y]);
-      seen++;
+      mark([x, y], true);
     });
-    // Seed all existing founding roads as serviced infrastructure. Their
-    // envelope is still bounded by the compact resource/building envelope,
-    // while every later street must be acquired through the frontier planner.
+    // Seed all existing founding roads as serviced infrastructure. Only roads
+    // inside the compact core define the initial neighbourhood envelope;
+    // resource access spurs remain acquired assets while later streets must be
+    // bought through the frontier planner.
     g.forEach((x, y) => {
       if (!g.isRoad(x, y)) return;
-      minX = Math.min(minX, x); minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
-      occupied.push([x, y]);
-      seen++;
+      mark([x, y], inCore(x, y));
     });
     // A road-only founding is still valid in a partially generated test town;
     // the road sweep above normally covers it, but keep this fallback for
@@ -93,6 +96,15 @@ export class PerimeterSystem {
       });
     }
     if (!seen) return this.reset();
+    // A minimal fixture may contain only a resource yard or only an out-of-
+    // core road. It is still a valid founding asset; fall back to its exact
+    // occupied bounds rather than leaving an infinite perimeter.
+    if (!envelopeSeen) {
+      for (const [x, y] of occupied) {
+        minX = Math.min(minX, x); minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+      }
+    }
     const roadMinX = Math.max(0, minX - 1);
     const roadMaxX = Math.min(g.w - 1, maxX + 1);
     const roadMinY = Math.max(0, minY - 1);
