@@ -116,6 +116,39 @@ const trips = (from, to) => Array.from({ length: 8 }, () => ({ from, to, weight:
 }
 
 {
+  // If a hot corridor has no road within the four-tile order, the council
+  // still needs a staged outlet beside the queue rather than a remote spur.
+  // The outlet is permitted only at strong measured pressure, uses all four
+  // cells, and leaves a straight endpoint for a later connection.
+  const g = new Grid(14, 12);
+  for (let x = 1; x <= 10; x++) g.setKind(x, 3, CELL_KIND.ROAD);
+  g.computeRoadMask();
+  const demand = { cells: new Map([[g.idx(4, 3), { visits: 5, delay: 10 }]]), trips: [] };
+  const town = {
+    grid: g,
+    roadGraphVersion: 1,
+    buildingAt: () => null,
+    resources: { ownsCell: () => false },
+    traffic: { roadDemandSnapshot: () => demand }
+  };
+  const growth = Object.create(GrowthSystem.prototype);
+  growth.town = town;
+  growth.claims = new Set();
+  const outletRuns = growth.roadRuns([4, 4], { demand, allowMeasuredBranches: true });
+  const outlet = outletRuns.find((run) => run.measuredOutlet);
+  assert.ok(outlet, 'strong measured pressure may open one staged corridor outlet');
+  assert.equal(outlet.cells.length, 4);
+  assert.equal(outlet.joins, false, 'the staged outlet does not pretend to be a network join');
+  const choice = chooseRoadExtension(g, [outlet], demand, roadComponents(g));
+  assert.deepEqual(choice.cells, outlet.cells);
+  assert.equal(choice.reason, 'opens measured congestion outlet');
+  assert.deepEqual(growth.selectRoadExtension()?.cells, outlet.cells,
+    'the live selector can surface an outlet when no nearby reconnecting road exists');
+  assert.equal(growth.roadRuns([4, 4]).length, 0,
+    'the same outlet remains unavailable without current pressure');
+}
+
+{
   const g = new Grid(5, 5);
   g.kind.fill(CELL_KIND.WATER);
   g.setKind(1, 2, CELL_KIND.ROAD);

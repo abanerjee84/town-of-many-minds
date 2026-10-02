@@ -210,7 +210,10 @@ function bestHotspot(grid, legal, demand) {
     .filter((run) => !run.sameComponentClosure)
     .map((run) => ({ run, pressure: hotspotScore(grid, run, demand), foresight: foresightScore(grid, run) }))
     .filter((row) => row.pressure >= MIN_HOTSPOT_PRESSURE)
-    .sort((a, b) => b.pressure - a.pressure || b.foresight.score - a.foresight.score || geometricScore(b.run) - geometricScore(a.run) || a.run.key.localeCompare(b.run.key));
+    .sort((a, b) => b.pressure - a.pressure ||
+      Number(!!b.run.joins) - Number(!!a.run.joins) ||
+      Number(!!b.run.measuredBranch) - Number(!!a.run.measuredBranch) ||
+      b.foresight.score - a.foresight.score || geometricScore(b.run) - geometricScore(a.run) || a.run.key.localeCompare(b.run.key));
   if (!ranked.length) return null;
   const { run, pressure, foresight } = ranked[0];
   return {
@@ -220,7 +223,9 @@ function bestHotspot(grid, legal, demand) {
     score: pressure - run.cells.length * 0.25 - run.junctionDelta * 2 + foresight.score * 0.1,
     frontage: foresight.frontage,
     continuation: foresight.continuation,
-    reason: pressure >= 1 ? 'relieves measured queue' : 'serves measured traffic'
+    reason: run.measuredOutlet
+      ? 'opens measured congestion outlet'
+      : pressure >= 1 ? 'relieves measured queue' : 'serves measured traffic'
   };
 }
 

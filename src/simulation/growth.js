@@ -3715,9 +3715,23 @@ export class GrowthSystem {
       const sourcePressure = pressureAt(back[0], back[1]);
       const measuredBranch = sourcePressure >= MIN_HOTSPOT_PRESSURE && backRoad && roadDegree(back[0], back[1]) === 2 &&
         firstRoads === 1 && joins && forwardRoad;
+      // When a delayed corridor has no nearby road to reconnect to, reserve
+      // one full-length outlet into contiguous acquired frontage. This is a
+      // staged network move: it puts capacity beside the measured queue and
+      // leaves a straight endpoint for a later, evidence-backed connection.
+      // The stronger threshold and four-cell requirement keep ordinary side
+      // branches out of the network.
+      const nearJunction = backRoad && dirs.some(([ox, oy]) => {
+        const nx = back[0] + ox;
+        const ny = back[1] + oy;
+        return g.isRoad(nx, ny) && roadDegree(nx, ny) >= 3;
+      });
+      const measuredOutlet = sourcePressure >= Math.max(1, MIN_HOTSPOT_PRESSURE * 4) && backRoad &&
+        roadDegree(back[0], back[1]) === 2 && !nearJunction && firstRoads === 1 && !joins &&
+        cells.length === EXTEND_STREET_TILES;
       const startOk = cells.length === 1 && joins
         ? firstRoads === 2 && backRoad && forwardRoad
-        : firstRoads === 1 && (measuredBranch || (startsAtRoadEnd && (straightContinuation || joins)));
+        : firstRoads === 1 && (measuredBranch || measuredOutlet || (startsAtRoadEnd && (straightContinuation || joins)));
       const endOk = !joins ? lastRoads === 0 : lastRoads >= 1 && forwardRoad;
       // A corridor that closes onto two already-busy junctions creates a
       // compact lattice of crossings rather than a useful street. Keep
@@ -3759,6 +3773,7 @@ export class GrowthSystem {
       // costs more than the tile that caused it.
       const score = cells.length * 2 - delta * 6 + (joins ? 4 : 0);
       runs.push({ cells, joins, junctionDelta: delta, score, measuredBranch: !!measuredBranch,
+        measuredOutlet: !!measuredOutlet,
         turningContinuation: !!turningContinuation, sourcePressure });
     }
     return runs;
