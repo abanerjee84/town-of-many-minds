@@ -177,6 +177,8 @@ const trips = (from, to) => Array.from({ length: 8 }, () => ({ from, to, weight:
   assert.ok(endpointRuns.length > 0, 'a road-end continuation remains eligible');
   assert.ok(endpointRuns.every((run) => run.cells.every(([, y]) => y === 3)),
     'a legal endpoint extension stays aligned with its source street');
+  assert.equal(growth.roadRuns([3, 4]).filter((run) => !run.joins).length, 0,
+    'an unmeasured ninety-degree turn from a road end cannot start a U-shaped loop');
   endpointTown.perimeter = { isAcquired: () => false };
   assert.equal(growth.roadRuns([4, 3]).length, 0,
     'frontier cells must be acquired before a street can enter them');

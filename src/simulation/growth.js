@@ -3694,6 +3694,16 @@ export class GrowthSystem {
       // rear road cell to be degree-one removes the apparent randomness that
       // came from choosing among every side-facing cell on a long corridor.
       const startsAtRoadEnd = backRoad && roadDegree(back[0], back[1]) === 1;
+      // A sequence of independent endpoint orders must continue along the
+      // existing street axis. Without this check, every newly paved endpoint
+      // becomes an invitation to turn ninety degrees on the next decision,
+      // which is how empty U-shaped loops and hairpins appeared in long runs.
+      // A turn is retained only for a connector that reaches another road;
+      // the planner then still needs a distinct-component join or positive OD
+      // relief before it can be built.
+      const straightContinuation = startsAtRoadEnd &&
+        g.isRoad(back[0] - dx, back[1] - dy);
+      const turningContinuation = startsAtRoadEnd && !straightContinuation;
       const end = cells[cells.length - 1];
       const forwardRoad = g.isRoad(end[0] + dx, end[1] + dy);
       // A straight bypass from the middle of a delayed corridor is the one
@@ -3707,7 +3717,7 @@ export class GrowthSystem {
         firstRoads === 1 && joins && forwardRoad;
       const startOk = cells.length === 1 && joins
         ? firstRoads === 2 && backRoad && forwardRoad
-        : firstRoads === 1 && (startsAtRoadEnd || measuredBranch);
+        : firstRoads === 1 && (measuredBranch || (startsAtRoadEnd && (straightContinuation || joins)));
       const endOk = !joins ? lastRoads === 0 : lastRoads >= 1 && forwardRoad;
       // A corridor that closes onto two already-busy junctions creates a
       // compact lattice of crossings rather than a useful street. Keep
@@ -3748,7 +3758,8 @@ export class GrowthSystem {
       // may either connect two roads or add a run), but every junction it lays
       // costs more than the tile that caused it.
       const score = cells.length * 2 - delta * 6 + (joins ? 4 : 0);
-      runs.push({ cells, joins, junctionDelta: delta, score, measuredBranch: !!measuredBranch, sourcePressure });
+      runs.push({ cells, joins, junctionDelta: delta, score, measuredBranch: !!measuredBranch,
+        turningContinuation: !!turningContinuation, sourcePressure });
     }
     return runs;
   }

@@ -93,7 +93,9 @@ Updated 2026-10-03 after the tourism, hotel/resort, and hospitality-economy audi
 - [x] Added a strict demand-qualified bypass for a delayed straight corridor: it can connect a middle road cell to a nearby street within the four-tile order, records its two deliberate junctions, and remains unavailable without current measured pressure.
 - [x] Kept same-component loop closures behind positive measured OD relief; topology and hotspot evidence alone cannot create a loop. Ordinary extensions remain aligned to degree-one road ends and opposing road gaps.
 - [x] Fixed a four-tile connector edge case where the planner stopped before inspecting the road immediately beyond the maximum run, silently rejecting a valid full-length reconnection.
-- [x] Added regression coverage for flowing-but-undelayed traffic, sparse-history hotspot priority, live bypass generation/selection, and the no-demand middle-branch guard in `scripts/_road_extension_check.mjs`.
+- [x] Blocked unmeasured ninety-degree turns from newly created road ends. Endpoint spurs now preserve their existing axis, while a turn is admitted only as a reconnecting, measured network connector; this prevents repeated orders from assembling empty U-shaped loops and hairpins.
+- [x] Added regression coverage for flowing-but-undelayed traffic, sparse-history hotspot priority, live bypass generation/selection, the no-demand middle-branch guard, and the unmeasured road-end turn guard in `scripts/_road_extension_check.mjs`.
+- [x] Re-ran a 100-day forced seed-42 horizon after the turn guard: the network remained one connected component with zero unmarked off-road vehicles, zero unacquired roads, and a clean accounting audit.
 - [x] Ran a bounded 200-day forced road horizon for seeds 42 and 1337: both stayed at one connected component with zero unacquired roads, zero off-road/unmarked vehicles, clean accounting audits, and no arbitrary `EXTEND_STREET` order while completed-trip evidence remained empty.
 - [ ] Re-run the full 800-day seed matrix after a longer browser soak and compare congestion relief, component count, unacquired roads, and off-road vehicles against the prior baseline.
 
