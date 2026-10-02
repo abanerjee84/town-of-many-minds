@@ -11,7 +11,7 @@ import { XS_CLASS_ORDER, XS_CLASS_LABEL, classIndex } from '../kits/roads/crossS
 import { ORDER as RESOURCE_ORDER, SITE_LABEL, spurPath, MAX_SPUR_LENGTH } from '../kits/resources/resourceKit.js';
 import { snapshotProjectWorld, restoreProjectWorld } from './projectSnapshot.js';
 import { DIRS } from '../core/grid.js';
-import { chooseRoadExtension } from './roadExtensionPlanner.js';
+import { chooseRoadExtension, sameComponentClosure } from './roadExtensionPlanner.js';
 import { constructionBlock, constructionBlockQuote } from '../kits/constructionBlocks.js';
 import { civicVerticalCap } from '../kits/civic/civicKit.js';
 import { agriculturalSetbackConflict, resourceSetbackConflict, educationCampusConflict } from '../placement/siteRules.js';
@@ -3708,6 +3708,12 @@ export class GrowthSystem {
     if (selection.cells.length > EXTEND_STREET_TILES) return false;
     const g = this.town.grid;
     const comps = roadComponents(g);
+    // Do not let an explicit/stale selection bypass the planner's loop guard.
+    // Same-component closures require measured OD relief and are marked by the
+    // chooser with the `shortens trips` reason; hotspot-only closures are not
+    // valid construction orders even if their cells still happen to be free.
+    if (sameComponentClosure(g, selection, comps) &&
+      !(selection.benefit > 0 && selection.reason === 'shortens trips')) return false;
     const [ax, ay] = selection.cells[0];
     if (![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => {
       const x = ax + dx;

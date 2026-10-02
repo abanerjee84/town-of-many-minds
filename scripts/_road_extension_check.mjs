@@ -53,8 +53,7 @@ const trips = (from, to) => Array.from({ length: 8 }, () => ({ from, to, weight:
 
   const hotspot = new Map([[g.idx(9, 1), { visits: 20, delay: 12 }]]);
   const hotspotChoice = chooseRoadExtension(g, runs, { cells: hotspot, trips: [] }, roadComponents(g));
-  assert.deepEqual(hotspotChoice.cells, shortcut.cells, 'a measured hotspot may justify a legal local extension without completed OD pairs');
-  assert.equal(hotspotChoice.reason, 'relieves measured queue');
+  assert.equal(hotspotChoice, null, 'a same-component shortcut may not be justified by a hotspot alone');
 }
 
 {
@@ -158,6 +157,38 @@ const trips = (from, to) => Array.from({ length: 8 }, () => ({ from, to, weight:
   growth.claims = new Set();
   assert.equal(growth.roadRuns([3, 2]).length, 0,
     'a four-tile closure between busy junctions is rejected');
+}
+
+{
+  // A U-shaped road has two open ends in the same component. The gap is
+  // locally legal, but filling it would make a small loop around one block.
+  // A hotspot at the endpoint must not be enough evidence to close it.
+  const g = new Grid(10, 10);
+  for (let x = 2; x <= 6; x++) g.setKind(x, 2, CELL_KIND.ROAD);
+  for (let y = 2; y <= 6; y++) {
+    g.setKind(2, y, CELL_KIND.ROAD);
+    g.setKind(6, y, CELL_KIND.ROAD);
+  }
+  g.computeRoadMask();
+  const town = {
+    grid: g,
+    buildingAt: () => null,
+    resources: { ownsCell: () => false }
+  };
+  const growth = Object.create(GrowthSystem.prototype);
+  growth.town = town;
+  growth.claims = new Set();
+  const runs = growth.roadRuns([3, 6]);
+  assert.ok(runs.some((run) => run.joins), 'the U-gap remains detectable for measured OD evaluation');
+  const loop = chooseRoadExtension(g, runs, {
+    cells: new Map([[g.idx(2, 6), { visits: 24, delay: 18 }]]),
+    trips: []
+  }, roadComponents(g));
+  assert.equal(loop, null, 'a same-component U-gap loop is rejected without OD evidence');
+  const rawLoop = runs.find((run) => run.joins);
+  town.roadGraphVersion = 1;
+  assert.equal(growth.roadSelectionValid({ ...rawLoop, version: 1, benefit: 3, reason: 'relieves measured queue' }), false,
+    'the final construction validator also rejects a forged hotspot-only loop');
 }
 
 {

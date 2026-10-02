@@ -52,6 +52,7 @@ Updated 2026-10-02 after the population-cap, factory-archetype, fuel-siting, fou
 - [x] Added a persisted Council cadence setting (default two sittings per game day, configurable from 1–12) and moved the live scheduler from a fixed six-hour slot to that setting.
 - [x] Council congestion evidence is now time-weighted between sittings. The next report presents average, closing instantaneous value, range, duration, and sample count; road gates and `EXTEND_STREET` ranking consume the closed interval average instead of a single frame.
 - [x] Congestion priority now gives an eligible `EXTEND_STREET` a dedicated high score above other demand gates. Planner legality, graph benefit, acquired land, finance, and materials remain mandatory.
+- [x] Audited road geometry: same-component U-gap closures are now identified as loops and rejected by hotspot/topology fallback; only positive measured OD relief can authorize a shortcut, while normal runs remain anchored to degree-one street ends.
 - [x] Fit Town now reframes automatically at three-game-hour boundaries while enabled, while retaining immediate framing on load, Reset, and perimeter growth.
 - [x] Agriculture yards now start as exact 7×4 rectangles (28 tiles) and expand to 8×5 and 9×6 tiers for farms, livestock, and poultry, with matching catalogue footprints.
 - [x] `UPDATE_RESOURCE` now emits an auditable event, a transient world-space pulse at the upgraded yard, and a visible HUD notice that reports the site, level change, and yard area.

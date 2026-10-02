@@ -142,6 +142,24 @@ function componentJoins(grid, run, components) {
 }
 
 /**
+ * A run can be locally legal and still be the wrong kind of street work. If
+ * both ends land on the same existing road component, paving it closes a
+ * cycle. Cycles are useful only when measured trips prove that the shortcut
+ * pays for itself; a hotspot alone is not enough evidence to draw a small
+ * loop around one block.
+ */
+export function sameComponentClosure(grid, run, components) {
+  if (!run.joins) return false;
+  const edges = boundary(grid, run.cells);
+  const roads = new Set(edges.map((entry) => entry.road));
+  if (roads.size < 2) return false;
+  const labels = new Set(edges
+    .map((entry) => components.label[entry.road])
+    .filter((label) => label >= 0));
+  return labels.size === 1;
+}
+
+/**
  * A sparse completed-trip sample is common in a young town. A run that touches
  * a measured busy/delayed road is still evidence-based, so it can be selected
  * when OD detour scoring has too little signal. This never scores empty land:
@@ -169,6 +187,10 @@ function hotspotScore(grid, run, demand) {
 
 function bestHotspot(grid, legal, demand) {
   const ranked = legal
+    // A queue at an existing road does not justify closing a same-component
+    // loop. Keep the fallback attached to a road end or a genuine component
+    // join; OD evidence below is the only path that can authorize a shortcut.
+    .filter((run) => !run.sameComponentClosure)
     .map((run) => ({ run, pressure: hotspotScore(grid, run, demand), foresight: foresightScore(grid, run) }))
     .filter((row) => row.pressure > 0)
     .sort((a, b) => b.pressure - a.pressure || b.foresight.score - a.foresight.score || geometricScore(b.run) - geometricScore(a.run) || a.run.key.localeCompare(b.run.key));
@@ -206,7 +228,7 @@ export function chooseRoadExtension(grid, runs, demand, components) {
     });
     if (!mainTouch || seen.has(k)) continue;
     seen.add(k);
-    legal.push({ ...run, key: k });
+    legal.push({ ...run, key: k, sameComponentClosure: sameComponentClosure(grid, run, components) });
   }
   if (!legal.length) return null;
 
@@ -223,7 +245,7 @@ export function chooseRoadExtension(grid, runs, demand, components) {
     // still actionable with a small sample, followed by a legal run touching
     // a measured live hotspot rather than guessing a destination.
     const joins = legal
-      .filter((run) => componentJoins(grid, run, components) > 0)
+      .filter((run) => componentJoins(grid, run, components) > 0 && !run.sameComponentClosure)
       .sort((a, b) =>
         componentJoins(grid, b, components) - componentJoins(grid, a, components) ||
         foresightScore(grid, b).score - foresightScore(grid, a).score ||
@@ -277,6 +299,11 @@ export function chooseRoadExtension(grid, runs, demand, components) {
       else if (Number.isFinite(before)) saved += (before - after) * trip.weight;
     }
     const benefit = saved + reached * 20 + joined * 8;
+    // A same-component closure is a cycle by construction. It may still be
+    // the right answer when the measured OD sample demonstrates a meaningful
+    // shortcut, but it must never survive solely because the local geometry
+    // or a generic positive score looks attractive.
+    if (run.sameComponentClosure && saved <= 0) continue;
     // OD relief is the primary objective. Foresight breaks ties between roads
     // with comparable relief, preferring a useful frontage and a continuation
     // that can become the next block without multiplying junctions.
