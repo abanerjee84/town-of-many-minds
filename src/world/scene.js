@@ -35,6 +35,73 @@ function makeGrassTexture() {
   return tex;
 }
 
+function makeSkybox() {
+  const uniforms = {
+    topColor: { value: new THREE.Color(0x4b91c4) },
+    horizonColor: { value: new THREE.Color(0xbfe7f4) },
+    bottomColor: { value: new THREE.Color(0x8fb9c9) },
+    sunColor: { value: new THREE.Color(0xffe5b0) },
+    sunDirection: { value: new THREE.Vector3(0.5, 0.7, 0.35).normalize() },
+    nightStrength: { value: 0 }
+  };
+  const material = new THREE.ShaderMaterial({
+    uniforms,
+    side: THREE.BackSide,
+    depthWrite: false,
+    depthTest: false,
+    fog: false,
+    toneMapped: false,
+    vertexShader: /* glsl */ `
+      varying vec3 vSkyDirection;
+      void main() {
+        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+        vSkyDirection = worldPosition.xyz - cameraPosition;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform vec3 topColor;
+      uniform vec3 horizonColor;
+      uniform vec3 bottomColor;
+      uniform vec3 sunColor;
+      uniform vec3 sunDirection;
+      uniform float nightStrength;
+      varying vec3 vSkyDirection;
+
+      float hash21(vec2 p) {
+        p = fract(p * vec2(123.34, 456.21));
+        p += dot(p, p + 45.32);
+        return fract(p.x * p.y);
+      }
+
+      void main() {
+        vec3 direction = normalize(vSkyDirection);
+        float height = clamp(direction.y * 0.5 + 0.5, 0.0, 1.0);
+        float horizonMix = smoothstep(0.04, 0.48, height);
+        float topMix = smoothstep(0.42, 0.94, height);
+        vec3 color = mix(bottomColor, horizonColor, horizonMix);
+        color = mix(color, topColor, topMix);
+
+        float sunDot = max(dot(direction, normalize(sunDirection)), 0.0);
+        float sunGlow = pow(sunDot, 12.0) * 0.12 + pow(sunDot, 220.0) * 0.8;
+        color += sunColor * sunGlow * (1.0 - nightStrength);
+
+        vec2 starCell = floor(direction.xz * 180.0 + direction.y * 37.0);
+        float stars = step(0.9985, hash21(starCell));
+        stars *= smoothstep(0.16, 0.82, direction.y) * nightStrength;
+        color += vec3(0.65, 0.78, 1.0) * stars * 0.75;
+
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `
+  });
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(2400, 48, 24), material);
+  mesh.name = 'skybox';
+  mesh.frustumCulled = false;
+  mesh.renderOrder = -1000;
+  return { mesh, uniforms };
+}
+
 export class SceneManager {
   constructor(container) {
     this.container = container;
@@ -50,16 +117,22 @@ export class SceneManager {
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x9fd3ef);
-    // The full plate is 400m across. Keep the woodland visible in the top and
-    // isometric overview while still fading the far skirt into the horizon.
-    this.scene.fog = new THREE.Fog(0x9fd3ef, 420, 1250);
+    this.scene.background = new THREE.Color(0xbfe7f4);
+    // The full plate is 400m across. Start fading beyond the readable town
+    // core and finish before the plate's diagonal corners, so the rectangular
+    // build boundary dissolves into the procedural sky instead of remaining a
+    // hard green frame in wide overviews.
+    this.scene.fog = new THREE.Fog(0xbfe7f4, 120, 460);
+    const sky = makeSkybox();
+    this.skybox = sky.mesh;
+    this.skyUniforms = sky.uniforms;
+    this.scene.add(this.skybox);
 
     this.camera = new THREE.PerspectiveCamera(
       50,
       container.clientWidth / container.clientHeight,
       0.5,
-      2200
+      3000
     );
     // Frame the founding hamlet just right of centre so the playable map reads
     // cleanly between the HUD panels. The modestly tighter pose keeps roads and
@@ -191,22 +264,40 @@ export class SceneManager {
     this.hemi.intensity = 0.28 + d * 0.95;
     this.ambient.intensity = 0.22 + d * 0.2;
 
-    const daySky = new THREE.Color(0x9fd3ef);
-    const duskSky = new THREE.Color(0xe08a5a);
-    const nightSky = new THREE.Color(0x0b1626);
+    const dayTop = new THREE.Color(0x4b91c4);
+    const dayHorizon = new THREE.Color(0xbfe7f4);
+    const dayBottom = new THREE.Color(0x8fb9c9);
+    const duskTop = new THREE.Color(0x4a365f);
+    const duskHorizon = new THREE.Color(0xf0a06b);
+    const duskBottom = new THREE.Color(0xd9785a);
+    const nightTop = new THREE.Color(0x020611);
+    const nightHorizon = new THREE.Color(0x182b43);
+    const nightBottom = new THREE.Color(0x0b1626);
 
-    const sky = new THREE.Color();
+    const top = new THREE.Color();
+    const horizon = new THREE.Color();
+    const bottom = new THREE.Color();
     if (d > 0.45) {
-      sky.copy(daySky);
+      top.copy(dayTop); horizon.copy(dayHorizon); bottom.copy(dayBottom);
     } else if (d > 0.12) {
       const t = (d - 0.12) / 0.33;
-      sky.copy(duskSky).lerp(daySky, t);
+      top.copy(nightTop).lerp(duskTop, Math.min(1, t));
+      horizon.copy(nightHorizon).lerp(duskHorizon, Math.min(1, t));
+      bottom.copy(nightBottom).lerp(duskBottom, Math.min(1, t));
     } else {
       const t = d / 0.12;
-      sky.copy(nightSky).lerp(duskSky, t);
+      top.copy(nightTop).lerp(duskTop, t);
+      horizon.copy(nightHorizon).lerp(duskHorizon, t);
+      bottom.copy(nightBottom).lerp(duskBottom, t);
     }
-    this.scene.background = sky;
-    this.scene.fog.color.copy(sky);
+    this.skyUniforms.topColor.value.copy(top);
+    this.skyUniforms.horizonColor.value.copy(horizon);
+    this.skyUniforms.bottomColor.value.copy(bottom);
+    this.skyUniforms.sunColor.value.copy(this.sun.color);
+    this.skyUniforms.sunDirection.value.copy(this.sun.position).normalize();
+    this.skyUniforms.nightStrength.value = this._night;
+    this.scene.background.copy(horizon);
+    this.scene.fog.color.copy(horizon);
     this.renderer.toneMappingExposure = 0.72 + d * 0.45;
   }
 
@@ -392,6 +483,9 @@ export class SceneManager {
 
   render() {
     this.controls.update();
+    // Keep the sky infinitely distant even when the player pans across the
+    // full plate; only its direction should change with the camera.
+    this.skybox.position.copy(this.camera.position);
     this.renderer.render(this.scene, this.camera);
   }
 

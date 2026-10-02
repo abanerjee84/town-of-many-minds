@@ -33,6 +33,11 @@ const result = await page.evaluate((required) => {
       actions: [...document.querySelectorAll('#camera-toolbar [data-camera-action]')].map((el) => el.dataset.cameraAction),
       presets: [...document.querySelectorAll('#camera-toolbar [data-camera-preset]')].map((el) => el.dataset.cameraPreset)
     },
+    sceneAtmosphere: {
+      skybox: !!window.sceneMgr.scene.getObjectByName('skybox'),
+      fogNear: window.sceneMgr.scene.fog?.near,
+      fogFar: window.sceneMgr.scene.fog?.far
+    },
     fitTown: {
       pressed: document.getElementById('fit-town')?.getAttribute('aria-pressed'),
       active: document.getElementById('fit-town')?.classList.contains('active'),
@@ -176,6 +181,7 @@ const failures = [
   ...(!result.stats.providerHooks ? ['council/provider hooks are not exposed'] : []),
   ...(result.stats.cameraToolbar?.actions?.length !== 8 || result.stats.cameraToolbar?.presets?.join(',') !== 'iso,top,north,east' ? ['camera toolbar is missing a nudge or preset control'] : []),
   ...(result.stats.cameraToolbarMutation?.readout?.includes('NaN') || result.stats.cameraPresetMutation?.orbit?.includes('NaN') ? ['camera toolbar produced an invalid pose'] : []),
+  ...(!result.stats.sceneAtmosphere?.skybox || !(result.stats.sceneAtmosphere.fogNear > 0) || !(result.stats.sceneAtmosphere.fogFar > result.stats.sceneAtmosphere.fogNear) ? ['skybox or horizon fog is missing'] : []),
   ...(result.stats.fitTown?.pressed !== 'true' || !result.stats.fitTown?.active ? ['Fit Town is not enabled by default'] : []),
   ...(result.stats.fitTownOff?.pressed !== 'false' || result.stats.fitTownOff?.stored !== false ? ['Fit Town toggle did not persist off'] : []),
   ...(result.stats.fitTownOn?.pressed !== 'true' || result.stats.fitTownOn?.stored !== true ? ['Fit Town toggle did not persist on'] : []),
