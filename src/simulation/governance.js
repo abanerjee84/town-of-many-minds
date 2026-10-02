@@ -501,7 +501,7 @@ const PROMPT_BODY = [
   'each bucket is limited by its own basis — ' + BUCKET_IDS.map((id) => `${BUCKETS[id].label} needs ${BUCKETS[id].hint}`).join(' · ') + ',',
   'and a finished programme applies one of these gains: ' + LEVER_IDS.map((k) => `${k} (${LEVERS[k].hint})`).join(' · ') +
     '. The next programme is always the town\u2019s own weakest number, printed on the Research line,',
-  'EXTEND_STREET (also EXPAND_STREET) chooses a legal run only when congestion is above the road gate and observed trips or a disconnected component justify it; the council chooses whether to order it, not its coordinates,',
+  'EXTEND_STREET (also EXPAND_STREET) chooses a legal run only when congestion is above the road gate and observed trips or a disconnected component justify it; graph planning uses connected components, weighted shortest paths, measured OD relief, and a deterministic frontage/continuation foresight tie-break; the council chooses whether to order it, not its coordinates,',
   'ACQUIRE_LAND buys surveyed frontier tiles only after the current acquired land has no usable serviced plot left; it is priced per fresh tile and must leave the public reserve intact,',
   'BUILD_TRANSIT (optional spec: facility=busdepot|transit) commissions a bus depot or transit hub, after which registered buses can serve marked stops; read coverage and ridership before expanding the fleet,',
   'RESTRUCTURE_BUILDING clears and rebuilds one eligible occupied lot with a safe additional floor; it preserves the footprint and facility and records the demolition,',

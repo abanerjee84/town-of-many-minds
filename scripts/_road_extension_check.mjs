@@ -101,8 +101,8 @@ const trips = (from, to) => Array.from({ length: 8 }, () => ({ from, to, weight:
 {
   const g = new Grid(8, 8);
   for (let x = 1; x <= 6; x++) g.setKind(x, 3, CELL_KIND.ROAD);
-  // This empty cell is beside a road junction, but the proposed run would
-  // leave sideways from the junction instead of continuing a road end.
+  // A corridor-middle branch is never a valid extension, even when the
+  // middle cell has a large observed queue. Growth must start at an end.
   const town = {
     grid: g,
     roadGraphVersion: 1,
@@ -114,9 +114,26 @@ const trips = (from, to) => Array.from({ length: 8 }, () => ({ from, to, weight:
   growth.town = town;
   growth.claims = new Set();
   const runs = growth.roadRuns([2, 2]);
-  assert.ok(runs.length > 0, 'a straight road-end continuation remains eligible');
-  assert.ok(runs.every((run) => run.cells.every(([x]) => x === 2)),
-    'a side branch from a junction is rejected before demand scoring');
+  assert.equal(runs.length, 0,
+    'a side branch from a corridor middle is rejected before demand scoring');
+
+  const endpointGrid = new Grid(10, 8);
+  for (let x = 1; x <= 3; x++) endpointGrid.setKind(x, 3, CELL_KIND.ROAD);
+  endpointGrid.computeRoadMask();
+  const endpointTown = {
+    grid: endpointGrid,
+    roadGraphVersion: 1,
+    buildingAt: () => null,
+    resources: { ownsCell: () => false }
+  };
+  growth.town = endpointTown;
+  const endpointRuns = growth.roadRuns([4, 3]);
+  assert.ok(endpointRuns.length > 0, 'a road-end continuation remains eligible');
+  assert.ok(endpointRuns.every((run) => run.cells.every(([, y]) => y === 3)),
+    'a legal endpoint extension stays aligned with its source street');
+  endpointTown.perimeter = { isAcquired: () => false };
+  assert.equal(growth.roadRuns([4, 3]).length, 0,
+    'frontier cells must be acquired before a street can enter them');
 }
 
 {

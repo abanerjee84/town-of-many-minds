@@ -373,8 +373,14 @@ export function spurPath(g, sources, maxDepth = MAX_SPUR) {
 }
 
 function carveRoad(g, cells, town = null) {
+  const perimeter = town?.perimeter;
+  // During founding the perimeter ledger is still empty and is seeded after
+  // the resource layout is complete. Once a town has a seeded ledger, a
+  // resource refresh must use already-acquired land; it cannot silently pave
+  // a frontier spur outside an ACQUIRE_LAND decision.
+  if (perimeter?.acquired?.size && cells.some(([x, y]) => !perimeter.isAcquired(x, y))) return false;
   for (const [x, y] of cells) {
-    if (!g.inBounds(x, y)) continue;
+    if (!g.inBounds(x, y)) return false;
     // Resource sites are planned after the founding forest exists. Their
     // direct carve must use the same vegetation contract as Town.paintRoad;
     // otherwise a tree prop survives on a newly paved access spur.
@@ -384,6 +390,7 @@ function carveRoad(g, cells, town = null) {
     g.zone[i] = null;
     g.owner[i] = null;
   }
+  return true;
 }
 
 /**
@@ -776,18 +783,22 @@ export class ResourceSystem {
       const carved = carveLake(g, rng, bounds, Math.max(LAKE_MIN, Math.min(LAKE_MAX, lakeTarget)), true);
       if (carved) {
         const { lake, spur: lakeSpur } = carved;
-        for (const [x, y] of lake) {
-          g.setKind(x, y, CELL_KIND.WATER);
-          g.zone[g.idx(x, y)] = null;
-          g.owner[g.idx(x, y)] = null;
+        const perimeter = this.townRef?.perimeter;
+        const landReady = !perimeter?.acquired?.size || [...lake, ...lakeSpur]
+          .every(([x, y]) => perimeter.isAcquired(x, y));
+        if (landReady && carveRoad(g, lakeSpur, this.townRef)) {
+          for (const [x, y] of lake) {
+            g.setKind(x, y, CELL_KIND.WATER);
+            g.zone[g.idx(x, y)] = null;
+            g.owner[g.idx(x, y)] = null;
+          }
+          this.claim(lake);
+          this.sites.push({
+            id: town.nextEntityId ? town.nextEntityId('resource') : `resource-lake-${this.sites.length + 1}`,
+            kind: 'lake', cells: lake, spur: lakeSpur, work: null, face: faceToRoad(g, lake),
+            ownerType: 'government', ownerId: 'government', fixedCapital: 0
+          });
         }
-        this.claim(lake);
-        carveRoad(g, lakeSpur, this.townRef);
-        this.sites.push({
-          id: town.nextEntityId ? town.nextEntityId('resource') : `resource-lake-${this.sites.length + 1}`,
-          kind: 'lake', cells: lake, spur: lakeSpur, work: null, face: faceToRoad(g, lake),
-          ownerType: 'government', ownerId: 'government', fixedCapital: 0
-        });
       }
 
       // The energy order. The first three are the guaranteed founding mix —
@@ -903,8 +914,10 @@ export class ResourceSystem {
       if (resourceSiteBuildingConflict(this.townRef, cells, kind)) continue;
       const spur = spurPath(g, cells);
       if (!spur) continue;
+      const perimeter = this.townRef?.perimeter;
+      if (perimeter?.acquired?.size && [...cells, ...spur].some(([cx, cy]) => !perimeter.isAcquired(cx, cy))) continue;
       this.claim(cells);
-      carveRoad(g, spur, this.townRef);
+      if (!carveRoad(g, spur, this.townRef)) continue;
       for (const [cx, cy] of cells) {
         g.setKind(cx, cy, CELL_KIND.LOT);
         g.zone[g.idx(cx, cy)] = null;

@@ -46,6 +46,8 @@ for (const seed of SEEDS) {
     let forcedRequests = 0;
     let maxCongestion = 0;
     let maxOffNetwork = 0;
+    let maxUnacquiredRoads = 0;
+    let lastUnacquiredRoadCells = [];
     let maxVehicles = 0;
     let maxTrips = 0;
     const decisionRows = [];
@@ -113,6 +115,13 @@ for (const seed of SEEDS) {
         }
       }
       const congestion = Number(mobility.congestion) || 0;
+      const unacquiredRoads = t.perimeter
+        ? t.grid.roadCells().filter(([x, y]) => !t.perimeter.isAcquired(x, y)).length
+        : 0;
+      if (unacquiredRoads) {
+        lastUnacquiredRoadCells = t.grid.roadCells()
+          .filter(([x, y]) => !t.perimeter.isAcquired(x, y));
+      }
       // The planner evaluates every legal four-cell run and, once four trips
       // exist, virtual Dijkstra detours. Do not pay that cost on calm days.
       const plan = congestion > 0.34 && (day % snapshotEvery === 0 || day === days - 1)
@@ -125,6 +134,7 @@ for (const seed of SEEDS) {
       maxOffRoadUnmarked = Math.max(maxOffRoadUnmarked, offRoadUnmarked);
       maxCongestion = Math.max(maxCongestion, congestion);
       maxOffNetwork = Math.max(maxOffNetwork, connectivity.offNetwork || 0);
+      maxUnacquiredRoads = Math.max(maxUnacquiredRoads, unacquiredRoads);
       maxVehicles = Math.max(maxVehicles, t.traffic.vehicles.length);
       maxTrips = Math.max(maxTrips, Number(mobility.vehicleTripsCompleted) || 0);
       if (congestion > 0.34) {
@@ -151,6 +161,7 @@ for (const seed of SEEDS) {
           plan: plan ? { cells: plan.cells.length, reason: plan.reason, benefit: plan.benefit ?? null } : null,
           components: connectivity.components,
           offNetwork: connectivity.offNetwork,
+          unacquiredRoads,
           linked: connectivity.linked,
           priority: t.growth.ranked().slice(0, 4).map((x) => x.type),
           projects: t.growth.projects.map((p) => p.plan.type)
@@ -220,6 +231,8 @@ for (const seed of SEEDS) {
       maxOffRoadDistance,
       offRoadExample,
       maxOffNetwork,
+      maxUnacquiredRoads,
+      lastUnacquiredRoadCells,
       finalConnectivity,
       daysWithRoadNeed,
       daysWithRoadPlan,
@@ -252,6 +265,7 @@ console.log(JSON.stringify({ pageErrors, days: DAYS, summary: results.map((r) =>
   offRoadUnmarkedExample: r.offRoadUnmarkedExample,
   maxOffRoadDistance: r.maxOffRoadDistance,
   maxOffNetwork: r.maxOffNetwork,
+  maxUnacquiredRoads: r.maxUnacquiredRoads,
   daysWithRoadNeed: r.daysWithRoadNeed,
   daysWithRoadPlan: r.daysWithRoadPlan,
   roadDecisions: r.roadDecisions,
@@ -259,4 +273,4 @@ console.log(JSON.stringify({ pageErrors, days: DAYS, summary: results.map((r) =>
   forcedRequests: r.forcedRequests,
   auditOk: r.audit.ok
 })) }));
-if (pageErrors.length || results.some((r) => !r.audit.ok)) process.exit(1);
+if (pageErrors.length || results.some((r) => !r.audit.ok || r.maxUnacquiredRoads > 0)) process.exit(1);

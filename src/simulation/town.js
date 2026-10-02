@@ -835,6 +835,7 @@ export class Town {
     if (!cells || !cells.length) return false;
     let felled = 0;
     for (const [cx, cy] of cells) {
+      if (this.perimeter && !this.perimeter.isAcquired(cx, cy)) return false;
       this.clearCell(cx, cy);
       felled += this.clearProps(cx, cy);
       g.setKind(cx, cy, CELL_KIND.PATH);
@@ -892,6 +893,7 @@ export class Town {
     if (!cells) return false;
     let felled = 0;
     for (const [cx, cy] of cells) {
+      if (this.perimeter && !this.perimeter.isAcquired(cx, cy)) return false;
       this.clearCell(cx, cy);
       felled += this.clearProps(cx, cy);
       g.setKind(cx, cy, CELL_KIND.ROAD);

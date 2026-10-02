@@ -3477,7 +3477,8 @@ export class GrowthSystem {
     if (!spur || !spur.length) return false;
     const g = this.town.grid;
     for (const [x, y] of spur) {
-      if (!g.inBounds(x, y)) continue;
+      if (!g.inBounds(x, y)) return false;
+      if (this.town.perimeter && !this.town.perimeter.isAcquired(x, y)) return false;
       if (g.isRoad(x, y)) continue;
       // Access roads are real construction too. Remove canopy and understory
       // before changing the cell kind so a tree can never render in asphalt.
@@ -3509,7 +3510,7 @@ export class GrowthSystem {
     if (!plan.accessSpur?.length) return;
     const g = this.town.grid;
     plan.accessSpurBefore = plan.accessSpur.map(([x, y]) => ({ x, y, kind: g.kindAt(x, y), zone: g.zone[g.idx(x, y)], owner: g.owner[g.idx(x, y)] }));
-    this.laySpur(plan.accessSpur);
+    if (!this.laySpur(plan.accessSpur)) throw new Error('access spur land is not acquired');
   }
 
   rollbackSpur(plan) {
@@ -3541,6 +3542,7 @@ export class GrowthSystem {
     const free = (x, y) =>
       g.inBounds(x, y) &&
       g.kindAt(x, y) === CELL_KIND.EMPTY &&
+      (!t.perimeter || t.perimeter.isAcquired(x, y)) &&
       !t.buildingAt(x, y) &&
       !t.resources?.ownsCell(x, y) &&
       !this.claims.has(`${x},${y}`);
@@ -3631,11 +3633,17 @@ export class GrowthSystem {
       const lastRoads = contacts.filter((c) => c.i === cells.length - 1).reduce((n, c) => n + c.count, 0);
       const sideTouch = contacts.some((c) => c.i > 0 && c.i < cells.length - 1);
       const backRoad = g.isRoad(anchor[0] - dx, anchor[1] - dy);
+      const back = [anchor[0] - dx, anchor[1] - dy];
+      // A normal extension is a continuation of a road end, not a branch
+      // punched into the middle of an existing block. Requiring the anchor's
+      // rear road cell to be degree-one removes the apparent randomness that
+      // came from choosing among every side-facing cell on a long corridor.
+      const startsAtRoadEnd = backRoad && roadDegree(back[0], back[1]) === 1;
       const end = cells[cells.length - 1];
       const forwardRoad = g.isRoad(end[0] + dx, end[1] + dy);
       const startOk = cells.length === 1 && joins
         ? firstRoads === 2 && backRoad && forwardRoad
-        : firstRoads === 1 && backRoad;
+        : firstRoads === 1 && startsAtRoadEnd;
       const endOk = !joins ? lastRoads === 0 : lastRoads >= 1 && forwardRoad;
       // A corridor that closes onto two already-busy junctions creates a
       // compact lattice of crossings rather than a useful street. Keep
@@ -3690,6 +3698,7 @@ export class GrowthSystem {
     })) return false;
     if (!selection.cells.every(([x, y]) =>
       g.inBounds(x, y) && g.kindAt(x, y) === CELL_KIND.EMPTY &&
+      (!this.town.perimeter || this.town.perimeter.isAcquired(x, y)) &&
       !this.town.buildingAt(x, y) && !this.town.resources?.ownsCell(x, y) &&
       !this.claims.has(`${x},${y}`))) return false;
     return this.roadRuns([ax, ay]).some((run) =>
@@ -4498,6 +4507,19 @@ export class GrowthSystem {
       const access = this.planConnectedRoad(landCells);
       if (access.needed && access.spur) {
         plan.accessSpur = access.spur;
+        // An access spur is a real road project. If it crosses the current
+        // envelope, include those frontier cells in the same auditable land
+        // quote as the building site so construction can never paint an
+        // unacquired road and the Council buys the complete connected parcel.
+        if (this.town.perimeter) {
+          const siteCells = plan.siteLand?.cells || [];
+          const priorLandCost = plan.siteLand?.cost || 0;
+          const merged = [...siteCells, ...access.spur]
+            .filter(([x, y], i, all) => all.findIndex(([ox, oy]) => ox === x && oy === y) === i);
+          const mergedLand = this.town.perimeter.quote(merged);
+          plan.siteLand = mergedLand;
+          plan.cost = (plan.cost || 0) - priorLandCost + mergedLand.cost;
+        }
         plan.cost = (plan.cost || 0) + access.cost;
         plan.access = access.spur.length;
       } else if (access.needed && !access.spur) {
@@ -4669,8 +4691,8 @@ export class GrowthSystem {
     const beforeSpur = snapshotProjectWorld(this.town);
     try {
       this.clearConstructionSite(plan, cell);
-      this.commitSpur(plan);
       if (!this.reserveSiteLand(plan)) throw new Error(this.lastBlock || 'site land acquisition failed');
+      this.commitSpur(plan);
     }
     catch (error) {
       restoreProjectWorld(this.town, beforeSpur);

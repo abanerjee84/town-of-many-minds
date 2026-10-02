@@ -91,6 +91,52 @@ function geometricScore(run) {
   return run.cells.length * 2 - run.junctionDelta * 6 + (run.joins ? 4 : 0);
 }
 
+/**
+ * A road is a capital decision with a future service area, not just a way to
+ * remove today's queue. This is a small deterministic network-growth
+ * heuristic: count the buildable frontage the run unlocks and the amount of
+ * straight continuation it leaves for a later, legal order. It is deliberately
+ * a secondary term; measured OD relief and component joins always dominate.
+ *
+ *   F(run) = 1.5 * frontage + 0.75 * continuation - 2 * new junctions
+ *
+ * The terms are all local graph measurements, so this cannot invent a distant
+ * destination or make an empty field look useful just because it is large.
+ */
+function foresightScore(grid, run) {
+  const added = new Set(run.cells.map(([x, y]) => `${x},${y}`));
+  const side = new Set();
+  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  for (const [x, y] of run.cells) {
+    for (const [dx, dy] of dirs) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (!grid.inBounds(nx, ny) || added.has(`${nx},${ny}`) || grid.isRoad(nx, ny) || grid.isWater(nx, ny)) continue;
+      const kind = grid.kindAt(nx, ny);
+      if (kind === 0 || kind === 2) side.add(`${nx},${ny}`);
+    }
+  }
+  let continuation = 0;
+  if (run.cells.length >= 2) {
+    const first = run.cells[0];
+    const second = run.cells[1];
+    const dx = Math.sign(second[0] - first[0]);
+    const dy = Math.sign(second[1] - first[1]);
+    const end = run.cells[run.cells.length - 1];
+    for (let step = 1; step <= 3; step++) {
+      const x = end[0] + dx * step;
+      const y = end[1] + dy * step;
+      if (!grid.inBounds(x, y) || grid.isRoad(x, y) || grid.isWater(x, y) || grid.kindAt(x, y) !== 0) break;
+      continuation++;
+    }
+  }
+  return {
+    frontage: side.size,
+    continuation,
+    score: side.size * 1.5 + continuation * 0.75 - (run.junctionDelta || 0) * 2
+  };
+}
+
 function componentJoins(grid, run, components) {
   return Math.max(0, new Set(boundary(grid, run.cells).map((e) => components.label[e.road])).size - 1);
 }
@@ -123,16 +169,18 @@ function hotspotScore(grid, run, demand) {
 
 function bestHotspot(grid, legal, demand) {
   const ranked = legal
-    .map((run) => ({ run, pressure: hotspotScore(grid, run, demand) }))
+    .map((run) => ({ run, pressure: hotspotScore(grid, run, demand), foresight: foresightScore(grid, run) }))
     .filter((row) => row.pressure > 0)
-    .sort((a, b) => b.pressure - a.pressure || geometricScore(b.run) - geometricScore(a.run) || a.run.key.localeCompare(b.run.key));
+    .sort((a, b) => b.pressure - a.pressure || b.foresight.score - a.foresight.score || geometricScore(b.run) - geometricScore(a.run) || a.run.key.localeCompare(b.run.key));
   if (!ranked.length) return null;
-  const { run, pressure } = ranked[0];
+  const { run, pressure, foresight } = ranked[0];
   return {
     ...run,
     pressure,
     benefit: pressure,
-    score: pressure - run.cells.length * 0.25 - run.junctionDelta * 2,
+    score: pressure - run.cells.length * 0.25 - run.junctionDelta * 2 + foresight.score * 0.1,
+    frontage: foresight.frontage,
+    continuation: foresight.continuation,
     reason: pressure >= 1 ? 'relieves measured queue' : 'serves measured traffic'
   };
 }
@@ -178,8 +226,12 @@ export function chooseRoadExtension(grid, runs, demand, components) {
       .filter((run) => componentJoins(grid, run, components) > 0)
       .sort((a, b) =>
         componentJoins(grid, b, components) - componentJoins(grid, a, components) ||
+        foresightScore(grid, b).score - foresightScore(grid, a).score ||
         geometricScore(b) - geometricScore(a) || a.key.localeCompare(b.key));
-    if (joins.length) return { ...joins[0], reason: 'joins networks', benefit: null, score: geometricScore(joins[0]) };
+    if (joins.length) {
+      const foresight = foresightScore(grid, joins[0]);
+      return { ...joins[0], reason: 'joins networks', benefit: null, score: geometricScore(joins[0]), ...foresight };
+    }
     return bestHotspot(grid, legal, demand);
   }
 
@@ -202,6 +254,7 @@ export function chooseRoadExtension(grid, runs, demand, components) {
 
   let best = null;
   for (const run of legal) {
+    const foresight = foresightScore(grid, run);
     const ends = boundary(grid, run.cells);
     const joined = componentJoins(grid, run, components);
     let saved = 0;
@@ -224,10 +277,16 @@ export function chooseRoadExtension(grid, runs, demand, components) {
       else if (Number.isFinite(before)) saved += (before - after) * trip.weight;
     }
     const benefit = saved + reached * 20 + joined * 8;
-    const score = benefit - run.cells.length * 0.25 - run.junctionDelta * 2;
-    if (score <= 0) continue;
+    // OD relief is the primary objective. Foresight breaks ties between roads
+    // with comparable relief, preferring a useful frontage and a continuation
+    // that can become the next block without multiplying junctions.
+    const score = benefit - run.cells.length * 0.25 - run.junctionDelta * 2 + foresight.score * 0.1;
+    // Foresight is a tie-breaker, never a licence to pave. A candidate still
+    // needs positive measured OD relief or a component join before its future
+    // frontage can influence the ranking.
+    if (benefit <= 0 || score <= 0) continue;
     if (!best || score > best.score || (score === best.score && run.key < best.key)) {
-      best = { ...run, benefit, score, reason: reached ? 'connects trips' : joined > 0 ? 'joins networks' : 'shortens trips' };
+      best = { ...run, benefit, score, reason: reached ? 'connects trips' : joined > 0 ? 'joins networks' : 'shortens trips', ...foresight };
     }
   }
   // A route sample can be valid but still fail to produce a positive virtual
