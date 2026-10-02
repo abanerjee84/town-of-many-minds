@@ -46,7 +46,7 @@ function normalise(patch = {}) {
       ? Math.round(clamp(glow, 0.2, 2) * 10) / 10
       : SETTINGS_DEFAULTS.glowIntensity,
     councilTemperature: Number.isFinite(temperature)
-      ? Math.round(clamp(temperature, 0, 0.6) * 100) / 100
+      ? Math.round(clamp(temperature, 0, 1) * 100) / 100
       : SETTINGS_DEFAULTS.councilTemperature,
     autoCouncil: patch.autoCouncil !== false,
     defaultSpeed: [0, 1, 2, 4, 10, 20, 50, 100].includes(speed)

@@ -73,6 +73,7 @@ result.stats.settings = await page.evaluate(() => ({
   maxPopulation: document.getElementById('setting-max-population')?.value,
   glow: document.getElementById('setting-glow')?.value,
   temperature: document.getElementById('setting-temperature')?.value,
+  temperatureMax: document.getElementById('setting-temperature')?.max,
   speed: document.getElementById('setting-speed')?.value,
   speedOptions: [...(document.getElementById('setting-speed')?.options || [])].map((option) => option.value),
   autoCouncil: document.getElementById('setting-auto-council')?.checked,
@@ -91,6 +92,15 @@ result.stats.settingsSearch = await page.evaluate(() => ({
   summary: document.getElementById('settings-search-summary')?.textContent
 }));
 await page.fill('#settings-search', '');
+await page.locator('#setting-temperature').evaluate((el) => {
+  el.value = '1';
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+});
+result.stats.temperatureMutation = await page.evaluate(() => ({
+  stored: JSON.parse(localStorage.getItem('town3.settings') || '{}').councilTemperature,
+  runtime: window.town?.governance?.temperature,
+  max: document.getElementById('setting-temperature')?.max
+}));
 await page.fill('#setting-residents', '4');
 await page.locator('#setting-residents').press('Tab');
 await page.fill('#setting-max-population', '900');
@@ -146,6 +156,7 @@ const failures = [
   ...(result.stats.settings?.residents !== '3' ? ['settings modal has the wrong residential density default'] : []),
   ...(result.stats.settings?.maxPopulation !== '1000' ? ['settings modal has the wrong maximum population default'] : []),
   ...(result.stats.settings?.glow !== '1' ? ['settings modal has the wrong glow default'] : []),
+  ...(result.stats.settings?.temperatureMax !== '1' ? ['settings modal temperature does not allow 1.0'] : []),
   ...(result.stats.settings?.speed !== '100' ? ['settings modal has the wrong speed default'] : []),
   ...(!result.stats.settings?.speedOptions?.includes('100') ? ['settings modal is missing the 100x speed option'] : []),
   ...(result.stats.settings?.cameraYaw !== '34.5' || result.stats.settings?.cameraPitch !== '64' || result.stats.settings?.cameraZoom !== '228' || result.stats.settings?.cameraTargetX !== '-20' || result.stats.settings?.cameraTargetZ !== '-40' ? ['settings modal has the wrong camera defaults'] : []),
@@ -155,6 +166,7 @@ const failures = [
   ...(!result.stats.cameraOrbit?.includes('yaw') || !result.stats.cameraZoom?.endsWith('m') || !result.stats.cameraPan?.includes('x') ? ['camera readout is missing orbit, zoom, or pan values'] : []),
   ...(result.stats.settingsMutation?.stored !== 4 || result.stats.settingsMutation?.capacity !== 4 ? ['residential density setting did not apply to kit capacity'] : []),
   ...(result.stats.settingsMutation?.maxPopulation !== 900 ? ['maximum population setting did not persist'] : []),
+  ...(result.stats.temperatureMutation?.stored !== 1 || result.stats.temperatureMutation?.runtime !== 1 ? ['temperature 1.0 did not persist or reach the live Council'] : []),
   ...(result.stats.settingsReset?.residents !== '3' || result.stats.settingsReset?.maxPopulation !== '1000' || result.stats.settingsReset?.stored !== 3 ? ['settings restore defaults did not persist'] : []),
   ...(Math.abs((result.stats.settingsReset?.targetX ?? 0) + 20) > 0.01 || Math.abs((result.stats.settingsReset?.targetZ ?? 0) + 40) > 0.01 || Math.abs((result.stats.settingsReset?.zoom ?? 0) - 228) > 1 ? ['settings restore defaults did not restore camera defaults'] : []),
   ...(result.stats.ribbon1024?.overflow ? ['bottom ribbon controls overflow at 1024px'] : []),

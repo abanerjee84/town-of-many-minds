@@ -111,7 +111,7 @@ function renderSettings() {
         <div class="settings-section-head"><h3>Council</h3><span>LLM decision behaviour</span></div>
         <label class="settings-row settings-item" data-setting-search="council creativity llm temperature variety proposals">
           <span><b>Council creativity</b><small>LLM temperature for varied proposals</small></span>
-          <span class="settings-inline"><input id="setting-temperature" type="range" min="0" max="0.6" step="0.05" value="${settings.councilTemperature}" /><output id="setting-temperature-value">${settings.councilTemperature.toFixed(2)}</output></span>
+          <span class="settings-inline"><input id="setting-temperature" type="range" min="0" max="1" step="0.05" value="${settings.councilTemperature}" /><output id="setting-temperature-value">${settings.councilTemperature.toFixed(2)}</output></span>
         </label>
         <label class="settings-check settings-item" data-setting-search="automatic llm council decisions governance">
           <input id="setting-auto-council" type="checkbox"${settings.autoCouncil ? ' checked' : ''} /> <span><b>Automatic LLM Council</b><small>Let the council make scheduled decisions</small></span>

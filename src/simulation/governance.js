@@ -34,7 +34,7 @@ export const COUNCIL_PROMPT_TOKEN_BUDGET = 4000;
 
 function councilTemperature(value, fallback = DEFAULT_COUNCIL_TEMPERATURE) {
   const n = Number(value);
-  return Number.isFinite(n) ? Math.max(0, Math.min(0.6, n)) : fallback;
+  return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : fallback;
 }
 
 /**
