@@ -5,11 +5,10 @@ import { CELL_KIND } from '../core/config.js';
  * The rendered grid is deliberately larger than the founding hamlet. This
  * ledger separates "visible ground" from land the town has actually brought
  * inside its serviced perimeter. The founding buildings, resource sites, and
- * their roads are seeded; open cells between those assets and the rest of the
- * visible map remain frontier land. The town therefore begins inside a tight
- * asset envelope while still having obvious land to acquire. Roads can only
- * pull new land in through a contiguous extension, and acquisition is paid
- * once for fresh cells.
+ * their roads define a tight envelope. Every non-water cell inside that
+ * envelope is acquired at start; only cells beyond it are frontier land.
+ * Roads can only pull new land in through a contiguous extension, and
+ * acquisition is paid once for fresh cells.
  */
 export class PerimeterSystem {
   constructor(town) {
@@ -60,8 +59,8 @@ export class PerimeterSystem {
       }
     }
     // Public green/plaza cells are already commissioned town land. Seeding
-    // them keeps the initial boundary from cutting through an opening park
-    // while retaining every unzoned cell as future frontier.
+    // them keeps the initial boundary from cutting through an opening park;
+    // the complete envelope is acquired below, including its unzoned cells.
     g.forEach((x, y) => {
       const kind = g.kindAt(x, y);
       if (kind !== CELL_KIND.PARK && kind !== CELL_KIND.PLAZA) return;
@@ -100,12 +99,17 @@ export class PerimeterSystem {
     g.forEach((x, y) => {
       if (x >= roadMinX && x <= roadMaxX && y >= roadMinY && y <= roadMaxY && g.isRoad(x, y)) occupied.push([x, y]);
     });
-    // Seed the exact founding road/building band. The first frontier ring is
-    // deliberately unacquired so the Council has visible land to survey and
-    // buy instead of receiving a hidden one-cell cushion around every lot.
-    for (const [x, y] of occupied) {
-      if (!g.inBounds(x, y) || g.isWater(x, y)) continue;
-      this.acquired.add(this.key(x, y));
+    // The tight founding envelope is already town land. Acquire every
+    // non-water cell inside it, while leaving the ring outside the envelope
+    // as frontier. The old exact-asset ledger left empty cells between roads,
+    // homes, and resources looking like frontier, so ACQUIRE_LAND could buy
+    // an interior tile even though the player was still inside the initial
+    // town. Future acquisition is now unambiguously outward.
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        if (!g.inBounds(x, y) || g.isWater(x, y)) continue;
+        this.acquired.add(this.key(x, y));
+      }
     }
     this.minX = Math.max(0, minX);
     this.minY = Math.max(0, minY);

@@ -3,6 +3,7 @@ import { CELL, CELL_KIND, SIM } from '../../core/config.js';
 import { findLinkPath } from '../../core/pathfinding.js';
 import { box, boxEuler, cyl, cone, merge, buildMesh } from '../geometry.js';
 import { events } from '../../core/events.js';
+import { resourceSiteBuildingConflict } from '../../placement/siteRules.js';
 
 /**
  * Resource Kit: the town's three primary resources — water, energy and food —
@@ -892,6 +893,10 @@ export class ResourceSystem {
       const cells = growFootprint(g, x, y, need, bounds, ground);
       if (!cells) continue;
       if (cells.some(([cx, cy]) => this.tooClose(cx, cy, gap))) continue;
+      // Resource planning runs after the founding buildings. Keep production
+      // and storage yards away from ordinary homes, shops and civic buildings
+      // instead of creating a nuisance beside an already occupied lot.
+      if (resourceSiteBuildingConflict(this.townRef, cells, kind)) continue;
       const spur = spurPath(g, cells);
       if (!spur) continue;
       this.claim(cells);

@@ -26,13 +26,15 @@ const result = await page.evaluate(() => {
     if (g.isRoad(x, y) || g.kindAt(x, y) === 3 || g.kindAt(x, y) === 5) allAssets.push([x, y]);
   });
   const acquiredAssets = allAssets.filter(([x, y]) => !g.isWater(x, y));
-  const assetKeys = new Set(acquiredAssets.map(([x, y]) => `${x},${y}`));
   const xs = allAssets.map(([x]) => x);
   const ys = allAssets.map(([, y]) => y);
   const assetBounds = { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) };
   const boundsMatch = bounds && Object.entries(assetBounds).every(([key, value]) => bounds[key] === value);
   const acquiredKeys = [...t.perimeter.acquired];
-  const exactAssetLedger = acquiredKeys.every((key) => assetKeys.has(key));
+  const envelopeLedger = acquiredKeys.every((key) => {
+    const [x, y] = key.split(',').map(Number);
+    return x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY && !g.isWater(x, y);
+  });
   const resourcesOwned = acquiredAssets.every(([x, y]) => t.perimeter.isAcquired(x, y));
   const expansionCell = t.perimeter.frontierCells(64).find(([x, y]) =>
     x === bounds.minX - 1 || x === bounds.maxX + 1 || y === bounds.minY - 1 || y === bounds.maxY + 1
@@ -50,7 +52,7 @@ const result = await page.evaluate(() => {
     boundsMatch,
     acquired: acquiredBefore,
     resourcesOwned,
-    exactAssetLedger,
+    envelopeLedger,
     frontier: frontierBefore,
     groundBefore,
     groundAfter,
@@ -60,7 +62,7 @@ const result = await page.evaluate(() => {
 
 if (errors.length) throw new Error(`page errors: ${errors.join('; ')}`);
 if (!result.boundsMatch) throw new Error(`founding perimeter is not asset-tight: ${JSON.stringify(result)}`);
-if (!result.resourcesOwned || !result.exactAssetLedger) {
+if (!result.resourcesOwned || !result.envelopeLedger) {
   throw new Error(`founding asset ownership was lost: ${JSON.stringify(result)}`);
 }
 if (!result.expansion.ok || (result.groundAfter.width <= result.groundBefore.width && result.groundAfter.height <= result.groundBefore.height)) {
@@ -68,6 +70,9 @@ if (!result.expansion.ok || (result.groundAfter.width <= result.groundBefore.wid
 }
 if (!result.frontier.length || result.frontier.some(([x, y]) => x < result.bounds.minX - 1 || x > result.bounds.maxX + 1 || y < result.bounds.minY - 1 || y > result.bounds.maxY + 1)) {
   throw new Error(`frontier did not grow from the asset envelope: ${JSON.stringify(result)}`);
+}
+if (result.frontier.some(([x, y]) => x >= result.bounds.minX && x <= result.bounds.maxX && y >= result.bounds.minY && y <= result.bounds.maxY)) {
+  throw new Error(`frontier leaked into already acquired founding envelope: ${JSON.stringify(result)}`);
 }
 console.log(JSON.stringify(result));
 await browser.close();

@@ -37,7 +37,7 @@ import { publicSpaceStats, publicSpaceUse } from '../kits/publicspace/publicKit.
 import { ForestSystem } from './forest.js';
 import { validateTown } from '../placement/validator.js';
 import { planConnectedRoad, splitsNetwork, hasNetworkAccess, planFootway } from '../placement/placementController.js';
-import { agriculturalSetbackConflict } from '../placement/siteRules.js';
+import { agriculturalSetbackConflict, resourceSetbackConflict } from '../placement/siteRules.js';
 import { events } from '../core/events.js';
 import { exportIntegrityState, importIntegrityState } from './integrityState.js';
 
@@ -1110,6 +1110,14 @@ export class Town {
     // an explicit override remains available for a scenario that intentionally
     // co-locates a specialist facility.
     if (!opts.allowAgriculturalAdjacency && agriculturalSetbackConflict(this.resources, cells)) return null;
+    // Production/storage yards need a wider public/residential buffer than a
+    // normal lot. Industrial works are intentionally exempt so a factory can
+    // share a supply corridor; fuel stations are omitted by the shared rule
+    // because they are public-facing civic infrastructure.
+    if (!opts.allowResourceAdjacency && resourceSetbackConflict(this.resources, cells, {
+      zone,
+      kind: opts.kind
+    })) return null;
     // Construction replaces whatever decoration stood on its cell — timber
     // from felled trees goes to the storehouse.
     for (const [cx, cy] of cells) this.clearProps(cx, cy);

@@ -14,7 +14,7 @@ import { DIRS } from '../core/grid.js';
 import { chooseRoadExtension } from './roadExtensionPlanner.js';
 import { constructionBlock, constructionBlockQuote } from '../kits/constructionBlocks.js';
 import { civicVerticalCap } from '../kits/civic/civicKit.js';
-import { agriculturalSetbackConflict } from '../placement/siteRules.js';
+import { agriculturalSetbackConflict, resourceSetbackConflict } from '../placement/siteRules.js';
 const COST = {
   house: 9000, shop: 11000, civic: 30000, park: 3000, road: 2000, utility: 0,
   footway: 600,
@@ -1090,7 +1090,15 @@ export function planFor(town, type, opts = {}) {
       if (!growth?.landNeeded?.()) return null;
       let target = null;
       const population = town.pedestrians?.citizens?.length || 0;
-      if (population >= 80 && !town.buildings.some((b) => b.purpose === 'industrial')) {
+      const growthInputs = growth.inputs?.();
+      // When beds are full, buy land for an actual residential frontage rather
+      // than six arbitrary frontier cells. The old fallback could acquire
+      // tiles beside a building or resource spur with no road-facing parcel,
+      // leaving DEVELOP_HOUSING blocked on the very next sitting.
+      if (growthInputs && housingNeedsBuild(growthInputs.pop, growthInputs.capacity, growthInputs.pressure) &&
+        !growth.findCell('house')) {
+        target = planFor(town, 'house');
+      } else if (population >= 80 && !town.buildings.some((b) => b.purpose === 'industrial')) {
         target = planFor(town, 'factory');
       } else if (population >= 45 && !town.buildings.some((b) => b.facility === 'college' || b.facility === 'university')) {
         target = planFor(town, 'civic', { facility: 'college' });
@@ -1846,13 +1854,19 @@ export class GrowthSystem {
     const g = this.town.grid;
     if (!perimeter || !targetPlan) return null;
     const entries = targetPlan.footprintCandidates || (targetPlan.footprint ? [targetPlan.footprint] : []);
-    if (!entries.length) return null;
     const dims = entries.map((entry) => Array.isArray(entry)
       ? { cols: entry[0], rows: entry[1] }
       : { cols: entry.cols, rows: entry.rows })
       .filter((entry) => entry.cols > 0 && entry.rows > 0)
-      .sort((a, b) => a.cols * a.rows - b.cols * b.rows)[0];
+      .sort((a, b) => a.cols * a.rows - b.cols * b.rows)[0] ||
+      (targetPlan.type === 'house' ? { cols: 1, rows: 1 } : null);
     if (!dims) return null;
+    // siteForFootprint uses the footprint and desired zone to validate the
+    // projected purchase. Plain houses do not normally carry either field, so
+    // give the temporary survey an explicit one-cell residential contract.
+    const surveyPlan = targetPlan.footprint
+      ? targetPlan
+      : { ...targetPlan, footprint: dims, footprintCandidates: [dims], wantZone: targetPlan.type === 'house' ? ZONE.RESIDENTIAL : targetPlan.wantZone };
     const industrial = targetPlan.type === 'factory' ? this.industryProfile(g) : null;
     const frontier = perimeter.frontierCells(240);
     const blocked = (x, y) => !g.inBounds(x, y) ||
@@ -1881,7 +1895,7 @@ export class GrowthSystem {
             const projected = new Set(original);
             for (const [x, y] of cells) projected.add(perimeter.key(x, y));
             perimeter.acquired = projected;
-            const site = this.siteForFootprint(targetPlan);
+            const site = this.siteForFootprint(surveyPlan);
             perimeter.acquired = original;
             if (site) return cells;
           }
@@ -3130,6 +3144,10 @@ export class GrowthSystem {
         // industrial block cannot be dropped against the fence just because
         // its anchor cell happens to look attractive.
         if (!plan.allowAgriculturalAdjacency && agriculturalSetbackConflict(t.resources, cells)) continue;
+        if (!plan.allowResourceAdjacency && resourceSetbackConflict(t.resources, cells, {
+          zone: want,
+          kind: plan.type
+        })) continue;
         // Parcels: the block must contain at least one parcel's street-facing
         // cell (so it sits on the street, like findCell's front-cell rule).
         // Vacancy is checked per footprint cell above. A parcel can contain
@@ -3747,7 +3765,11 @@ export class GrowthSystem {
     return best;
   }
 
-  findCell(type, zone, { allowUnacquired = false, allowAgriculturalAdjacency = false } = {}) {
+  findCell(type, zone, {
+    allowUnacquired = false,
+    allowAgriculturalAdjacency = false,
+    allowResourceAdjacency = false
+  } = {}) {
     const t = this.town;
     const g = t.grid;
     const claimed = (x, y) => this.claims.has(`${x},${y}`);
@@ -3886,6 +3908,10 @@ export class GrowthSystem {
       // Keep every new building type away from agricultural yards. Props and
       // public-space branches returned above do not pass through this path.
       if (!isProp && !allowAgriculturalAdjacency && agriculturalSetbackConflict(t.resources, [[x, y]])) return;
+      if (!isProp && !allowResourceAdjacency && resourceSetbackConflict(t.resources, [[x, y]], {
+        zone: want,
+        kind: type
+      })) return;
       // Industry is refused the middle of town outright (see industryEligible).
       if (industrial && !this.industryEligible(profile, x, y)) return;
       const parcel = t.parcels?.at(x, y);
@@ -4287,6 +4313,8 @@ export class GrowthSystem {
             ? 'no free cell left to pave a civic square'
             : plan.type === 'parking'
               ? 'no kerbside cell left to mark for parking'
+              : plan.type === 'house' && this.town.perimeter
+                ? 'no acquired serviced residential plot — ACQUIRE_LAND first'
               : plan.type === 'road'
                 ? 'no eligible street extension'
                 : 'no free plot and no room to expand';
