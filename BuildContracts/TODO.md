@@ -1,6 +1,6 @@
 ﻿# Construction and metropolis roadmap
 
-Updated 2026-10-02 after the population-cap, factory-archetype, fuel-siting, founding-frame, progression, and weather audit.
+Updated 2026-10-03 after the tourism, hotel/resort, and hospitality-economy audit.
 
 ## Completed
 
@@ -80,6 +80,11 @@ Updated 2026-10-02 after the population-cap, factory-archetype, fuel-siting, fou
 - [x] Vehicle parking deadlock audit: a vehicle executing the final docking leg is excluded from wait-for cycle breaking; stale reverse commands release the bay and retry the legal approach instead of reversing out and re-parking. Parked bodies remain stationary while their dwell is active.
 - [x] Vehicle footprints are now rendered and simulated from a shared 0.68 scale. The largest emergency/service body is 1.36 m wide against 1.6 m opposing lane-centre spacing, leaving a small passing buffer while keeping parking eligibility and SAT collision envelopes consistent.
 - [x] Idle emergency/service bay holds are now one-way state transitions: ambulance/fire/police station bays wake only after a matching call is successfully assigned and routed; utility/refuse vehicles retry unreachable work from their current bay without releasing and re-claiming it.
+- [x] Added a typed hospitality kit: hotels and resorts are distinct commercial building kinds with dedicated lobby/canopy, room-balcony, pool, terrace, and service-wing modules; their footprints and floors are larger than ordinary shops and are retained in inspection metadata.
+- [x] Added hotel and resort catalogue blocks with stable IDs, horizontal footprints, modular bills, and landmark plans. `BUILD HOTEL` and `BUILD RESORT` now reach the same placement path as other catalogue landmarks instead of becoming generic shops.
+- [x] Added tourism accounting: rooms are separate from resident beds, lodging businesses receive floor-area staffing, visitor nights settle as external export revenue, and room capacity, occupancy, demand, appeal, weather, and nightly revenue are exposed in economy stats.
+- [x] Added tourism growth gates: hotels require population and positive measured demand; resorts require an existing hotel, stronger demand, and high hotel occupancy. This prevents destination capacity from arriving before the town has a functioning visitor economy.
+- [x] Added Council tourism evidence with visitors, occupied/free rooms, demand, appeal, occupancy, and nightly revenue. The Council can now compare hospitality investment with weather, mood, approval, and existing attractions.
 
 ## Regression coverage
 
@@ -113,6 +118,7 @@ Updated 2026-10-02 after the population-cap, factory-archetype, fuel-siting, fou
 - [x] Final focused regression pass: UI/settings, construction kits (all three seeds), resources, roads, glow, prompt, footways, banking, governor, council providers, soak, and direct Vite build all pass; the kits probe now disables its provider boundary so endpoint 400s cannot contaminate a geometry-only test.
 - [x] Re-ran the UI and construction-kit probes after the 64-row catalogue and population setting; settings default to 1,000 and the three deterministic kit seeds pass.
 - [x] Added `scripts/_vehicle_parking_check.mjs` / `npm run test:vehicle-parking`; an 80-day seed-42 run verifies no claimed/docking vehicle backs, no parked vehicle moves during its dwell, idle station holds do not release without a routed call, and no vehicle exceeds the lane-width envelope. The focused probe and the 800-day fast road horizon pass after the resize.
+- [x] Added `scripts/_tourism_check.mjs` / `npm run test:tourism`; the browser probe places a legal hotel, verifies room metadata and lodging classification, checks floor-area staffing, settles visitor nights and export revenue, checks Council tourism evidence, and verifies resort modules and catalogue quotes.
 - [x] Added `scripts/_factory_site_regression.mjs` / `npm run test:factory-site`; seed 1337 now commissions a 3×3+ factory campus without an unnecessary street carve, and the projected expansion path is site-aware for later blocked campuses.
 - [x] Re-ran the 800-day fast road horizon after graph/perimeter hardening on seed 42: 75→77 road tiles, one connected component, zero unacquired road cells, zero off-road/unmarked active vehicles, and a clean accounting audit.
 - [x] Fit Town now frames `PerimeterSystem.acquiredBounds()` from the actual acquired-cell ledger, instead of relying on the broader serviced perimeter envelope; UI/perimeter checks cover initial, reset, and post-acquisition framing.
