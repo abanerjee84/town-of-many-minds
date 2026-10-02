@@ -44,6 +44,7 @@ const result = await page.evaluate((required) => {
       active: document.getElementById('fit-town')?.classList.contains('active'),
       stored: JSON.parse(localStorage.getItem('town3.settings') || '{}').fitTown,
       target: window.sceneMgr.controls.target.toArray(),
+      zoom: window.sceneMgr.camera.position.distanceTo(window.sceneMgr.controls.target),
       bounds: town.perimeter?.stats?.().bounds || null,
       acquiredBounds: town.perimeter?.acquiredBounds?.() || null
     }
@@ -201,6 +202,7 @@ const failures = [
   ...(result.stats.fitTownOff?.pressed !== 'false' || result.stats.fitTownOff?.stored !== false ? ['Fit Town toggle did not persist off'] : []),
   ...(result.stats.fitTownOn?.pressed !== 'true' || result.stats.fitTownOn?.stored !== true ? ['Fit Town toggle did not persist on'] : []),
   ...(result.stats.fitTown?.acquiredBounds && Math.abs((result.stats.fitTown?.target?.[0] ?? 0) - (((result.stats.fitTown.acquiredBounds.minX + result.stats.fitTown.acquiredBounds.maxX) / 2 - 49.5) * 4)) > 8 ? ['initial camera did not fit the acquired land bounds'] : []),
+  ...(result.stats.fitTown?.zoom > 190 ? ['Fit Town still leaves too much frontier margin'] : []),
   ...(result.stats.expansionFit?.acquiredBounds && (Math.abs((result.stats.expansionFit.target?.[0] ?? 0) - (((result.stats.expansionFit.acquiredBounds.minX + result.stats.expansionFit.acquiredBounds.maxX) / 2 - 49.5) * 4)) > 8 || Math.abs((result.stats.expansionFit.target?.[2] ?? 0) - (((result.stats.expansionFit.acquiredBounds.minY + result.stats.expansionFit.acquiredBounds.maxY) / 2 - 49.5) * 4)) > 8) ? ['Fit Town did not reframe after acquired-land growth'] : []),
   ...(result.stats.settingsReset?.fitTown !== true ? ['settings restore defaults did not re-enable Fit Town'] : []),
   ...(!result.stats.settings?.open ? ['settings modal did not open'] : []),

@@ -461,7 +461,11 @@ export class SceneManager {
    * orbit direction. The fit toggle calls this when the perimeter grows, so
    * expansion remains visible while manual orbit and pan still feel natural.
    */
-  fitTown(bounds, grid, { padding = 1.35 } = {}) {
+  // Fit the acquired land tightly. A diagonal multiplier of 1.35 made the
+  // camera frame a large frontier skirt around the owned cells, especially at
+  // the default elevated tilt. 0.75 keeps a small edge buffer while making
+  // the acquired footprint fill the playable viewport.
+  fitTown(bounds, grid, { padding = 0.75 } = {}) {
     if (!bounds || !grid || ![bounds.minX, bounds.minY, bounds.maxX, bounds.maxY].every(Number.isFinite)) return null;
     const min = grid.cellToWorld(bounds.minX, bounds.minY);
     const max = grid.cellToWorld(bounds.maxX, bounds.maxY);
