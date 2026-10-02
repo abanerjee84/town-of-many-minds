@@ -422,7 +422,45 @@ export function createBuilding(town, x, y, zone = null, opts = {}) {
   let params;
   let kind;
 
-  if (z === ZONE.COMMERCIAL) {
+  const hospitalityKind = ['hotel', 'resort'].includes(opts.kind)
+    ? opts.kind
+    : (['hotel', 'resort'].includes(opts.subtype) ? opts.subtype : null);
+
+  if (z === ZONE.COMMERCIAL && hospitalityKind) {
+    kind = hospitalityKind;
+    const resort = hospitalityKind === 'resort';
+    const tourism = {
+      rooms: Math.max(1, Math.floor(Number(opts.tourism?.rooms) || (resort ? 48 : 24))),
+      nightlyRate: Math.max(1, Number(opts.tourism?.nightlyRate) || (resort ? 48 : 32)),
+      appeal: Math.max(0, Number(opts.tourism?.appeal) || (resort ? 6 : 3)),
+      tier: opts.tourism?.tier || hospitalityKind,
+      amenities: Array.isArray(opts.tourism?.amenities) ? [...opts.tourism.amenities] : (resort ? ['pool', 'spa', 'trails'] : ['lobby', 'breakfast'])
+    };
+    params = {
+      rng: r,
+      style: resort ? 'resort' : 'hotel',
+      kind,
+      w: resort ? r.float(7.5, 9.2) : r.float(4.2, 5.4),
+      d: resort ? r.float(5.8, 7.4) : r.float(3.8, 4.8),
+      floors: resort ? 3 : 6,
+      wall: jitterColor(resort ? 0xc9b48b : 0x9fb5c4, r, 0.06),
+      trim: resort ? 0xf1e4c4 : 0xe9eef2,
+      roofColor: resort ? r.pick([0x6f7c6e, 0x7c6753, 0x566675]) : r.pick([0x3e5567, 0x596d7c]),
+      doorColor: resort ? 0x6b4a2f : 0x2e4f65,
+      roofType: 'flat',
+      signText: opts.name || (resort ? 'Lakeside Resort' : 'Grand Hotel'),
+      signBg: resort ? '#7b5e34' : '#31536a',
+      porch: false,
+      garage: false,
+      accessible: true,
+      balcony: !resort,
+      solar: resort,
+      greenRoof: resort,
+      purpose: 'commercial',
+      tourism,
+      capacity: tourism.rooms
+    };
+  } else if (z === ZONE.COMMERCIAL) {
     // Phase 20 (C3b) — an office is commercial land, but it is NOT a shop: the
     // kind, the kit branch and the economy's revenue rule all differ. The
     // planner asks for one with `office` (or the seed does); a plain commercial
@@ -683,6 +721,7 @@ export function createBuilding(town, x, y, zone = null, opts = {}) {
     purpose: house.purpose,
     facility: house.spec.facility || null,
     capacityKind: house.spec.capacityKind || null,
+    tourism: house.spec.tourism || null,
     capacity: house.capacity,
     budget: house.budget,
     modules: house.modules,

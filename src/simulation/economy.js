@@ -31,7 +31,13 @@ export const SHOP_TIERS = {
 };
 
 export function money(v) { return `$${Math.round(v || 0).toLocaleString('en-US')}`; }
-function businessLabel(b) { return b.purpose === 'industrial' ? 'Works' : b.kind === 'office' ? 'Office' : 'Shop'; }
+function businessLabel(b) {
+  if (b.purpose === 'industrial') return 'Works';
+  if (b.kind === 'office') return 'Office';
+  if (b.kind === 'hotel') return 'Hotel';
+  if (b.kind === 'resort') return 'Resort';
+  return 'Shop';
+}
 function finiteAmount(v) { v = Number(v); return Number.isFinite(v) && v > 0 ? v : 0; }
 
 /** Proprietor names — a private firm has a person behind it, not a sector id. */
@@ -98,6 +104,11 @@ export class EconomySystem {
     this.totalTrips = 0;
     this.unemployment = 0;
     this.participation = 0;
+    this.tourism = {
+      arrivals: 0, departures: 0, nights: 0, revenue: 0, revenueToday: 0,
+      roomCapacity: 0, occupiedRooms: 0, freeRooms: 0, appeal: 0, demand: 0,
+      visitors: 0, occupancy: 0, lastDay: 0
+    };
     this.gdp = 0;
     this.gdpComponents = { consumption: 0, privateFixedInvestment: 0, inventoryInvestment: 0, governmentConsumption: 0, governmentInvestment: 0, exports: 0, imports: 0, period: 'daily' };
     this.landValue = null;
@@ -347,7 +358,13 @@ export class EconomySystem {
     this.ensureBuildingIdentity(building);
     const id = building.businessId || this.nextId('business');
     building.businessId = id;
-    const type = building.purpose === 'industrial' ? 'industry' : building.kind === 'office' ? 'office' : building.zone === 1 ? 'retail' : 'services';
+    const type = building.purpose === 'industrial'
+      ? 'industry'
+      : building.kind === 'office'
+        ? 'office'
+        : (building.kind === 'hotel' || building.kind === 'resort' || building.tourism || building.house?.spec?.tourism)
+          ? 'lodging'
+          : building.zone === 1 ? 'retail' : 'services';
     const propertyValue = this.propertyValue(building);
     const owner = this.createOwner({ id });
     const business = {
@@ -360,7 +377,10 @@ export class EconomySystem {
       inputExpense: 0, rentExpense: 0, utilityExpense: 0, interestExpense: 0,
       depreciationExpense: 0, taxExpense: 0, profit: 0, retainedEarnings: 0,
       employees: 0, jobsRequired: 0, staffNeed: 0, vacancies: 0, customers: 0,
-      rent: 0, open: true, status: 'active', production: 0, productionFactor: 0, utilityFactor: 1
+      rent: 0, open: true, status: 'active', production: 0, productionFactor: 0, utilityFactor: 1,
+      rooms: Math.max(0, Math.floor(Number(building.tourism?.rooms || building.house?.spec?.tourism?.rooms) || 0)),
+      rate: Math.max(0, Number(building.tourism?.nightlyRate || building.house?.spec?.tourism?.nightlyRate) || 0),
+      tourismRevenue: 0
     };
     building.ownerType = SECTOR.BUSINESS;
     building.ownerId = id;
@@ -388,6 +408,10 @@ export class EconomySystem {
       business.buildingId = building.id;
       business.open = true;
       if (business.status === 'closed') business.status = 'active';
+      if (business.type === 'lodging') {
+        business.rooms = Math.max(0, Math.floor(Number(building.tourism?.rooms || building.house?.spec?.tourism?.rooms || business.rooms) || 0));
+        business.rate = Math.max(0, Number(building.tourism?.nightlyRate || building.house?.spec?.tourism?.nightlyRate || business.rate) || 0);
+      }
       live.add(business.id);
     }
     for (const business of this.businessesById.values()) {
@@ -936,8 +960,9 @@ export class EconomySystem {
   /** Workplace kinds this citizen's trade can be posted to, widest first. */
   buildingKinds(p) {
     switch (p?.job?.work) {
-      case 'shop': return ['shop', 'office'];
-      case 'office': return ['office', 'shop'];
+      case 'shop': return ['shop', 'office', 'hotel', 'resort'];
+      case 'office': return ['office', 'shop', 'hotel', 'resort'];
+      case 'lodging': return ['hotel', 'resort'];
       case 'civic': return ['civic', 'shop'];
       case 'park': return ['park'];
       case 'industry': return ['factory'];
@@ -992,7 +1017,7 @@ export class EconomySystem {
     // Owners post their vacancies BEFORE the census, so an open post is filled
     // from the town's own unemployed the same day it appears.
     const jobs = this.businesses
-      .filter((b) => b.building && ['shop', 'office', 'factory'].includes(b.building.kind))
+      .filter((b) => b.building && ['shop', 'office', 'hotel', 'resort', 'factory'].includes(b.building.kind))
       .sort((a, b) => (b.jobsRequired - b.employees) - (a.jobsRequired - a.employees));
     this.hireResidents(jobs);
 
@@ -1065,7 +1090,7 @@ export class EconomySystem {
     for (const b of this.businesses) {
       b.revenue = 0; b.wageExpense = 0; b.inputExpense = 0; b.rentExpense = 0;
       b.utilityExpense = 0; b.interestExpense = 0; b.depreciationExpense = 0;
-      b.taxExpense = 0; b.profit = 0; b.customers = 0; b.production = 0;
+      b.taxExpense = 0; b.profit = 0; b.customers = 0; b.production = 0; b.tourismRevenue = 0;
     }
   }
 
@@ -1112,8 +1137,93 @@ export class EconomySystem {
     }
   }
 
+  /** Buildings that sell rooms to visitors rather than ordinary residents. */
+  lodgingBusinesses() {
+    return this.businesses.filter((b) => b.open && b.type === 'lodging' && b.building);
+  }
+
+  /**
+   * Current tourism evidence. Rooms are a hard capacity ceiling; demand is a
+   * bounded composite of attractions, civic legitimacy and weather. The
+   * Council can therefore distinguish “we have no rooms” from “the town has
+   * rooms but visitors are not interested” without creating fake residents.
+   */
+  tourismStats() {
+    const lodging = this.lodgingBusinesses();
+    const roomCapacity = lodging.reduce((sum, b) => sum + Math.max(0, b.rooms || 0), 0);
+    const civicAttractions = {
+      stadium: 3, zoo: 3, amphitheatre: 2.5, museum: 2, conservatory: 1.5,
+      campus: 1.5, university: 1.5, college: 0.8
+    };
+    let attractions = 0;
+    for (const b of this.town.buildings || []) {
+      const declared = Number(b.tourism?.appeal || b.house?.spec?.tourism?.appeal) || 0;
+      attractions += declared;
+      attractions += civicAttractions[b.subtype] || 0;
+    }
+    const parks = this.town.grid?.countOf ? this.town.grid.countOf(CELL_KIND.PARK) : 0;
+    attractions += Math.min(6, parks * 0.08);
+    const society = this.town.society?.stats?.() || {};
+    const legitimacy = Math.max(0, Math.min(1, Number(society.approvalRate) || 0.5));
+    const mood = Math.max(0, Math.min(1, Number(society.mood) || 0.5));
+    const weather = this.town.weather?.stats?.();
+    const weatherFactor = weather && weather.precipitation > 0.7 ? 0.78 : weather && weather.precipitation > 0.4 ? 0.9 : 1;
+    const appeal = Math.max(0, Math.min(1.5, attractions / 18 + legitimacy * 0.22 + mood * 0.12));
+    const demand = Math.max(0, Math.min(1, appeal * weatherFactor));
+    const occupiedRooms = Math.max(0, Math.min(roomCapacity, Math.round(roomCapacity * (0.18 + demand * 0.7))));
+    Object.assign(this.tourism, {
+      roomCapacity,
+      occupiedRooms,
+      freeRooms: Math.max(0, roomCapacity - occupiedRooms),
+      appeal,
+      demand,
+      occupancy: roomCapacity ? occupiedRooms / roomCapacity : 0,
+      visitors: occupiedRooms
+    });
+    return { ...this.tourism };
+  }
+
+  /** Settle one lodging night per available room at the day boundary. */
+  runTourism() {
+    const previous = this.tourism.occupiedRooms || 0;
+    const stats = this.tourismStats();
+    if (this.tourism.lastDay === this.lastDay) return stats;
+    this.tourism.lastDay = this.lastDay;
+    this.tourism.revenueToday = 0;
+    let remaining = stats.occupiedRooms;
+    let booked = 0;
+    for (const business of this.lodgingBusinesses().sort((a, b) => a.id.localeCompare(b.id))) {
+      const rooms = Math.min(Math.max(0, business.rooms || 0), remaining);
+      remaining -= rooms;
+      if (!rooms || !business.rate) continue;
+      const amount = Math.round(rooms * business.rate * 100) / 100;
+      const paid = this.transfer({
+        from: 'external',
+        to: { sector: SECTOR.BUSINESS, id: business.id },
+        amount,
+        category: 'export',
+        metadata: { tourism: true, businessId: business.id, rooms, nightlyRate: business.rate }
+      });
+      if (!paid.ok) continue;
+      business.customers = (business.customers || 0) + rooms;
+      business.revenue += amount;
+      business.tourismRevenue = (business.tourismRevenue || 0) + amount;
+      booked += rooms;
+      this.tourism.revenue += amount;
+      this.tourism.revenueToday += amount;
+    }
+    this.tourism.nights += booked;
+    this.tourism.arrivals += Math.max(0, booked - previous);
+    this.tourism.departures += Math.max(0, previous - booked);
+    this.tourism.occupiedRooms = booked;
+    this.tourism.freeRooms = Math.max(0, stats.roomCapacity - booked);
+    this.tourism.occupancy = stats.roomCapacity ? booked / stats.roomCapacity : 0;
+    this.tourism.visitors = booked;
+    return { ...this.tourism };
+  }
+
   runConsumption() {
-    const sellers = this.businesses.filter((b) => b.open && b.type !== 'industry');
+    const sellers = this.businesses.filter((b) => b.open && b.type !== 'industry' && b.type !== 'lodging');
     if (!sellers.length) return;
     const weights = sellers.map((b) => Math.max(1, b.building?.capacity || 1));
     const totalWeight = weights.reduce((n, w) => n + w, 0);
@@ -1202,6 +1312,10 @@ export class EconomySystem {
     this.releaseReserveIfNeeded();
     this.runPayroll();
     this.runConsumption();
+    // Lodging is settled after ordinary household spending so visitor money
+    // appears in the same daily ledger as exports and is visible to the next
+    // council sitting.
+    this.runTourism();
     this.runHousing();
     this.runGovernmentConsumption();
     this.serviceDebt();
@@ -2068,6 +2182,7 @@ export class EconomySystem {
       p.governmentConsumption + p.governmentInvestment + p.exports - p.imports;
     const privateCapital = this.capital.privateResidential + this.capital.privateCommercial + this.capital.privateIndustrial;
     const publicCapital = this.capital.publicInfrastructure + this.capital.publicBuildings;
+    const tourism = this.tourismStats();
     return {
       treasury: Math.round(this.treasury), gdp: Math.round(dailyGDP * 365), gdpDaily: Math.round(dailyGDP),
       gdpPerCapita: Math.round((dailyGDP * 365) / Math.max(1, citizens.length)),
@@ -2080,6 +2195,7 @@ export class EconomySystem {
       wages: Math.round(p.wages), rent: Math.round(p.rent), spending: Math.round(p.spending),
       unemployment: Math.round(this.unemployment * 1000) / 10, participation: Math.round(this.participation * 1000) / 10,
       businesses: this.businesses.length, revenue: Math.round(this.businesses.reduce((s, b) => s + b.revenue, 0)),
+      tourism,
       owners: this.ownersById.size,
       openPosts: this.businesses.reduce((s, b) => s + (b.vacancies || 0), 0),
       selfEmployed: this.selfEmployed || 0,
@@ -2119,6 +2235,10 @@ export class EconomySystem {
       id: b.id, name: b.name, type: b.type, status: b.status, cash: Math.round(b.cash), debt: Math.round(b.debt),
       owner: b.owner ? b.owner.name : null, ownerId: b.ownerId,
       inventory: { ...b.inventory }, customers: b.customers, revenue: Math.round(b.revenue), profit: Math.round(b.profit),
+      rooms: b.type === 'lodging' ? b.rooms : undefined,
+      nightlyRate: b.type === 'lodging' ? b.rate : undefined,
+      tourismRevenue: b.type === 'lodging' ? Math.round(b.tourismRevenue || 0) : undefined,
+      lodgingOccupancy: b.type === 'lodging' && b.rooms ? Math.round((b.customers || 0) / b.rooms * 100) / 100 : undefined,
       rent: Math.round(b.rentExpense), employees: b.employees, jobsRequired: b.jobsRequired,
       staffNeed: b.staffNeed, vacancies: b.vacancies, production: b.production, productionFactor: b.productionFactor,
       landValue: Math.round(this.landValueAt(building.cell[0], building.cell[1]) * 100) / 100

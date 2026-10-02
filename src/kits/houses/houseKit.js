@@ -182,10 +182,10 @@ export function buildHouse(params = {}) {
   const purpose =
     params.purpose ??
     (style === 'shop'
-      ? 'commercial'
-      : style === 'factory'
-        ? 'industrial'
-        : params.kind === 'office'
+        ? 'commercial'
+        : style === 'factory'
+          ? 'industrial'
+        : params.kind === 'office' || params.kind === 'hotel' || params.kind === 'resort'
           ? 'commercial'
           : 'residential');
   // Civic facilities carry capacityPerFloor (civicParams) — capacity then
@@ -201,8 +201,10 @@ export function buildHouse(params = {}) {
           ? Math.max(1, Math.round(w * d * floors * 2.2))
           : style === 'factory'
             ? Math.max(1, Math.round(w * d * floors * 1.6))
-            : params.kind === 'office'
+        : params.kind === 'office'
               ? Math.max(4, Math.round(floors * (w * d * 0.9)))
+              : (params.kind === 'hotel' || params.kind === 'resort')
+                ? Math.max(1, Math.round(params.tourism?.rooms || w * d * floors * 0.4))
               : Math.max(1, Math.round(residentialCapacityPerFloor({ ...params, w, d }) * floors)));
   const budget = params.budget ?? 1;
 
@@ -580,6 +582,37 @@ export function buildHouse(params = {}) {
     modules.push({ kind: 'lobby', at: [0, BASE_H + lobbyH / 2, fz], width: lobbyW, face: 'front' });
   }
 
+  // HOSPITALITY KIT: hotels and resorts are commercial buildings with a
+  // different public edge from a shop. Hotels get a legible entrance canopy
+  // and room balconies; resorts add a pool deck and a small service wing.
+  if (params.kind === 'hotel' || params.kind === 'resort' || style === 'hotel' || style === 'resort') {
+    const resort = params.kind === 'resort' || style === 'resort';
+    const lobbyW = Math.min(w - 0.35, resort ? w * 0.68 : w * 0.58);
+    const front = d / 2;
+    P('lobby', box(lobbyW, 0.14, 0.42, resort ? 0xb39a67 : 0x4f6f82, 0, BASE_H + 1.55, front + 0.2));
+    P('canopy', boxEuler(lobbyW + 0.48, 0.1, resort ? 1.15 : 0.9, resort ? 0xc8a55f : 0x455e72, [0, BASE_H + 2.08, front + 0.46], [0.16, 0, 0]));
+    modules.push({ kind: 'lodging-lobby', at: [0, BASE_H + 1.55, front], width: lobbyW });
+    if (resort) {
+      const deckW = Math.min(w - 0.35, w * 0.72);
+      const deckD = Math.min(1.25, Math.max(0.8, d * 0.25));
+      P('pool', box(deckW, 0.08, deckD, 0x3d9fc2, 0, 0.16, -d / 2 - deckD * 0.34));
+      P('terrace', box(deckW + 0.2, 0.06, deckD + 0.2, 0xc6b07a, 0, 0.1, -d / 2 - deckD * 0.34));
+      P('service-wing', box(Math.min(1.45, w * 0.25), Math.min(1.4, wallH * 0.45), Math.min(1.15, d * 0.28), 0x9a8063, w * 0.28, BASE_H + Math.min(1.4, wallH * 0.45) / 2, -d * 0.12));
+      modules.push({ kind: 'pool', at: [0, 0.16, -d / 2 - deckD * 0.34], width: deckW, depth: deckD });
+      modules.push({ kind: 'service-wing', at: [w * 0.28, BASE_H + 0.7, -d * 0.12] });
+    } else {
+      const balconyCount = Math.max(1, Math.min(4, Math.floor(w / 1.4)));
+      for (let f = 1; f < floors; f++) {
+        const y = BASE_H + f * FLOOR_H + 0.2;
+        for (let i = 0; i < balconyCount; i++) {
+          const x = -w / 2 + (i + 1) * w / (balconyCount + 1);
+          P('balcony', box(0.75, 0.08, 0.55, 0x697d8b, x, y, front + 0.22));
+        }
+      }
+      modules.push({ kind: 'room-balconies', floors: Math.max(0, floors - 1), count: balconyCount });
+    }
+  }
+
   if (garageBay) modules.push({ kind: 'garage', at: [-w / 2 + w / (countX + 1), 0, d / 2], width: Math.min(1.7, w / countX - 0.2) });
   if (floors > 1) {
     modules.push({ kind: 'stair', at: [-w / 2 + 0.4, 0, -d / 2 + 0.4], rise: wallH, run: d - 0.8 });
@@ -615,6 +648,13 @@ export function buildHouse(params = {}) {
     capacity,
     capacityPerFloor: params.capacityPerFloor ?? null,
     footprintTiles: params.footprintTiles ?? null,
+    tourism: params.tourism ? {
+      rooms: Math.max(0, Math.floor(Number(params.tourism.rooms) || 0)),
+      nightlyRate: Math.max(0, Number(params.tourism.nightlyRate) || 0),
+      appeal: Math.max(0, Number(params.tourism.appeal) || 0),
+      tier: params.tourism.tier || null,
+      amenities: Array.isArray(params.tourism.amenities) ? [...params.tourism.amenities] : []
+    } : null,
     budget,
     parcel: params.parcel ?? null,
     facility: params.facility ?? null,
@@ -645,6 +685,7 @@ export function buildHouse(params = {}) {
     capacity,
     budget,
     parcel: spec.parcel,
+    tourism: spec.tourism,
     height: ridge,
     doorLocal: new THREE.Vector3(doorX, 0, d / 2 + 1.15),
     frontLocal: new THREE.Vector3(0, 0, d / 2),
@@ -719,7 +760,7 @@ export function changedRoles(a, b) {
   return [...out];
 }
 
-export const HOUSE_STYLES = ['suburban', 'townhouse', 'shop', 'cottage'];
+export const HOUSE_STYLES = ['suburban', 'townhouse', 'shop', 'hotel', 'resort', 'cottage'];
 
 /**
  * Phase 20 (C3b) — the building KINDS the planner can commission. `office` is
@@ -727,4 +768,4 @@ export const HOUSE_STYLES = ['suburban', 'townhouse', 'shop', 'cottage'];
  * shares the 'shop' kit and differs in kind, purpose and how the economy
  * counts it.
  */
-export const BUILDING_KINDS = ['house', 'shop', 'office', 'civic', 'park', 'factory', 'landmark'];
+export const BUILDING_KINDS = ['house', 'shop', 'office', 'hotel', 'resort', 'civic', 'park', 'factory', 'landmark'];

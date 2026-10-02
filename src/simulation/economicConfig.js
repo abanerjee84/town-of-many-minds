@@ -130,6 +130,6 @@ export const PUBLIC_PROJECT_TYPES = Object.freeze(new Set([
 ]));
 
 export const PRIVATE_PROJECT_TYPES = Object.freeze(new Set([
-  'house', 'shop', 'office', 'factory', 'mall', 'hotel', 'tower', 'renovate',
+  'house', 'shop', 'office', 'factory', 'mall', 'hotel', 'resort', 'tower', 'renovate',
   'tierup', 'upgrade', 'wing', 'archetype'
 ]));

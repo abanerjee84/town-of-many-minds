@@ -1429,7 +1429,7 @@ export class Town {
     let civic = 0;
     for (const b of this.buildings) {
       if (b.kind === 'house') houses++;
-      else if (b.kind === 'shop') shops++;
+      else if (['shop', 'office', 'hotel', 'resort'].includes(b.kind) || b.purpose === 'commercial') shops++;
       else civic++;
     }
     // `resources.stats()` used to be evaluated TWICE in the object literal below —

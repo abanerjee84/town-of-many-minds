@@ -574,6 +574,7 @@ export const BUILD_HOURS = {
   // Phase 20 — an office block is a shell plus storeys, so it takes longer than
   // a shop and not as long as a civic hall.
   office: 26,
+  hotel: 56, resort: 84,
   'prop-tree': 3, 'prop-lamp': 4, upgrade: 12, archetype: 24, factory: 18,
   resource: 12, renovate: 6, tierup: 10, wing: 14,
   // Phase 8 — a square and a bay are crew work; the land-use family is a
@@ -676,8 +677,18 @@ export const LANDMARKS = {
     zone: ZONE.COMMERCIAL, floors: 6, cellCost: 26000,
     matPerCell: { lumber: 11, cement: 15, steel: 12 },
     sizes: [[3, 3], [3, 2], [2, 3], [2, 2]],
-    hours: 56, band: 4.6, owner: 'private', pop: 130, treasury: 380000,
+    hours: 56, band: 4.6, owner: 'private', pop: 70, treasury: 180000,
+    rooms: 24, nightlyRate: 32, tourismAppeal: 3, tourismTier: 'hotel',
     phrases: ['BUILD HOTEL', 'GRAND HOTEL', 'HOTEL']
+  },
+  resort: {
+    id: 'resort', label: 'A destination resort opens beyond the town centre',
+    zone: ZONE.COMMERCIAL, floors: 3, cellCost: 30000,
+    matPerCell: { lumber: 14, cement: 18, steel: 14 },
+    sizes: [[5, 4], [4, 4], [5, 3], [4, 3]],
+    hours: 84, band: 5.2, owner: 'private', pop: 140, treasury: 420000,
+    rooms: 48, nightlyRate: 48, tourismAppeal: 6, tourismTier: 'resort',
+    phrases: ['BUILD RESORT', 'DESTINATION RESORT', 'LAKESIDE RESORT', 'RESORT']
   },
   station: {
     id: 'station', label: 'A train station links the town to the line',
@@ -742,6 +753,10 @@ function landmarkPlan(town, lm, opts = {}) {
       acquire: true,
       floors: lm.floors,
       subtype: lm.id,
+      kind: ['hotel', 'resort'].includes(lm.id) ? lm.id : undefined,
+      tourism: ['hotel', 'resort'].includes(lm.id)
+        ? { rooms: lm.rooms, nightlyRate: lm.nightlyRate, appeal: lm.tourismAppeal, tier: lm.tourismTier }
+        : undefined,
       capacity: lm.capacity || undefined,
       capacityKind: lm.capacityKind || undefined,
       factory: plan.factory || undefined,
@@ -1820,6 +1835,7 @@ export class GrowthSystem {
       parks: parkCells,
       pressure: capacity ? pop / capacity : 0,
       economy: t.economy ? t.economy.stats() : null,
+      tourism: t.economy?.tourismStats?.() || null,
       mobility,
       utilities: utilityStats
     };
@@ -3004,11 +3020,21 @@ export class GrowthSystem {
     const funds = lm.owner === 'private' && this.town.economy
       ? this.town.economy.accounts.developer.cash
       : eco.treasury;
+    const tourism = this.town.economy?.tourismStats?.() || eco.tourism || null;
+    const lodgingFull = tourism && tourism.roomCapacity > 0
+      ? tourism.occupiedRooms / Math.max(1, tourism.roomCapacity)
+      : 0;
+    const tourismGate = lm.id === 'hotel'
+      ? (!tourism || tourism.demand >= 0.18)
+      : lm.id === 'resort'
+        ? (!!tourism && tourism.demand >= 0.55 && lodgingFull >= 0.65 && this.hasBuilding('hotel'))
+        : true;
     return (
       !this.hasBuilding(lm.id) &&
       s.pop > lm.pop &&
       funds > lm.treasury &&
-      (!lm.shops || s.shops >= lm.shops)
+      (!lm.shops || s.shops >= lm.shops) &&
+      tourismGate
     );
   }
 

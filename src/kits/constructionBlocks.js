@@ -16,6 +16,8 @@ const BLOCKS = [
   { id: 'house.solar', kit: 'houses', family: 'housing', label: 'Solar home', footprint: [1, 1], modules: ['entrance', 'unit', 'solar-roof'] },
   { id: 'mixed.use', kit: 'houses', family: 'commerce', label: 'Mixed-use block', footprint: [2, 1], modules: ['storefront', 'lobby', 'unit', 'roof'] },
   { id: 'office.lobby', kit: 'houses', family: 'commerce', label: 'Office block', footprint: [1, 1], modules: ['lobby', 'fin', 'roofplant'] },
+  { id: 'commerce.hotel', kit: 'houses', family: 'commerce', label: 'Hotel', footprint: [3, 3], modules: ['lobby', 'canopy', 'room-balconies', 'roof'] },
+  { id: 'commerce.resort', kit: 'houses', family: 'commerce', label: 'Destination resort', footprint: [5, 4], modules: ['lobby', 'pool', 'terrace', 'service-wing'] },
 
   // Civic buildings. Facility IDs are consumed by civicKit, so these remain
   // useful even when a future renderer replaces the shared house shell.

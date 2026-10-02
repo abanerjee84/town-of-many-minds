@@ -1482,6 +1482,12 @@ export class GovernanceSystem {
         // the townsfolk in their own account.
         ` · open posts ${eco.openPosts} · self-employed ${eco.selfEmployed} · owners ${eco.owners}`
       : '';
+    const tourism = eco?.tourism || t.economy?.tourismStats?.() || null;
+    const tourismLine = tourism && (tourism.roomCapacity || tourism.demand)
+      ? `Tourism: ${tourism.visitors} visitors · rooms ${tourism.occupiedRooms}/${tourism.roomCapacity} occupied (${Math.round(tourism.occupancy * 100)}%)` +
+        ` · demand ${Math.round(tourism.demand * 100)}% · appeal ${Math.round(tourism.appeal * 100)}%` +
+        ` · nightly revenue $${Math.round(tourism.revenueToday || 0)}`
+      : '';
     const stockLine = ind
       ? (() => {
           const rows = Object.entries(ind.commodities);
@@ -1513,6 +1519,7 @@ export class GovernanceSystem {
         ? `Treasury ${Math.round(eco.treasury)} · reserve ${Math.round(eco.reserve)} · debt ${Math.round(eco.debt)} · GDP ${Math.round(eco.gdp)} · unemployment ${eco.unemployment}% · tax ${eco.taxRate}%${eco.taxRate !== eco.effectiveTaxRate ? ` (${eco.effectiveTaxRate}% with law)` : ''}${eco.spendingScale !== 1 ? ` · spending ×${eco.spendingScale}` : ''}${eco.spendingScale !== eco.effectiveSpending ? ` (×${eco.effectiveSpending} with law)` : ''} · jurisdiction ${Math.round(eco.jurisdiction * 100)}%`
         : 'Treasury unknown',
       economyLine,
+      tourismLine,
       t.economy?.treasuryFlow ? (() => { const f = t.economy.treasuryFlow();
         return `Treasury ${eco?.fiscalBand || 'healthy'}: opening $${Math.round(f.opening)}, inflows $${Math.round(f.inflows)}, outflows $${Math.round(f.outflows)}, closing $${Math.round(f.closing)}`; })() : '',
       eco?.budget
