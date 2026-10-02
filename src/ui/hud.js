@@ -117,6 +117,8 @@ export class Hud {
       time: $('stat-time'),
       day: $('stat-day'),
       period: $('stat-period'),
+      season: $('stat-season'),
+      weather: $('stat-weather'),
       phase: $('stat-phase'),
       comps: $('stat-comps'),
       res: $('stat-res'),
@@ -498,6 +500,14 @@ export class Hud {
     // with the time underneath it.
     this.el.day.textContent = `Day ${this.clock.day}`;
     if (this.el.period) this.el.period.textContent = this.clock.period;
+    const weather = stats.weather;
+    if (weather) {
+      if (this.el.season) this.el.season.textContent = `${weather.seasonIcon || ''} ${weather.seasonLabel || weather.season}`.trim();
+      if (this.el.weather) {
+        this.el.weather.textContent = `${weather.icon || ''} ${weather.weatherLabel || weather.weather}`.trim();
+        this.el.weather.title = `${weather.temperature}°C · precipitation ${Math.round((weather.precipitation || 0) * 100)}% · changes day ${weather.nextChangeDay}`;
+      }
+    }
     if (this.el.phase) {
       const glyph = phaseEmoji(this.clock.hour);
       if (glyph !== this._phase) {

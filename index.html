@@ -215,6 +215,21 @@
       #clock .cl-sub > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
       #clock .cl-sub .sep { flex: none; color: #484f58; }
       #clock .cl-sub #stat-time { flex: none; color: #cfd6de; font-weight: 700; letter-spacing: 0.04em; }
+      #clock .cl-weather {
+        margin-top: 2px;
+        display: flex;
+        gap: 5px;
+        align-items: baseline;
+        min-width: 0;
+        color: #8b949e;
+        font-size: 9px;
+        line-height: 1.1;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      #clock .cl-weather > span { overflow: hidden; text-overflow: ellipsis; }
+      #clock .cl-weather .sep { flex: none; color: #484f58; }
+      #clock .cl-weather #stat-weather { color: #d2a8ff; }
       button {
         font: inherit;
         color: #c9d1d9;
@@ -1338,6 +1353,11 @@
             <span id="stat-period">Morning</span>
             <span class="sep">&middot;</span>
             <span id="stat-time">07:30</span>
+          </div>
+          <div class="cl-weather" title="Season and current weather">
+            <span id="stat-season">Spring</span>
+            <span class="sep">&middot;</span>
+            <span id="stat-weather">Clear</span>
           </div>
         </div>
       </div>

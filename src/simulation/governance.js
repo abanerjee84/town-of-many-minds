@@ -1342,6 +1342,7 @@ export class GovernanceSystem {
     // Council needs both the town-wide approval signal and the citizen mood
     // dimensions that explain it before it weighs a scheme or landmark.
     const society = t.society?.stats?.() || null;
+    const weather = t.weather?.stats?.() || null;
     const citizens = t.pedestrians?.citizens || [];
     const moodDimensions = ['needs', 'safety', 'services', 'economy', 'belonging', 'transport']
       .map((key) => {
@@ -1408,6 +1409,9 @@ export class GovernanceSystem {
       (() => { const blocks = constructionBlockStats(); return `Construction kits: ${blocks.total} blocks · ${Object.entries(blocks.kits).map(([k, n]) => `${k} ${n}`).join(' · ')}`; })(),
       `Population ${pop} · target ${lc ? lc.target : '?'} · homes ${homes.length} · capacity ${Math.round(capacity)} · spare beds ${Math.max(0, Math.round(capacity) - pop)} · mood ${Math.round(mood * 100)}%${gr ? ` · pressure ${gr.pressure}` : ''}`,
       societyLine,
+      weather
+        ? `Weather: year ${weather.year}, day ${weather.dayOfYear} · ${weather.seasonLabel} · ${weather.weatherLabel} · ${weather.temperature}°C · precipitation ${Math.round(weather.precipitation * 100)}% · food ×${weather.modifiers.foodYield.toFixed(2)} · traffic ×${weather.modifiers.trafficFactor.toFixed(2)}`
+        : '',
       demogLine,
       // Phase 16 — A3/A7. The pull is a number the council can act on, and the
       // campaign is the only thing that moves it, so both belong on the report.

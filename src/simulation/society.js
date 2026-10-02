@@ -69,7 +69,8 @@ export class SocietySystem {
     const economy = clamp(0.45 + (c.p.employmentStatus === 'employed' ? 0.2 : -0.12) + (eco.unemployment < 12 ? 0.08 : -0.08));
     const belonging = clamp(0.42 + (c.p.preferences?.community || 0) * 0.25 + (c.p.relationships?.friends?.length || 0) * 0.02);
     const transit = transport.ready ? clamp(0.35 + transport.coverage * 0.5) : 0.35;
-    const overall = clamp(needs * 0.24 + safety * 0.22 + services * 0.16 + economy * 0.16 + belonging * 0.12 + transit * 0.1 + (c.p.optimism || 0) * 0.08);
+    const weatherMood = this.town.weather?.currentModifiers?.().moodDelta || 0;
+    const overall = clamp(needs * 0.24 + safety * 0.22 + services * 0.16 + economy * 0.16 + belonging * 0.12 + transit * 0.1 + (c.p.optimism || 0) * 0.08 + weatherMood);
     return { overall, safety, services, economy, belonging, transport: transit, needs };
   }
 
@@ -175,6 +176,7 @@ export class SocietySystem {
       laws: this.laws.filter((l) => l.active).map((l) => l.id),
       elections: this.elections.slice(-4),
       mood: this.town.pedestrians?.citizens?.length ? this.town.pedestrians.citizens.reduce((s, c) => s + c.mood, 0) / this.town.pedestrians.citizens.length : 0.5,
+      weather: this.town.weather?.stats?.() || null,
       lastDemolition: this.lastDemolition
     };
   }

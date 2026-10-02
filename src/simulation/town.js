@@ -35,6 +35,7 @@ import { UtilitySystem } from '../kits/utilities/utilityKit.js';
 import { ResourceSystem, resourceStress } from '../kits/resources/resourceKit.js';
 import { publicSpaceStats, publicSpaceUse } from '../kits/publicspace/publicKit.js';
 import { ForestSystem } from './forest.js';
+import { WeatherSystem } from './weather.js';
 import { validateTown } from '../placement/validator.js';
 import { planConnectedRoad, splitsNetwork, hasNetworkAccess, planFootway } from '../placement/placementController.js';
 import { agriculturalSetbackConflict, resourceSetbackConflict } from '../placement/siteRules.js';
@@ -96,6 +97,7 @@ export class Town {
     this.utilities = new UtilitySystem();
     this.resources = new ResourceSystem();
     this.forest = new ForestSystem(this);
+    this.weather = new WeatherSystem(this);
     this.publicPlan = null;
     this.pipeline = null;
     this.pipelineSummary = null;
@@ -146,6 +148,7 @@ export class Town {
     this.entityIds = { building: 1, household: 1 };
     this.rng = makeRng(normalizedSeed);
     this.forest.reset(normalizedSeed);
+    this.weather.reset(normalizedSeed);
     this.swapGrid();
     this.roadKit = new RoadKit(this.grid, this.rng);
     this.parcels = new ParcelKit();
@@ -276,6 +279,7 @@ export class Town {
     this.perimeter?.reset();
     this.transport?.reset();
     this.society?.reset();
+    this.weather?.reset(this.seed || 1);
     this.publicPlan = null;
     this.clearGroup(this.roadsGroup);
     this.clearGroup(this.lotsGroup);
@@ -736,6 +740,7 @@ export class Town {
    * no longer depends on how many frames the renderer happened to produce.
    */
   advance(dt, clock = null) {
+    this.weather?.update(clock);
     this.traffic.runShared(dt, clock);
     this.streetGlow?.update(dt);
     this.transport?.update(dt, clock);
@@ -1445,6 +1450,7 @@ export class Town {
       economy: this.economy ? this.economy.stats() : null,
       industry: this.industry ? this.industry.stats() : null,
       forest: this.forest ? this.forest.stats() : null,
+      weather: this.weather ? this.weather.stats() : null,
       growth: this.growth ? this.growth.stats() : null,
       progression: {
         ...height,

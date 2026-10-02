@@ -31,7 +31,8 @@
     "test:perimeter": "node scripts/_perimeter_tight_check.mjs",
     "test:land-gate": "node scripts/_land_gate_check.mjs",
     "test:forest": "node scripts/_forest_check.mjs",
-    "test:vegetation-clear": "node scripts/_vegetation_clear_check.mjs"
+    "test:vegetation-clear": "node scripts/_vegetation_clear_check.mjs",
+    "test:weather": "node scripts/_weather_check.mjs"
   },
   "dependencies": {
     "three": "^0.169.0"

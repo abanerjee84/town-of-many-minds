@@ -4,7 +4,7 @@ const URL = process.env.APP_URL || 'http://localhost:5174';
 const REQUIRED_IDS = [
   'hud', 'tools', 'tool-grid', 'seed-input', 'regen', 'reset-town', 'fit-town',
   'settings-toggle', 'camera-toolbar', 'camera-readout', 'camera-orbit', 'camera-zoom', 'camera-pan',
-  'stat-pop', 'stat-bld', 'stat-treasury', 'council', 'council-feedback',
+  'stat-pop', 'stat-bld', 'stat-treasury', 'stat-season', 'stat-weather', 'council', 'council-feedback',
   'council-thought', 'council-learning', 'society-feedback', 'society-feedback-summary',
   'society-feedback-detail', 'society-feedback-election', 'speed-100', 'inspector'
 ];
@@ -38,6 +38,7 @@ const result = await page.evaluate((required) => {
       fogNear: window.sceneMgr.scene.fog?.near,
       fogFar: window.sceneMgr.scene.fog?.far
     },
+    weather: town.weather?.stats?.() || null,
     fitTown: {
       pressed: document.getElementById('fit-town')?.getAttribute('aria-pressed'),
       active: document.getElementById('fit-town')?.classList.contains('active'),
@@ -182,6 +183,7 @@ const failures = [
   ...(result.stats.cameraToolbar?.actions?.length !== 8 || result.stats.cameraToolbar?.presets?.join(',') !== 'iso,top,north,east' ? ['camera toolbar is missing a nudge or preset control'] : []),
   ...(result.stats.cameraToolbarMutation?.readout?.includes('NaN') || result.stats.cameraPresetMutation?.orbit?.includes('NaN') ? ['camera toolbar produced an invalid pose'] : []),
   ...(!result.stats.sceneAtmosphere?.skybox || !(result.stats.sceneAtmosphere.fogNear > 0) || !(result.stats.sceneAtmosphere.fogFar > result.stats.sceneAtmosphere.fogNear) ? ['skybox or horizon fog is missing'] : []),
+  ...(!result.stats.weather?.season || !result.stats.weather?.weatherLabel ? ['weather system is missing live season/weather state'] : []),
   ...(result.stats.fitTown?.pressed !== 'true' || !result.stats.fitTown?.active ? ['Fit Town is not enabled by default'] : []),
   ...(result.stats.fitTownOff?.pressed !== 'false' || result.stats.fitTownOff?.stored !== false ? ['Fit Town toggle did not persist off'] : []),
   ...(result.stats.fitTownOn?.pressed !== 'true' || result.stats.fitTownOn?.stored !== true ? ['Fit Town toggle did not persist on'] : []),

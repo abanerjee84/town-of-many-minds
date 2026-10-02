@@ -1614,6 +1614,10 @@ export class VehicleAgent {
     const curvature = curvatureAt(this.points, Math.min(this.idx, this.points.length - 1), 5);
     let desired = this.spec.maxSpeed * (0.9 + this.driver.traits.extraversion * 0.35 - this.driver.traits.conscientiousness * 0.12);
     desired *= 1 - Math.min(0.72, curvature * 0.85);
+    // Rain, storms, and snow reduce speed before signal and queue handling;
+    // this makes weather visible in mobility without changing road capacity.
+    const weather = this.town.weather?.currentModifiers?.();
+    desired *= weather?.trafficFactor ?? 1;
     if (this.sirens) desired *= 1.3;
     else {
       const congestion = this.town.traffic ? this.town.traffic.congestion : 0;

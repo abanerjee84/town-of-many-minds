@@ -251,17 +251,19 @@ export class SceneManager {
     this.groundMat.map.repeat.set(width / 9, height / 9);
   }
 
-  updateLighting(clock) {
+  updateLighting(clock, weather = null) {
     const d = clock.daylight;
     this._night = 1 - d;
+    const precipitation = Math.max(0, Math.min(1, Number(weather?.precipitation) || 0));
+    const cloud = Math.min(1, precipitation * 0.65 + (weather?.weather === 'cloudy' ? 0.22 : 0));
 
     const sunAngle = ((clock.hour - 6) / 12) * Math.PI;
     const sx = Math.cos(sunAngle) * 140;
     const sy = Math.max(12, Math.sin(sunAngle) * 150);
     this.sun.position.set(sx, sy, 70);
-    this.sun.intensity = 0.15 + d * 2.0;
+    this.sun.intensity = (0.15 + d * 2.0) * (1 - cloud * 0.28);
     this.sun.color.setHSL(0.1, 0.55 - d * 0.3, 0.55 + d * 0.28);
-    this.hemi.intensity = 0.28 + d * 0.95;
+    this.hemi.intensity = (0.28 + d * 0.95) * (1 - cloud * 0.12);
     this.ambient.intensity = 0.22 + d * 0.2;
 
     const dayTop = new THREE.Color(0x4b91c4);
@@ -290,6 +292,15 @@ export class SceneManager {
       horizon.copy(nightHorizon).lerp(duskHorizon, t);
       bottom.copy(nightBottom).lerp(duskBottom, t);
     }
+    // Overcast weather desaturates the daytime sky and pulls the horizon fog
+    // closer, giving rain and storms a visible atmospheric footprint without
+    // replacing the deterministic day/night cycle.
+    if (cloud > 0) {
+      const overcast = new THREE.Color(0x71808a);
+      top.lerp(overcast, cloud * 0.25);
+      horizon.lerp(overcast, cloud * 0.32);
+      bottom.lerp(overcast, cloud * 0.18);
+    }
     this.skyUniforms.topColor.value.copy(top);
     this.skyUniforms.horizonColor.value.copy(horizon);
     this.skyUniforms.bottomColor.value.copy(bottom);
@@ -298,6 +309,8 @@ export class SceneManager {
     this.skyUniforms.nightStrength.value = this._night;
     this.scene.background.copy(horizon);
     this.scene.fog.color.copy(horizon);
+    this.scene.fog.near = 120 - cloud * 30;
+    this.scene.fog.far = 460 - cloud * 100;
     this.renderer.toneMappingExposure = 0.72 + d * 0.45;
   }
 

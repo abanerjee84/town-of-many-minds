@@ -445,7 +445,7 @@ function frame(now) {
     // stays frozen forever and the player cannot unpause their way out.
     if (thinking) clock.speed = heldSpeed;
 
-    step('lighting', () => sceneMgr.updateLighting(clock));
+    step('lighting', () => sceneMgr.updateLighting(clock, town.weather?.stats?.()));
     step('glow', () => setGlowLevel(sceneMgr.nightFactor * getSettings().glowIntensity));
 
     step('hud', () => hud.update(town.stats(), rawDt));

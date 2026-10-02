@@ -1317,6 +1317,7 @@ export class ResourceSystem {
   computeProduction() {
     const out = blank(() => 0);
     const staff = this.activeSiteWorkers();
+    const weather = this.townRef?.weather?.currentModifiers?.() || {};
     for (const s of this.sites) {
       if (!s.connected) continue;
       const res = SITE_RESOURCE[s.kind];
@@ -1330,13 +1331,18 @@ export class ResourceSystem {
         // further (s.level || 1) multiplier here or every upgrade pays twice.
         const tier = agTierOf(s);
         const rated = tier ? tier.output : OUTPUT[s.kind] * (s.level || 1);
-        out[res] += rated * staffing;
+        // Weather is a shared modifier, so farms respond to a bad season while
+        // industrial and utility output keeps its own rating. Keeping the
+        // adjustment here also means the live site/effective-output inspector
+        // reports the same number the storehouse receives.
+        const weatherYield = res === RESOURCE.FOOD ? (weather.foodYield ?? 1) : 1;
+        out[res] += rated * staffing * weatherYield;
         // Remember what this site is actually producing, so `describe` and the
         // upgrade label can report the effective figure rather than the rated
         // one. A level-3 farm needs 4 crew and the town has 2 farmers: it is
         // advertised at 220 t/day and delivers 110, and the upgrade that raises
         // the crew requirement is sold on the promise of the 220.
-        s.effectiveOutput = rated * staffing;
+        s.effectiveOutput = rated * staffing * weatherYield;
         s.ratedOutput = rated;
         s.staffing = staffing;
       }
@@ -1406,7 +1412,9 @@ export class ResourceSystem {
   productionSignature() {
     const workers = this.activeSiteWorkers();
     const sites = this.sites.map((s) => `${s.kind}:${s.connected ? 1 : 0}:${s.level || 1}:${workers.get(s) || 0}`).join(',');
-    return `${sites}|${(this.yieldBonus || 0).toFixed(3)}`;
+    const weather = this.townRef?.weather;
+    const weatherKey = weather ? `${weather.lastDay}:${weather.currentId}` : 'none';
+    return `${sites}|${(this.yieldBonus || 0).toFixed(3)}|${weatherKey}`;
   }
 
   /** Recompute production if any of its inputs moved since the last call. */
@@ -1434,6 +1442,9 @@ export class ResourceSystem {
     // all — a phantom demand that gates imports and buys pumps.
     const measured = Math.round(this.fuelDemand || 0);
     out[RESOURCE.FUEL] = measured > 0 ? measured : out[RESOURCE.FUEL];
+    const weather = town.weather?.currentModifiers?.() || {};
+    if (weather.energyDemand) out[RESOURCE.ENERGY] = Math.round(out[RESOURCE.ENERGY] * weather.energyDemand);
+    if (weather.waterDemand) out[RESOURCE.WATER] = Math.round(out[RESOURCE.WATER] * weather.waterDemand);
     return out;
   }
 

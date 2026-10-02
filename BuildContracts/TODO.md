@@ -1,6 +1,6 @@
 ﻿# Construction and metropolis roadmap
 
-Updated 2026-10-02 after the population-cap, factory-archetype, fuel-siting, founding-frame, and progression audit.
+Updated 2026-10-02 after the population-cap, factory-archetype, fuel-siting, founding-frame, progression, and weather audit.
 
 ## Completed
 
@@ -116,6 +116,7 @@ Updated 2026-10-02 after the population-cap, factory-archetype, fuel-siting, fou
 - [x] Added `npm run test:forest`; it verifies seed-1337 coverage, deforestation lumber credit, player/council plantation accounting, natural fall, and no page errors.
 - [x] Added `npm run test:vegetation-clear`; seed 1337 verifies both a building footprint and a road expansion fell an obstructing tree and credited the lumber ledger.
 - [x] Re-ran the deterministic 800-day seed-1337 forest horizon after the foliage-kit balance: 580 natural falls, 2,320 lumber recovered, no renderer errors, and a valid town; weekly batching reduced tree coverage 19%→13% while the 12-cell decorative understory remained.
+- [x] Added a seeded WeatherSystem with a 120-day four-season calendar, bounded rain/storm/heatwave/snow states, HUD and Council evidence, and shared effects on food yield, utility demand, traffic speed, and citizen mood. Added `npm run test:weather` for deterministic season-boundary and Council-report coverage.
 
 ## Optional operator experiments (require external provider credentials)
 
