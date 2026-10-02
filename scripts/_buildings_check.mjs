@@ -99,7 +99,7 @@ const PROBE = () => {
   })();
   let tall = null;
   if (site) {
-    tall = t.placeBuilding(site[0], site[1], 'commercial', { floors: 9, kind: 'office' });
+    tall = t.placeBuilding(site[0], site[1], 'commercial', { floors: 9, kind: 'office', allowUnacquired: true });
   }
   const built = t.buildings.map(floorsOf);
   out.steps.push({

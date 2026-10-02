@@ -20,9 +20,10 @@ export const EXTENT = Object.freeze({ w: 48, h: 40 });
  * town on day one. Roughly 19x17 against a 48x40 extent, so the town is founded
  * on ~21% of the land and has to earn the rest.
  */
-// The hamlet is deliberately sparse inside a wider founding street frame. It
-// gives the first 30 residents a readable neighbourhood while keeping a broad
-// ring of unbuilt land on every side for earned expansion.
+// The hamlet is deliberately compact inside a wider map. It gives the first
+// 30 residents a readable neighbourhood while keeping a broad ring of land on
+// every side for visible, paid expansion. The largest founding frame is 24x21,
+// well below the 30x30 initial-town ceiling while leaving room for campuses.
 export const FOUNDING_CORE = Object.freeze({ w: [22, 24], h: [19, 21] });
 
 /**

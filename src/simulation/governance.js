@@ -4,7 +4,7 @@ import { MAX_FLOORS, CELL_KIND } from '../core/config.js';
 import { planFor, LANDMARKS, UTILITY_RESERVE, MAX_ACTIVE, BUILD_FLOOR, BUILD_HOURS,
   MAX_BRIDGE_GAP,
   civicLoads, civicExpansionNeed, HOUSE_PRESSURE_GATE, HOUSE_SPARE_BEDS, housingNeedsBuild, FILLER_PRESSURE_GATE,
-  UNEMPLOYMENT_GATE, UNEMPLOYMENT_PCT, unemploymentRate, CIVIC_PER_POP, PARKS_PER_POP, CONGESTION_GATE, CIVIC_LOAD_GATE } from './growth.js';
+  UNEMPLOYMENT_GATE, UNEMPLOYMENT_PCT, unemploymentRate, CIVIC_PER_POP, PARKS_PER_POP, CONGESTION_GATE, ROAD_EMERGENCY_GATE, CIVIC_LOAD_GATE } from './growth.js';
 import { FACTORY_TYPES, COMMODITIES, MATERIAL_KEYS } from './industry.js';
 import { SHOP_TIERS } from './economy.js';
 import { CIVIC_CATALOGUE } from '../kits/civic/civicKit.js';
@@ -1409,7 +1409,7 @@ export class GovernanceSystem {
         : '',
       mb ? `Congestion ${Math.round(mb.congestion * 100)}% · parking demand ${mb.parkingDemand}/${mb.parkingSupply} (forecast) · ${mb.parkingTaken} taken · trips ${mb.trips}` : '',
       mb && mb.congestion > CONGESTION_GATE
-        ? `Road planning: ${roadPlan ? `${roadPlan.cells.length} tiles, ${roadPlan.reason}${roadPlan.benefit != null ? `, benefit ${Math.round(roadPlan.benefit)}` : ''}` : 'no measured benefit or disconnected component yet'} · completed observations ${roadDemand?.trips?.length || 0}`
+        ? `Road planning: ${roadPlan ? `${roadPlan.cells.length} tiles, ${roadPlan.reason}${roadPlan.benefit != null ? `, benefit ${Math.round(roadPlan.benefit)}` : ''}` : 'no legal measured extension'}${mb.congestion >= ROAD_EMERGENCY_GATE ? ' · EMERGENCY priority' : ''} · completed observations ${roadDemand?.trips?.length || 0}`
         : '',
       inc
         ? `Emergency: ${inc.open} open${Object.keys(inc.byKind).length ? ` (${Object.entries(inc.byKind).map(([k, n]) => `${n} ${k}`).join(' · ')})` : ''} · ${inc.taken} claimed${Object.keys(inc.byState || {}).length ? ` [${Object.entries(inc.byState).map(([k, n]) => `${n} ${k}`).join(' · ')}]` : ''} · fleet ${fleet.emergency} emergency · ${fleet.service} service · ${fleet.civilian} civilian${inc.emergency ? ' · DECLARED' : ''}`

@@ -1480,7 +1480,7 @@ export function placeInitialTown(town, rng) {
       // housing and civic. The rest of the extent is free land the town has to
       // pave, zone and build its way into.
       town.core = planCore(g, rng.fork(3301), { w: FOUNDING_CORE.w, h: FOUNDING_CORE.h });
-      town.streets = layoutStreets(g, rng.fork(3302), town.core);
+      town.streets = layoutStreets(g, rng.fork(3302), town.core, { minimal: true });
     },
     roadFeatures: () => {
       // The river, the bridge over it, the tunnel, the roundabout and the cul-de-sac.
@@ -1513,7 +1513,7 @@ export function placeInitialTown(town, rng) {
       town.connectivity = ensureRoadConnectivity(g);
     },
     zoning: () => {
-      town.zoning = zoneBlocks(g, rng.fork(3303), town.core, { civicSlots: BASIC_CIVIC.length });
+      town.zoning = zoneBlocks(g, rng.fork(3303), town.core, { civicSlots: BASIC_CIVIC.length, minimal: true });
       const lanes = tagFoundingAlleys(town);
       if (lanes > 0) {
         events.emit('log', {

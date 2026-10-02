@@ -1,12 +1,15 @@
 import { events } from '../core/events.js';
+import { CELL_KIND } from '../core/config.js';
 
 /**
  * The rendered grid is deliberately larger than the founding hamlet. This
  * ledger separates "visible ground" from land the town has actually brought
- * inside its serviced perimeter. Existing roads/buildings and a one-cell
- * service apron are seeded; the open blocks between them still have to be
- * acquired as the town grows. Roads can only pull new land in through a
- * contiguous extension, and the acquisition is paid once for fresh cells.
+ * inside its serviced perimeter. The founding buildings, resource sites, and
+ * their roads are seeded; open cells between those assets and the rest of the
+ * visible map remain frontier land. The town therefore begins inside a tight
+ * asset envelope while still having obvious land to acquire. Roads can only
+ * pull new land in through a contiguous extension, and acquisition is paid
+ * once for fresh cells.
  */
 export class PerimeterSystem {
   constructor(town) {
@@ -33,26 +36,81 @@ export class PerimeterSystem {
     let minX = g.w - 1; let minY = g.h - 1;
     let maxX = 0; let maxY = 0; let seen = 0;
     const occupied = [];
-    g.forEach((x, y, grid) => {
-      if (grid.kindAt(x, y) === 1 || this.town.buildingAt(x, y)) {
+    for (const building of this.town.buildings || []) {
+      for (const cell of building.footprint?.length ? building.footprint : [building.cell]) {
+        if (!cell || !g.inBounds(cell[0], cell[1])) continue;
+        minX = Math.min(minX, cell[0]); minY = Math.min(minY, cell[1]);
+        maxX = Math.max(maxX, cell[0]); maxY = Math.max(maxY, cell[1]);
+        occupied.push(cell);
+        seen++;
+      }
+    }
+    // Founding resource sites are municipal assets too. Include their exact
+    // cells in the initial ledger so a farm, reservoir or power yard is never
+    // rendered outside the town's own boundary. This keeps the envelope tight
+    // around the complete founding settlement while leaving the open cells
+    // between assets for future acquisition.
+    for (const site of this.town.resources?.sites || []) {
+      for (const cell of site.cells || (site.cell ? [site.cell] : [])) {
+        if (!cell || !g.inBounds(cell[0], cell[1])) continue;
+        minX = Math.min(minX, cell[0]); minY = Math.min(minY, cell[1]);
+        maxX = Math.max(maxX, cell[0]); maxY = Math.max(maxY, cell[1]);
+        occupied.push(cell);
+        seen++;
+      }
+    }
+    // Public green/plaza cells are already commissioned town land. Seeding
+    // them keeps the initial boundary from cutting through an opening park
+    // while retaining every unzoned cell as future frontier.
+    g.forEach((x, y) => {
+      const kind = g.kindAt(x, y);
+      if (kind !== CELL_KIND.PARK && kind !== CELL_KIND.PLAZA) return;
+      minX = Math.min(minX, x); minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+      occupied.push([x, y]);
+      seen++;
+    });
+    // Seed all existing founding roads as serviced infrastructure. Their
+    // envelope is still bounded by the compact resource/building envelope,
+    // while every later street must be acquired through the frontier planner.
+    g.forEach((x, y) => {
+      if (!g.isRoad(x, y)) return;
+      minX = Math.min(minX, x); minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+      occupied.push([x, y]);
+      seen++;
+    });
+    // A road-only founding is still valid in a partially generated test town;
+    // the road sweep above normally covers it, but keep this fallback for
+    // minimal fixtures that do not expose a Grid.forEach implementation.
+    if (!seen) {
+      g.forEach((x, y) => {
+        if (!g.isRoad(x, y)) return;
         minX = Math.min(minX, x); minY = Math.min(minY, y);
         maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
         occupied.push([x, y]);
         seen++;
-      }
-    });
-    if (!seen) return this.reset();
-    for (const [x, y] of occupied) {
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-        const nx = x + dx; const ny = y + dy;
-        if (!g.inBounds(nx, ny) || g.isWater(nx, ny)) continue;
-        this.acquired.add(this.key(nx, ny));
-      }
+      });
     }
-    this.minX = Math.max(0, minX - 1);
-    this.minY = Math.max(0, minY - 1);
-    this.maxX = Math.min(g.w - 1, maxX + 1);
-    this.maxY = Math.min(g.h - 1, maxY + 1);
+    if (!seen) return this.reset();
+    const roadMinX = Math.max(0, minX - 1);
+    const roadMaxX = Math.min(g.w - 1, maxX + 1);
+    const roadMinY = Math.max(0, minY - 1);
+    const roadMaxY = Math.min(g.h - 1, maxY + 1);
+    g.forEach((x, y) => {
+      if (x >= roadMinX && x <= roadMaxX && y >= roadMinY && y <= roadMaxY && g.isRoad(x, y)) occupied.push([x, y]);
+    });
+    // Seed the exact founding road/building band. The first frontier ring is
+    // deliberately unacquired so the Council has visible land to survey and
+    // buy instead of receiving a hidden one-cell cushion around every lot.
+    for (const [x, y] of occupied) {
+      if (!g.inBounds(x, y) || g.isWater(x, y)) continue;
+      this.acquired.add(this.key(x, y));
+    }
+    this.minX = Math.max(0, minX);
+    this.minY = Math.max(0, minY);
+    this.maxX = Math.min(g.w - 1, maxX);
+    this.maxY = Math.min(g.h - 1, maxY);
     this.acquiredCells = this.acquired.size;
   }
 
@@ -70,16 +128,44 @@ export class PerimeterSystem {
 
   frontierCells(limit = 6) {
     const g = this.town.grid;
-    const out = [];
+    const candidates = [];
     for (let y = Math.max(0, this.minY - 1); y <= Math.min(g.h - 1, this.maxY + 1); y++) {
       for (let x = Math.max(0, this.minX - 1); x <= Math.min(g.w - 1, this.maxX + 1); x++) {
         if (this.isAcquired(x, y) || g.kindAt(x, y) !== 0 || g.isWater(x, y)) continue;
         const adjacent = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => this.isAcquired(x + dx, y + dy));
-        if (adjacent) out.push([x, y]);
-        if (out.length >= limit) return out;
+        if (!adjacent) continue;
+        let roadAdj = 0;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          if (g.isRoad(x + dx, y + dy)) roadAdj++;
+        }
+        // A purchase should open usable town land. Prefer a parcel's actual
+        // street-facing cell over a vacant cell that merely touches the
+        // envelope through a resource yard, park, or another unbuildable lot.
+        const parcel = this.town.parcels?.at?.(x, y);
+        const front = parcel && this.town.parcels?.buildableCell?.(parcel);
+        const buildableFront = !!parcel?.buildable && !!front && front[0] === x && front[1] === y;
+        const outside = x === this.minX - 1 || x === this.maxX + 1 || y === this.minY - 1 || y === this.maxY + 1;
+        const score = roadAdj * 100 + (buildableFront ? 40 : 0) + (parcel?.buildable ? 10 : 0) + (outside ? 8 : 0);
+        candidates.push({ cell: [x, y], roadAdj, buildableFront, outside, score });
       }
     }
-    return out;
+    candidates.sort((a, b) => b.score - a.score || b.roadAdj - a.roadAdj ||
+      a.cell[1] - b.cell[1] || a.cell[0] - b.cell[0]);
+    // Keep the fallback ring available when a road has no empty frontage yet,
+    // but never let that fallback outrank a serviced construction plot.
+    const serviced = candidates.filter((c) => c.roadAdj > 0 && c.buildableFront);
+    const chosen = serviced.length ? serviced.slice() : candidates.slice();
+    // Each shortage purchase includes one contiguous frontier tile beyond the
+    // current envelope. The remaining tiles are useful frontage when it
+    // exists, so acquisition both advances the boundary and opens build sites.
+    const outside = candidates.find((c) => c.outside);
+    if (outside) {
+      const existing = chosen.findIndex((c) => c.cell[0] === outside.cell[0] && c.cell[1] === outside.cell[1]);
+      if (existing >= 0) chosen.splice(existing, 1);
+      else chosen.pop();
+      chosen.unshift(outside);
+    }
+    return chosen.slice(0, limit).map((c) => c.cell);
   }
 
   acquire(cells = [], { reason = 'perimeter expansion', charge = true } = {}) {
@@ -106,6 +192,26 @@ export class PerimeterSystem {
     events.emit('land-acquired', { ...this.last, cells: quote.cells });
     events.emit('log', { kind: 'event', text: `The town acquires ${quote.cells.length} new perimeter tile${quote.cells.length === 1 ? '' : 's'} for expansion.` });
     return { ok: true, ...quote, added: quote.cells.length };
+  }
+
+  /** Roll back a speculative site reservation after a failed project. */
+  release(cells = []) {
+    const removed = new Set();
+    for (const [x, y] of cells) {
+      const key = this.key(x, y);
+      if (!this.acquired.has(key)) continue;
+      this.acquired.delete(key);
+      removed.add(key);
+    }
+    if (!removed.size) return 0;
+    this.acquiredCells = this.acquired.size;
+    this.minX = Infinity; this.minY = Infinity; this.maxX = -Infinity; this.maxY = -Infinity;
+    for (const key of this.acquired) {
+      const [x, y] = key.split(',').map(Number);
+      this.minX = Math.min(this.minX, x); this.minY = Math.min(this.minY, y);
+      this.maxX = Math.max(this.maxX, x); this.maxY = Math.max(this.maxY, y);
+    }
+    return removed.size;
   }
 
   stats() {

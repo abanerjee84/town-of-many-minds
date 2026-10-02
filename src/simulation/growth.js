@@ -13,6 +13,7 @@ import { snapshotProjectWorld, restoreProjectWorld } from './projectSnapshot.js'
 import { DIRS } from '../core/grid.js';
 import { chooseRoadExtension } from './roadExtensionPlanner.js';
 import { constructionBlock, constructionBlockQuote } from '../kits/constructionBlocks.js';
+import { civicVerticalCap } from '../kits/civic/civicKit.js';
 const COST = {
   house: 9000, shop: 11000, civic: 30000, park: 3000, road: 2000, utility: 0,
   footway: 600,
@@ -314,6 +315,18 @@ export function buildingLoad(town, b) {
   const l = civicLoads(town).find((x) => x.kind === b.capacityKind);
   return l ? l.load : 0;
 }
+
+/** A civic building may only be raised while its authored facility has room. */
+export function civicHasVerticalHeadroom(building) {
+  return !!building?.house && (building.floors || 1) < civicVerticalCap(building);
+}
+
+/** The most strained civic record that can still absorb one more floor. */
+export function civicUpgradeTarget(town, threshold = 0.85, pending = null) {
+  return (town?.buildings || [])
+    .filter((b) => b.kind === 'civic' && civicHasVerticalHeadroom(b) && (!pending || !pending.has(b)) && buildingLoad(town, b) > threshold)
+    .sort((a, b) => buildingLoad(town, b) - buildingLoad(town, a))[0] || null;
+}
 /** Filler work (floor upgrades, design commissions) needs savings above this. */
 export const BUILD_FLOOR = 250000;
 
@@ -398,6 +411,10 @@ export const DISTRICT_FLOOR = 60000;
 export const CIVIC_PER_POP = 12;
 export const PARKS_PER_POP = 0.6;
 export const CONGESTION_GATE = 0.34;
+// At this level congestion is an immediate network-capacity problem. A legal
+// street run or corridor widening outranks lower-band infill so the council
+// does not spend a sitting on a shop while vehicles remain queued.
+export const ROAD_EMERGENCY_GATE = 0.65;
 export const CIVIC_LOAD_GATE = 0.85;
 // A founding town has no spare beds, so a resource that remains strained can
 // otherwise outrank housing forever and leave the settlement unable to admit
@@ -413,13 +430,15 @@ export const HOUSING_BOOTSTRAP_PRESSURE = 0.95;
 // Near full occupancy, ranked() temporarily raises housing to a bootstrap
 // band so a persistent resource strain cannot starve the town of spare beds.
 const BAND = {
-  power: 10, water: 10, sewage: 10, resource: 10, house: 9, shop: 8, civic: 7,
+  power: 10, water: 10, sewage: 10, resource: 10, land: 9.5, house: 9, shop: 8, civic: 7,
   // Phase 20 — an office shares the civic band: it is the same sort of answer
   // (a building the town needs people to work in), ranked just after a shop.
   office: 7,
   road: 5, roadup: 5, bridge: 5, parking: 5, tierup: 6, park: 4, plaza: 4, factory: 4,
   upgrade: 3, renovate: 3, wing: 3, archetype: 2
-  // Landmarks take their band from LANDMARKS[].band (ranked()'s add()).
+  // Land acquisition sits just below hard utility/resource work and above
+  // housing polish, but appears only when the measured local-shortage gate is
+  // true. Landmarks take their band from LANDMARKS[].band (ranked()'s add()).
   // park sits at 4 — BELOW road — so a congested town widens a street instead
   // of laying turf. Park/archetype/upgrades-as-filler/renovate/wing are also
   // tagged amenity in ranked(), which keeps them out of Priority and out of
@@ -1053,7 +1072,7 @@ export function planFor(town, type, opts = {}) {
     }
     case 'restructure': {
       const target = town.buildings
-        .filter((b) => b.house && b.floors < MAX_FLOORS && b.facility !== 'townhall')
+        .filter((b) => b.house && b.facility !== 'townhall' && (b.kind === 'civic' ? civicHasVerticalHeadroom(b) : b.floors < MAX_FLOORS))
         .sort((a, b) => (a.floors || 1) - (b.floors || 1))[0];
       if (!target) return null;
       return {
@@ -1066,7 +1085,18 @@ export function planFor(town, type, opts = {}) {
       };
     }
     case 'land': {
-      const cells = town.perimeter?.frontierCells(6) || [];
+      const growth = town.growth;
+      let target = null;
+      const population = town.pedestrians?.citizens?.length || 0;
+      if (population >= 80 && !town.buildings.some((b) => b.purpose === 'industrial')) {
+        target = planFor(town, 'factory');
+      } else if (population >= 45 && !town.buildings.some((b) => b.facility === 'college' || b.facility === 'university')) {
+        target = planFor(town, 'civic', { facility: 'college' });
+      } else if (population >= 150 && town.buildings.some((b) => b.facility === 'college') &&
+        !town.buildings.some((b) => b.facility === 'university' || b.subtype === 'campus')) {
+        target = planFor(town, 'civic', { facility: 'university' });
+      }
+      const cells = growth?.landAcquisitionCells?.(target) || town.perimeter?.frontierCells(6) || [];
       if (!cells.length) return null;
       const cost = town.perimeter.quote(cells).cost;
       return {
@@ -1199,14 +1229,14 @@ export function planFor(town, type, opts = {}) {
       // most strained one with headroom), else the shortest building with
       // headroom — never a target another pending project is raising.
       const g = town.growth;
-      const head = (b) => b.house && (b.floors || 1) < MAX_FLOORS && (!g || !g.pendingTargets.has(b));
+      const head = (b) => b.house && (b.kind === 'civic' ? civicHasVerticalHeadroom(b) : (b.floors || 1) < MAX_FLOORS) && (!g || !g.pendingTargets.has(b));
       const strained = town.buildings
         .filter((b) => b.kind === 'civic' && head(b) && buildingLoad(town, b) > 0.85)
         .sort((a, b) => buildingLoad(town, b) - buildingLoad(town, a));
       const target =
         strained[0] ||
         g.progressionTarget?.() ||
-        town.buildings.filter(head).sort((a, b) => (a.floors || 1) - (b.floors || 1))[0] ||
+        town.buildings.filter((b) => b.kind !== 'civic' && head(b)).sort((a, b) => (a.floors || 1) - (b.floors || 1))[0] ||
         null;
       if (!target) return null;
       const kindCost = target.kind === 'shop' ? 7000 : target.kind === 'civic' ? 14000 : 5000;
@@ -1780,6 +1810,117 @@ export class GrowthSystem {
     };
   }
 
+  /** Count genuinely usable empty plots inside the land the town already owns. */
+  vacantAcquiredPlots(limit = Infinity) {
+    const t = this.town;
+    const g = t.grid;
+    const perimeter = t.perimeter;
+    if (!perimeter) return Infinity;
+    const comps = t.roadComponents ? t.roadComponents() : roadComponents(g);
+    let count = 0;
+    for (const parcel of t.parcels?.parcels || []) {
+      if (!parcel?.buildable || parcel.type === 'park' || parcel.type === 'public') continue;
+      const front = t.parcels.buildableCell(parcel);
+      if (!front || !perimeter.isAcquired(front[0], front[1])) continue;
+      const [x, y] = front;
+      if (!g.inBounds(x, y) || (g.kindAt(x, y) !== CELL_KIND.EMPTY && g.kindAt(x, y) !== CELL_KIND.LOT)) continue;
+      if (t.buildingAt(x, y) || t.resources?.ownsCell(x, y) || this.claims.has(`${x},${y}`)) continue;
+      if (!hasNetworkAccess(g, x, y, comps)) continue;
+      count++;
+      if (count >= limit) return count;
+    }
+    return count;
+  }
+
+  /**
+   * Choose a contiguous patch for a named progression order. Buying a handful
+   * of unrelated frontage cells is enough for houses, but it can never unlock
+   * a 3x3 works or a 3x2 college. The patch is anchored on the current
+   * frontier, contains only empty ground, and is quoted by the normal land
+   * project so the council still records a visible ACQUIRE_LAND decision.
+   */
+  landAcquisitionCells(targetPlan) {
+    const perimeter = this.town.perimeter;
+    const g = this.town.grid;
+    if (!perimeter || !targetPlan) return null;
+    const entries = targetPlan.footprintCandidates || (targetPlan.footprint ? [targetPlan.footprint] : []);
+    if (!entries.length) return null;
+    const dims = entries.map((entry) => Array.isArray(entry)
+      ? { cols: entry[0], rows: entry[1] }
+      : { cols: entry.cols, rows: entry.rows })
+      .filter((entry) => entry.cols > 0 && entry.rows > 0)
+      .sort((a, b) => a.cols * a.rows - b.cols * b.rows)[0];
+    if (!dims) return null;
+    const industrial = targetPlan.type === 'factory' ? this.industryProfile(g) : null;
+    const frontier = perimeter.frontierCells(240);
+    const blocked = (x, y) => !g.inBounds(x, y) ||
+      (g.kindAt(x, y) !== CELL_KIND.EMPTY && g.kindAt(x, y) !== CELL_KIND.LOT) ||
+      g.isWater(x, y) || this.town.buildingAt(x, y) || this.town.resources?.ownsCell(x, y);
+    for (const [fx, fy] of frontier) {
+      for (let oy = 0; oy < dims.rows; oy++) {
+        for (let ox = 0; ox < dims.cols; ox++) {
+          const x0 = fx - ox;
+          const y0 = fy - oy;
+          if (industrial && !this.industryEligible(industrial,
+            x0 + (dims.cols - 1) / 2, y0 + (dims.rows - 1) / 2)) continue;
+          const cells = [];
+          let ok = true;
+          for (let y = y0; y < y0 + dims.rows && ok; y++) {
+            for (let x = x0; x < x0 + dims.cols; x++) {
+              if (blocked(x, y)) { ok = false; break; }
+              cells.push([x, y]);
+            }
+          }
+          if (ok && cells.length === dims.cols * dims.rows) {
+            // Verify the actual construction survey against the temporary
+            // purchase. This catches blocks that are empty but landlocked or
+            // split across parcels with no legal frontage.
+            const original = perimeter.acquired;
+            const projected = new Set(original);
+            for (const [x, y] of cells) projected.add(perimeter.key(x, y));
+            perimeter.acquired = projected;
+            const site = this.siteForFootprint(targetPlan);
+            perimeter.acquired = original;
+            if (site) return cells;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  /** Land is acquired as a response to a local shortage, not as decoration. */
+  landNeeded() {
+    const perimeter = this.town.perimeter;
+    if (!perimeter?.frontierCells(1).length) return false;
+    const s = this.inputs();
+    const housingPressure = (s.pressure || 0) >= 0.9;
+    const strainedProduct = this.town.industry?.missingConstructionProduct?.();
+    const firstWorksDeficit = !this.town.industry?.factories?.().length && this.town.industry?.deficitProduct?.();
+    const civicDemand = s.pop > s.civicCount * CIVIC_PER_POP || !!civicExpansionNeed(this.town) ||
+      (!!this.town.resources?.stats?.().waste && !this.town.buildings.some((b) => b.facility === 'recycling'));
+    // A few empty one-cell plots do not satisfy a campus or works order. Keep
+    // acquiring a contiguous frontier until a progression footprint can
+    // actually be placed, otherwise the council can spend the whole horizon
+    // upgrading the core while colleges and factories remain impossible to
+    // site. The request is still explicit ACQUIRE_LAND; this is only the
+    // feasibility gate that decides when that request is needed.
+    const hasSitedFootprint = (type, opts) => {
+      const plan = planFor(this.town, type, opts);
+      return !!plan && !!this.siteForFootprint(plan);
+    };
+    const educationNeed = (s.pop >= 45 && !this.town.buildings.some((b) => b.facility === 'college' || b.facility === 'university') &&
+      !hasSitedFootprint('civic', { facility: 'college' })) ||
+      (s.pop >= 150 && this.town.buildings.some((b) => b.facility === 'college') &&
+        !this.town.buildings.some((b) => b.facility === 'university' || b.subtype === 'campus') &&
+        !hasSitedFootprint('civic', { facility: 'university' }));
+    const worksNeed = s.pop >= 80 && !this.town.buildings.some((b) => b.purpose === 'industrial') &&
+      this.factoryRoom() && !hasSitedFootprint('factory');
+    const vacant = this.vacantAcquiredPlots(2);
+    return vacant < 2 && (housingPressure || !!strainedProduct || !!firstWorksDeficit || civicDemand || educationNeed || worksNeed) ||
+      (educationNeed || worksNeed);
+  }
+
   /**
    * Whether the town may commission another works: at most one per three
    * citizens, floor two. Without this the deficit gate loops forever — each
@@ -2074,13 +2215,14 @@ export class GrowthSystem {
         // stronger tie-break than commerce polish so a long run cannot spend
         // every sitting on shop tiers while all buildings remain low-rise.
         const heightPriority = type === 'upgrade' && s.pop >= 60 && !!this.progressionTarget();
+        const roadEmergency = (type === 'road' || type === 'roadup') && (s.mobility?.congestion || 0) >= ROAD_EMERGENCY_GATE;
         out.push({
           type,
           need,
           // Once the first town cohort exists, earned progression competes
           // with ordinary civic infill. This keeps long runs from repeatedly
           // selecting new one-storey shells while floors/wings wait forever.
-          score: band + Math.min(1, need) + (earnedProgression ? 4 : 0) + (heightPriority ? 6 : 0),
+          score: band + Math.min(1, need) + (earnedProgression ? 4 : 0) + (heightPriority ? 6 : 0) + (roadEmergency ? 20 : 0),
           opts,
           amenity
         });
@@ -2098,11 +2240,11 @@ export class GrowthSystem {
       ? this.town.resources.stats()
       : null;
     if (rs && rs.strained && rs.strained.length) add('resource', 1, { resource: rs.strained[0] });
-    if (housingNeedsBuild(s.pop, s.capacity, s.pressure))
+    if (housingNeedsBuild(s.pop, s.capacity, s.pressure) && this.findCell('house'))
       add('house', (s.pressure - HOUSE_PRESSURE_GATE) / (1 - HOUSE_PRESSURE_GATE));
     if (unemployment > UNEMPLOYMENT_GATE) {
       const need = (unemployment - UNEMPLOYMENT_GATE) / (1 - UNEMPLOYMENT_GATE);
-      add('shop', need, { need }); // need rides the commerce-ladder chooser
+      if (this.findCell('shop')) add('shop', need, { need }); // need rides the commerce-ladder chooser
       // Phase 20 — an office block is DEMAND work on the same gate, ranked
       // BELOW the shop so a town that needs trade gets trade first, and scored
       // down as its office count catches up with its population.
@@ -2115,14 +2257,15 @@ export class GrowthSystem {
       if (
         this.officeCount &&
         s.pop >= OFFICE_MIN_POP &&
-        this.officeCount() < s.pop / OFFICE_PER_POP
+        this.officeCount() < s.pop / OFFICE_PER_POP &&
+        this.findCell('office')
       ) {
         add('office', need * 0.8, { need: Math.min(0.8, need) });
       }
     }
     const civicOverload = civicExpansionNeed(this.town);
     const genericCivicNeed = s.pop > s.civicCount * CIVIC_PER_POP;
-    if (genericCivicNeed || civicOverload) {
+    if ((genericCivicNeed || civicOverload) && this.findCell('civic')) {
       const countNeed = s.pop / Math.max(1, s.civicCount * CIVIC_PER_POP) - 1;
       const loadNeed = civicOverload ? Math.min(1, civicOverload.load - 1) : 0;
       add('civic', Math.max(countNeed, loadNeed), civicOverload
@@ -2138,20 +2281,20 @@ export class GrowthSystem {
     const hasUniversity = tertiary.some((b) => b.facility === 'university' || b.subtype === 'campus');
     const waste = rs?.waste;
     const hasRecycling = this.town.buildings.some((b) => b.facility === 'recycling');
-    if (waste && !hasRecycling && waste.landfill > Math.max(60, waste.generated * 0.35)) {
+    if (waste && !hasRecycling && waste.landfill > Math.max(60, waste.generated * 0.35) && this.findCell('civic')) {
       const need = Math.min(1, waste.landfill / Math.max(1, waste.generated));
       // Recycling is a civic progression rung, financed through the same
       // public-outcome/private-capital leg as tertiary education so the
       // operating reserve does not prevent waste capacity from arriving.
       out.push({ type: 'civic', need, score: 13 + need, opts: { facility: 'recycling' }, amenity: false });
     }
-    if (s.pop >= 45 && !hasCollege && !hasUniversity) {
+    if (s.pop >= 45 && !hasCollege && !hasUniversity && this.findCell('civic')) {
       const need = Math.min(1, (s.pop - 44) / 80);
       // Tertiary education is a deliberate growth gate.  Keep it above the
       // height/commerce polish rows so a town can actually unlock the next
       // labour and research cohort instead of endlessly repeating upgrades.
       out.push({ type: 'civic', need, score: 16 + need, opts: { facility: 'college' }, amenity: false });
-    } else if (s.pop >= 150 && hasCollege && !hasUniversity) {
+    } else if (s.pop >= 150 && hasCollege && !hasUniversity && this.findCell('civic')) {
       // University is a second civic rung, rather than an unreachable
       // landmark-only feature.  A town can establish an affordable university
       // facility before it can afford the later multi-plot campus milestone.
@@ -2163,7 +2306,7 @@ export class GrowthSystem {
     // alive even while the initial stockpile is still above a shortage gate;
     // the quote still enforces the real lot, cash, utility and material rules.
     const industrialCount = this.town.buildings.filter((b) => b.purpose === 'industrial').length;
-    if (s.pop >= 80 && industrialCount === 0 && this.factoryRoom()) {
+    if (s.pop >= 80 && industrialCount === 0 && this.factoryRoom() && this.findCell('factory')) {
       const starter = this.town.industry?.missingConstructionProduct?.() ||
         this.town.industry?.deficitProduct?.() || this.town.industry?.strainedProduct?.() || 'lumber';
       const def = FACTORY_TYPES.find((f) => f.product === starter) || FACTORY_TYPES[0];
@@ -2171,7 +2314,7 @@ export class GrowthSystem {
     }
     // Park is AMENITY work: a real need, but never the fallback answer — a
     // settled town holds rather than inventing turf (see isAmenity).
-    if (s.parks < s.pop * PARKS_PER_POP)
+    if (s.parks < s.pop * PARKS_PER_POP && this.findCell('park'))
       add('park', (s.pop * PARKS_PER_POP - s.parks) / Math.max(1, s.pop * PARKS_PER_POP), undefined, true);
     if (s.mobility && s.mobility.congestion > CONGESTION_GATE) {
       // Congestion alone is not a site plan. A street is ranked only when the
@@ -2221,8 +2364,8 @@ export class GrowthSystem {
     // Frontier acquisition and in-place renewal are discretionary projects:
     // expose them in Feasible now so a Council can choose them deliberately,
     // while keeping them out of the demand fallback that drives essentials.
-    if (crewsFree && this.town.perimeter?.frontierCells(1).length) add('land', 0.18, undefined, true);
-    if (crewsFree && this.town.buildings.some((b) => b.house && b.floors < MAX_FLOORS && b.facility !== 'townhall')) {
+    if (crewsFree && this.landNeeded()) add('land', 0.42, undefined, false);
+    if (crewsFree && this.town.buildings.some((b) => b.house && b.facility !== 'townhall' && (b.kind === 'civic' ? civicHasVerticalHeadroom(b) : b.floors < MAX_FLOORS))) {
       add('restructure', 0.16, undefined, true);
     }
     // A facility over its designed load gets horizontal capacity before a
@@ -2237,7 +2380,7 @@ export class GrowthSystem {
     // upgrade row keeps population-earned height moving.  Previously the wing
     // branch suppressed the floor row entirely, so a valid wing candidate
     // could starve vertical progression for hundreds of days.
-    if (overload > CIVIC_LOAD_GATE) add('upgrade', Math.min(1, overload));
+    if (overload > CIVIC_LOAD_GATE && this.civicUpgradeTarget()) add('upgrade', Math.min(1, overload));
     else if (this.progressionTarget()) {
       // Height is earned by population, so it remains offered even when beds
       // are comfortable. This is what turns a long run into visible tier-ups
@@ -2323,9 +2466,9 @@ export class GrowthSystem {
       case 'sewage':
         return strained.includes(type);
       case 'house':
-        return housingNeedsBuild(s.pop, s.capacity, s.pressure);
+        return housingNeedsBuild(s.pop, s.capacity, s.pressure) && !!this.findCell('house');
       case 'shop':
-        return unemployment > UNEMPLOYMENT_GATE;
+        return unemployment > UNEMPLOYMENT_GATE && !!this.findCell('shop');
       case 'office':
         // Phase 20 — wanted on the same unemployment gate a shop is, but only
         // while the town has no office to put the white-collar trades in, and
@@ -2339,7 +2482,8 @@ export class GrowthSystem {
         return (
           s.pop >= OFFICE_MIN_POP &&
           unemployment > UNEMPLOYMENT_GATE &&
-          this.officeCount() < s.pop / OFFICE_PER_POP
+          this.officeCount() < s.pop / OFFICE_PER_POP &&
+          !!this.findCell('office')
         );
       case 'district':
         // Phase 18 — a district is a big, expensive answer: the council only
@@ -2351,15 +2495,17 @@ export class GrowthSystem {
           this.projects.length < MAX_ACTIVE &&
           eco.treasury >= DISTRICT_FLOOR
         );
-      case 'civic':
-        return s.pop > s.civicCount * CIVIC_PER_POP ||
+      case 'civic': {
+        const need = s.pop > s.civicCount * CIVIC_PER_POP ||
           !!civicExpansionNeed(this.town) ||
           (!!this.town.resources?.stats?.().waste && !this.town.buildings.some((b) => b.facility === 'recycling') && this.town.resources.stats().waste.landfill > Math.max(60, this.town.resources.stats().waste.generated * 0.35)) ||
           (s.pop >= 45 && !this.town.buildings.some((b) => b.facility === 'college' || b.facility === 'university')) ||
           (s.pop >= 150 && this.town.buildings.some((b) => b.facility === 'college') &&
             !this.town.buildings.some((b) => b.facility === 'university' || b.subtype === 'campus'));
+        return need && !!this.findCell('civic');
+      }
       case 'park':
-        return s.parks < s.pop * PARKS_PER_POP;
+        return s.parks < s.pop * PARKS_PER_POP && !!this.findCell('park');
       case 'plaza':
         // Always orderable, like a prop: the council may want a second square.
         // ranked() only OFFERS one while the town has none (see hasPlaza()).
@@ -2373,9 +2519,9 @@ export class GrowthSystem {
         // Land use is council discretion: always orderable, never invented.
         return true;
       case 'land':
-        return !!this.town.perimeter?.frontierCells(1).length && this.projects.length < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR;
+        return this.landNeeded() && this.projects.length < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR;
       case 'restructure':
-        return this.projects.length < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR && !!this.town.buildings.some((b) => b.house && b.floors < MAX_FLOORS && b.facility !== 'townhall');
+        return this.projects.length < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR && !!this.town.buildings.some((b) => b.house && b.facility !== 'townhall' && (b.kind === 'civic' ? civicHasVerticalHeadroom(b) : b.floors < MAX_FLOORS));
       case 'road':
         return !!(s.mobility && s.mobility.congestion > CONGESTION_GATE && this.selectRoadExtension());
       case 'bridge':
@@ -2404,7 +2550,7 @@ export class GrowthSystem {
         const strained = this.town.industry && (starter || (this.town.industry.factories().length === 0
           ? this.town.industry.deficitProduct?.() || this.town.industry.strainedProduct()
           : null));
-        return this.factoryRoom() && !!strained;
+        return this.factoryRoom() && !!strained && !!this.findCell('factory');
       }
       case 'resource': {
         const rs = this.town.resources;
@@ -2419,7 +2565,7 @@ export class GrowthSystem {
         // running over its designed load — the need gate, not the housing one.
         const crews = this.projects.length < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR;
         if (!crews) return false;
-        return !!this.progressionTarget() || worstCivicLoad(this.town) > CIVIC_LOAD_GATE || s.pressure > FILLER_PRESSURE_GATE;
+        return !!this.progressionTarget() || !!this.civicUpgradeTarget() || s.pressure > FILLER_PRESSURE_GATE;
       }
       case 'renovate': {
         // Quality work: wanted whenever a spare crew and savings exist and
@@ -2508,6 +2654,8 @@ export class GrowthSystem {
       case 'footway':
         return 'no landlocked parcel needs a path';
       case 'land':
+        if (this.vacantAcquiredPlots(2) >= 2) return 'acquired land still has usable serviced plots';
+        if ((s.pressure || 0) < 0.9 && !this.town.industry?.missingConstructionProduct?.()) return 'housing and material pressure are below the land-shortage gate';
         return 'the town has no unacquired frontier tiles or the reserve is too low';
       case 'restructure':
         return 'no occupied building has a safe higher floor to add';
@@ -2524,6 +2672,7 @@ export class GrowthSystem {
       case 'upgrade':
         if (!crewsFree) return 'no spare crew or savings for filler work';
         if (this.progressionTarget()) return `height rung is ${desiredFloorsForPopulation(s.pop)} floors for this population`;
+        if (worstCivicLoad(this.town) > CIVIC_LOAD_GATE && !this.civicUpgradeTarget()) return 'civic load is high but its facilities have reached their authored vertical caps; add a wing or a new facility';
         return `no facility over ${pct(CIVIC_LOAD_GATE)} load and pressure ${s.pressure.toFixed(2)} is comfortable`;
       case 'renovate':
         if (!crewsFree) return 'no spare crew or savings for quality work';
@@ -2575,7 +2724,7 @@ export class GrowthSystem {
     const cap = desiredFloorsForPopulation(pop);
     const pending = this.pendingTargets;
     const cands = this.town.buildings.filter((b) =>
-      b.house && (b.floors || 1) < cap && (!pending || !pending.has(b))
+      b.house && b.kind !== 'civic' && (b.floors || 1) < cap && (!pending || !pending.has(b))
     );
     cands.sort((a, b) =>
       (a.floors || 1) - (b.floors || 1) ||
@@ -2583,6 +2732,10 @@ export class GrowthSystem {
       a.cell[1] - b.cell[1] || a.cell[0] - b.cell[0]
     );
     return cands[0] || null;
+  }
+
+  civicUpgradeTarget() {
+    return civicUpgradeTarget(this.town, CIVIC_LOAD_GATE, this.pendingTargets);
   }
 
   /**
@@ -2965,6 +3118,7 @@ export class GrowthSystem {
             if (k === CELL_KIND.ROAD || k === CELL_KIND.WATER || k === CELL_KIND.PARK) { ok = false; break; }
             if (k !== CELL_KIND.EMPTY && k !== CELL_KIND.LOT) { ok = false; break; }
             if (t.resources?.ownsCell(cx, cy) || claimed(cx, cy)) { ok = false; break; }
+            if (!plan.projection && t.perimeter && !t.perimeter.isAcquired(cx, cy)) { ok = false; break; }
             const occ = t.buildingAt(cx, cy);
             if (occ && !acquire) { ok = false; break; }
             cells.push([cx, cy]);
@@ -3016,8 +3170,11 @@ export class GrowthSystem {
         const rim = industrial
           ? this.industryScore(profile, x + (cols - 1) / 2, y + (rows - 1) / 2)
           : 0;
+        const acquiredArea = cells.reduce((n, [cx, cy]) => n + (t.perimeter?.isAcquired(cx, cy) ? 1 : 0), 0);
+        const acquiredBonus = (acquiredArea / Math.max(1, cells.length)) * 1.2 -
+          (1 - acquiredArea / Math.max(1, cells.length)) * 0.2;
         const score =
-          landTerm + zoneBonus + rim + Math.min(3, frontage) * 0.15 + this.rng.next() * 0.3;
+          landTerm + zoneBonus + rim + acquiredBonus + Math.min(3, frontage) * 0.15 + this.rng.next() * 0.3;
         if (score > bestScore) {
           bestScore = score;
           // The anchor must be the parcel's FRONTAGE cell, not the block's
@@ -3564,7 +3721,7 @@ export class GrowthSystem {
     return best;
   }
 
-  findCell(type, zone) {
+  findCell(type, zone, { allowUnacquired = false } = {}) {
     const t = this.town;
     const g = t.grid;
     const claimed = (x, y) => this.claims.has(`${x},${y}`);
@@ -3586,6 +3743,7 @@ export class GrowthSystem {
       g.forEach((x, y, grid) => {
         const k = grid.kindAt(x, y);
         if (k !== CELL_KIND.EMPTY && k !== CELL_KIND.LOT) return;
+        if (!allowUnacquired && t.perimeter && !t.perimeter.isAcquired(x, y)) return;
         if (t.buildingAt(x, y) || claimed(x, y)) return;
         if (t.resources?.ownsCell(x, y)) return;
         // A bay never displaces an owner: paintParking() refuses an owned cell.
@@ -3629,6 +3787,7 @@ export class GrowthSystem {
       let bestScore = -Infinity;
       g.forEach((x, y, grid) => {
         if (type === 'annex' && !edgeCell(grid, x, y)) return;
+        if (!allowUnacquired && t.perimeter && !t.perimeter.isAcquired(x, y)) return;
         if (type === 'annex' && (t.buildingAt(x, y) || claimed(x, y))) return;
         if (!brushLand(grid, x, y, t)) return;
         const idx = grid.idx(x, y);
@@ -3694,6 +3853,7 @@ export class GrowthSystem {
     g.forEach((x, y, grid) => {
       const k = grid.kindAt(x, y);
       if (k !== CELL_KIND.EMPTY && k !== CELL_KIND.LOT) return;
+      if (!allowUnacquired && t.perimeter && !t.perimeter.isAcquired(x, y)) return;
       if (t.buildingAt(x, y) || claimed(x, y)) return;
       if (t.resources?.ownsCell(x, y)) return;
       // Industry is refused the middle of town outright (see industryEligible).
@@ -3722,8 +3882,9 @@ export class GrowthSystem {
       // Industry inverts the weighting: outskirts beats land value.
       const landTerm = industrial ? land * 0.35 : land;
       const rim = industrial ? this.industryScore(profile, x, y) : 0;
-      const score =
-        landTerm + zoneBonus + mainBonus + rim + this.rng.next() * (isProp ? 0.5 : 0.3);
+        const acquiredBonus = t.perimeter?.isAcquired(x, y) ? 1.2 : -0.2;
+        const score =
+          landTerm + zoneBonus + mainBonus + rim + acquiredBonus + this.rng.next() * (isProp ? 0.5 : 0.3);
       if (score > bestScore) {
         bestScore = score;
         best = [x, y];
@@ -3894,7 +4055,7 @@ export class GrowthSystem {
       // interior land. Rebuild only that derived map for the projection.
       t.parcels.build(t, t.rng.fork(2027));
       this.rng.setState(rngState);
-      const block = this.siteForFootprint(plan);
+      const block = this.siteForFootprint({ ...plan, projection: true });
       return block ? { block } : null;
     } finally {
       g.kind.set(kind);
@@ -3986,6 +4147,27 @@ export class GrowthSystem {
     }
   }
 
+  reserveSiteLand(plan) {
+    const cells = plan?.siteLand?.cells || [];
+    if (!cells.length || !this.town.perimeter) return true;
+    const acquired = this.town.perimeter.acquire(cells, {
+      reason: `${plan.type || 'project'} site`,
+      charge: false
+    });
+    if (!acquired.ok) {
+      this.lastBlock = acquired.reason || 'site land acquisition failed';
+      return false;
+    }
+    plan.siteLandAdded = acquired.cells;
+    return true;
+  }
+
+  releaseSiteLand(plan) {
+    if (!plan?.siteLandAdded?.length) return;
+    this.town.perimeter?.release(plan.siteLandAdded);
+    plan.siteLandAdded = null;
+  }
+
   projectState(projectId) { return this.projectStates.get(projectId) || null; }
   trackProject(plan, state, reason = '') {
     if (!plan?.projectId) return;
@@ -4049,7 +4231,7 @@ export class GrowthSystem {
       })) {
         // No block worked: fall back to the classic single-cell search (with
         // street expansion), which only 1x1 candidates can use.
-        cell = this.findCell(plan.type, plan.zone);
+        cell = this.findCell(plan.type, plan.zone, { allowUnacquired: true });
         if (cell) plan.footprint = null;
       }
     } else if (plan.type === 'road') {
@@ -4086,7 +4268,12 @@ export class GrowthSystem {
       // A dry run cannot pave, so it only prices the tiles the real run will
       // take; both passes rank the candidates from the same RNG state, so
       // the quote and the charge agree.
-      if (NO_EXPAND.has(plan.type)) return refuse();
+      // With a perimeter ledger, a missing serviced lot is a land decision,
+      // not permission to pave an arbitrary street as a side effect of a
+      // house/factory order. EXTEND_STREET is its own measured-demand action;
+      // only a caller that explicitly opts into a coupled street may use the
+      // legacy expansion path.
+      if (NO_EXPAND.has(plan.type) || (this.town.perimeter && !plan.allowStreetExpansion)) return refuse();
       let paved = null;
       if (dryRun) {
         const preview = this.expandPreview(plan);
@@ -4107,12 +4294,12 @@ export class GrowthSystem {
           cell = block.cell;
         }
         if (plan.footprintCandidates || plan.footprint) {
-          block ||= this.siteForFootprint(plan);
+          block ||= this.siteForFootprint({ ...plan, projection: true });
           if (block) cell = block.cell;
         }
         if (strictFootprint && !cell) return refuse();
         if (!cell) {
-          cell = this.findCell(plan.type, plan.zone);
+          cell = this.findCell(plan.type, plan.zone, { allowUnacquired: true });
           if (cell) plan.footprint = null;
         }
         if (!cell) return refuse();
@@ -4197,6 +4384,16 @@ export class GrowthSystem {
       const total = plan.cost + acq;
       plan.cost = total;
       plan.acquisitionQuote = quote;
+    }
+
+    // A build site is land too. Only exact acquired cells may be commissioned;
+    // a new frontier lot is quoted here and reserved immediately before the
+    // project runs, so land purchase appears as a charged Council decision.
+    if (needsCell && plan.type !== 'road' && !NO_SITE.has(plan.type) && this.town.perimeter) {
+      const siteCells = plan.cells?.length ? plan.cells : (cell ? [cell] : []);
+      const siteLand = this.town.perimeter.quote(siteCells);
+      plan.siteLand = siteLand;
+      plan.cost = (plan.cost || 0) + siteLand.cost;
     }
 
     // Phase 18 (A6) — the access road, priced into the plan and laid before
@@ -4303,6 +4500,12 @@ export class GrowthSystem {
       return false;
     }
     const worldBeforeRun = snapshotProjectWorld(this.town);
+    if (!this.reserveSiteLand(plan)) {
+      this.town.economy?.refundProject(plan);
+      if (plan.materials && this.town.industry) this.town.industry.refund(plan.materials);
+      this.trackProject(plan, 'FAILED_ROLLED_BACK', this.lastBlock);
+      return false;
+    }
     let ok = false;
     try { this.commitSpur(plan); ok = !!plan.run(cell, plan.target, plan); }
     catch (error) { this.lastBlock = error?.message || 'project_execution_failed'; }
@@ -4316,6 +4519,7 @@ export class GrowthSystem {
       // field itself, not just in the call below.
       this.lastBlock = this.lastBlock || 'executor_failed';
       restoreProjectWorld(this.town, worldBeforeRun);
+      this.releaseSiteLand(plan);
       this.town.economy?.refundProject(plan);
       if (plan.materials && this.town.industry) this.town.industry.refund(plan.materials);
       this.trackProject(plan, 'FAILED_ROLLED_BACK', this.lastBlock);
@@ -4383,9 +4587,13 @@ export class GrowthSystem {
       return false;
     }
     const beforeSpur = snapshotProjectWorld(this.town);
-    try { this.commitSpur(plan); }
+    try {
+      this.commitSpur(plan);
+      if (!this.reserveSiteLand(plan)) throw new Error(this.lastBlock || 'site land acquisition failed');
+    }
     catch (error) {
       restoreProjectWorld(this.town, beforeSpur);
+      this.releaseSiteLand(plan);
       this.town.economy?.refundProject(plan);
       if (plan.materials && this.town.industry) this.town.industry.refund(plan.materials);
       for (const [cx, cy] of claimCells) this.claims.delete(`${cx},${cy}`);

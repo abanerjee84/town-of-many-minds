@@ -105,7 +105,18 @@ export function planCore(g, rng, { w: spanW, h: spanH, frac } = {}) {
  * across its full extent until every block is BLOCK_MIN..BLOCK_MAX wide. Each
  * street ends on its parent street, so the network is connected by construction.
  */
-export function layoutStreets(g, rng, core) {
+export function layoutStreets(g, rng, core, { minimal = false } = {}) {
+  // Founding mode is intentionally a sparse cross: one main east-west street
+  // and one north-south spine are enough to front the four first blocks. The
+  // town earns parallel streets and branches later through EXTEND_STREET, so
+  // the opening view reads as a hamlet rather than a finished subdivision.
+  if (minimal) {
+    const x = Math.round((core.x0 + core.x1) / 2);
+    const y = Math.round((core.y0 + core.y1) / 2);
+    for (let cx = core.x0; cx <= core.x1; cx++) g.setKind(cx, y, CELL_KIND.ROAD);
+    for (let cy = core.y0; cy <= core.y1; cy++) g.setKind(x, cy, CELL_KIND.ROAD);
+    return [{ axis: 'x', at: x }, { axis: 'y', at: y }];
+  }
   const lines = [];
   const split = (r) => {
     const w = r.x1 - r.x0 + 1;
@@ -379,7 +390,57 @@ function spacedCount(g, cells, gap = 3) {
  * ZONE.INDUSTRIAL, so before this the reward was dead code and every
  * council-planned works landed on highest-land-value land: the town centre).
  */
-export function zoneBlocks(g, rng, core, { civicSlots = 4, downtownBlocks = 2, industrialBlocks = 2 } = {}) {
+export function zoneBlocks(g, rng, core, {
+  civicSlots = 4,
+  downtownBlocks = 2,
+  industrialBlocks = 2,
+  minimal = false
+} = {}) {
+  // The founding cross is deliberately too sparse for recursive block zoning.
+  // Give its street-facing cells explicit roles instead of adding a finished
+  // grid solely to manufacture five blocks; later growth can subdivide it.
+  if (minimal) {
+    const mx = Math.round((core.x0 + core.x1) / 2);
+    const my = Math.round((core.y0 + core.y1) / 2);
+    const out = { park: 0, civic: 0, commercial: 0, industrial: 0 };
+    // Reserve one compact, road-fronted 5×4 green block. The sparse cross has
+    // no recursive blocks from which the public-space kit could otherwise
+    // derive a park, so a deliberate patch keeps gardens/playgrounds useful
+    // without adding another founding street.
+    const parkX0 = Math.max(core.x0 + 1, mx - 5);
+    const parkY0 = Math.max(core.y0 + 1, my - 5);
+    for (let y = parkY0; y < parkY0 + 4 && y <= core.y1; y++) {
+      for (let x = parkX0; x < parkX0 + 4 && x <= core.x1; x++) {
+        if (g.isRoad(x, y) || g.isWater(x, y)) continue;
+        g.setKind(x, y, CELL_KIND.PARK);
+        g.zone[g.idx(x, y)] = ZONE.PARK;
+        out.park++;
+      }
+    }
+    g.forEach((x, y) => {
+      if (x < core.x0 || x > core.x1 || y < core.y0 || y > core.y1 || g.isRoad(x, y) || g.isWater(x, y)) return;
+      if (!isAdjacentToRoad(g, x, y)) return;
+      const idx = g.idx(x, y);
+      const dx = x - mx;
+      const dy = y - my;
+      let z = ZONE.RESIDENTIAL;
+      if (Math.abs(dx) <= 2 && Math.abs(dy) >= 3 && (Math.abs(dy) % 3 === 0 || Math.abs(dy) === 4)) z = ZONE.CIVIC;
+      else if (Math.abs(dy) <= 1 && dx < -2) z = ZONE.COMMERCIAL;
+      else if (Math.abs(dy) <= 1 && dx > 2) z = ZONE.INDUSTRIAL;
+      else if (x <= core.x0 + 2 && y <= my - 2) z = ZONE.PARK;
+      if (z === ZONE.PARK) {
+        g.setKind(x, y, CELL_KIND.PARK);
+        g.zone[idx] = z;
+        out.park++;
+      } else {
+        g.zone[idx] = z;
+        if (z === ZONE.CIVIC) out.civic++;
+        if (z === ZONE.COMMERCIAL) out.commercial++;
+        if (z === ZONE.INDUSTRIAL) out.industrial++;
+      }
+    });
+    return out;
+  }
   const mx = (core.x0 + core.x1) / 2;
   const my = (core.y0 + core.y1) / 2;
   const blocks = coreBlocks(g, core)

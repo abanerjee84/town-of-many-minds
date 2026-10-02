@@ -5,7 +5,8 @@ const REQUIRED_IDS = [
   'hud', 'tools', 'tool-grid', 'seed-input', 'regen', 'reset-town',
   'settings-toggle', 'camera-readout', 'camera-orbit', 'camera-zoom', 'camera-pan',
   'stat-pop', 'stat-bld', 'stat-treasury', 'council', 'council-feedback',
-  'council-thought', 'council-learning', 'speed-100', 'inspector'
+  'council-thought', 'council-learning', 'society-feedback', 'society-feedback-summary',
+  'society-feedback-detail', 'society-feedback-election', 'speed-100', 'inspector'
 ];
 
 const browser = await chromium.launch({ headless: true });

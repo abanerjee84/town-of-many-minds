@@ -539,7 +539,7 @@ function labelFreeRegions(g, b) {
  * seed. Growth prefers cells already touching the lake, so the result reads as
  * a pond rather than a snake, and never leaves the free region it started in.
  */
-function carveLake(g, rng, b, target) {
+function carveLake(g, rng, b, target, compact = false) {
   // One pass labels every connected empty-outskirts region; the candidate scan
   // then looks its region up instead of re-flooding it. Same cells, same scores,
   // same rng draws — linear instead of quadratic.
@@ -550,7 +550,8 @@ function carveLake(g, rng, b, target) {
     if (grid.kindAt(x, y) !== CELL_KIND.EMPTY) return;
     const region = regionOf.get(key(x, y));
     if (!region || region.cells.length < LAKE_MIN) return;
-    cands.push({ x, y, region, score: reachOf(x, y, b, MAX_SPUR + 4) * 1.6 + rng.float(0, 6) });
+    const reach = reachOf(x, y, b, MAX_SPUR + 4);
+    cands.push({ x, y, region, score: (compact ? -reach : reach) * 1.6 + rng.float(0, 6) });
   });
   if (!cands.length) return null;
   cands.sort((a, c) => c.score - a.score);
@@ -767,7 +768,7 @@ export class ResourceSystem {
       // A water body the network cannot reach is not sited: no access, no lake.
       // carveLake already rejected unreachable seeds, so whatever comes back
       // here has a spur that fits.
-      const carved = carveLake(g, rng, bounds, Math.max(LAKE_MIN, Math.min(LAKE_MAX, lakeTarget)));
+      const carved = carveLake(g, rng, bounds, Math.max(LAKE_MIN, Math.min(LAKE_MAX, lakeTarget)), true);
       if (carved) {
         const { lake, spur: lakeSpur } = carved;
         for (const [x, y] of lake) {
@@ -831,9 +832,9 @@ export class ResourceSystem {
         // and each later one steers in beside the ones already up, so the
         // founding plan lays out a wind farm rather than a scatter of masts.
         const cluster = kind === 'windmill' ? WIND_FARM : null;
-        if (this.placeSite(g, rng, bounds, kind, cluster ? { cluster } : {})) continue;
+        if (this.placeSite(g, rng, bounds, kind, cluster ? { cluster, compact: true, gap: 1 } : { compact: true, gap: 1 })) continue;
         for (const gap of GAP_LADDER) {
-          if (this.placeSite(g, rng, bounds, kind, cluster ? { cluster, gap } : { gap })) break;
+          if (this.placeSite(g, rng, bounds, kind, cluster ? { cluster, gap: Math.min(1, gap), compact: true } : { gap: Math.min(1, gap), compact: true })) break;
         }
       }
     }
@@ -883,7 +884,7 @@ export class ResourceSystem {
         ? CLUSTER_PULL - chebyshev(x, y, anchor) + rng.float(0, 3)
         : kind === 'gas'
           ? -Math.max(0, depthOf(x, y, bounds)) * 2 + rng.float(0, 6)
-          : reachOf(x, y, bounds, MAX_SPUR) * 2 + rng.float(0, 6);
+          : (opts.compact ? -reachOf(x, y, bounds, MAX_SPUR) * 2 : reachOf(x, y, bounds, MAX_SPUR) * 2) + rng.float(0, 6);
       cands.push([x, y, score]);
     });
     cands.sort((a, b) => b[2] - a[2]);

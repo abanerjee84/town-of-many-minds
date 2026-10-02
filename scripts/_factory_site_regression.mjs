@@ -29,6 +29,11 @@ const result = await page.evaluate(() => {
   for (const [key, value] of Object.entries(plan.materials || {})) {
     if ((t.industry.stocks[key] || 0) < value) t.industry.stocks[key] = value;
   }
+  // This regression is about factory geometry after a land decision. Service a
+  // real progression patch through the perimeter ledger before commissioning;
+  // the production path must never bypass acquisition by paving a hidden road.
+  const acquired = t.growth.landAcquisitionCells(plan);
+  if (acquired?.length) t.perimeter.acquire(acquired, { charge: false, reason: 'factory-site regression land' });
   const applied = !!t.growth.apply(plan);
   return {
     applied,

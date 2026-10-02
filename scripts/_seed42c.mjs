@@ -32,7 +32,8 @@ const PROBE = () => {
     rec = t.placeBuilding(bx, by, 'industrial', {
       factory: 'sawmill',
       footprint: { cols: 2, rows: 2 },
-      acquire: true
+      acquire: true,
+      allowUnacquired: true
     });
   } catch (e) {
     err = e.message;

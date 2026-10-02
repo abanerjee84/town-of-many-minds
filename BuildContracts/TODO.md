@@ -125,3 +125,22 @@ Updated 2026-10-02 after the population-cap, factory-archetype, fuel-siting, fou
 - [ ] Expand justice into staffed court throughput and neighbourhood-specific service budgets once the base ledger has enough observations.
 - [ ] Compare multiple Council providers on approval, fiscal runway, crime resolution, and land-use efficiency over the same seeded horizon.
 
+## Current sprint (2026-10-02, progression and social readout)
+
+- [x] Added facility-specific civic vertical caps. Recycling, bus depots, transit, fire, daycare, and similar service yards remain low-rise; colleges, universities, hospitals, and government buildings have higher authored caps. Overload growth now prefers a same-parcel wing or a new facility once the cap is reached.
+- [x] Removed civic buildings from generic population height progression and bounded the restructure path with the same cap, preventing a recycling centre from receiving arbitrary seven-floor upgrades.
+- [x] Added a Societal summary panel to the right of Council evidence. It reports approval, aggregate mood, neighbourhood count, open crimes/court backlog, active laws, and the current mayor/election.
+- [x] Extended the UI regression probe to require the societal panel and its live summary rows.
+- [x] Kept the founding core within a compact 22–24 × 19–21 cell frame (below the 30×30 ceiling). The perimeter ledger now seeds only exact founding assets (buildings, resource sites, public-space cells, and their roads), producing a tight seed-42 29×29 envelope with 161 acquired tiles and no empty acquired lots.
+- [x] Added a severe-congestion priority band (65%+) so a legal EXTEND_STREET or ROADUP plan outranks lower-band infill in the rules fallback and is labelled emergency in the Council report.
+- [x] Added recycling-cap regression coverage to `npm run test:society`.
+- [x] Reworked the founding street layout into a two-street cross with explicit frontage zoning and compact resource siting. Seed-42 now starts with 61 connected road tiles, 161 acquired asset tiles inside a 29×29 envelope, and the same 15-building/30-resident contract; later branches are earned through EXTEND_STREET.
+- [x] Visually checked the initial seed-1337 overview after regeneration: all founding assets sit inside the compact envelope with no empty acquired lot; later land requests can be seen as explicit Council acquisition rather than silent map sprawl.
+- [x] Gated automatic `ACQUIRE_LAND` offers on a measured local shortage: fewer than two usable serviced plots plus housing/material pressure, or a population-gated campus/works footprint with no legal acquired site. Frontier selection prefers road-fronted buildable cells, buys a contiguous progression patch when needed, and includes a frontier tile beyond the current envelope so the ledger can grow outward without implicit building-triggered streets.
+- [x] Verified explicit outward acquisition on seed 42: the compact founding ledger expands beyond its initial bounds through charged `ACQUIRE_LAND` decisions, while acquired frontage becomes usable before the next build order.
+
+### Follow-up checks
+
+- [ ] Run a normal-council 800-day matrix with congestion snapshots and compare EXTEND_STREET/ROADUP response latency after the emergency priority band.
+- [ ] Add a visual perimeter overlay showing acquired cells, frontier candidates, and the latest acquisition pulse.
+

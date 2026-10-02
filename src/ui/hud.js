@@ -132,7 +132,11 @@ export class Hud {
       councilThought: $('council-thought'),
       councilLearning: $('council-learning'),
       councilFeedbackAge: $('council-feedback-age'),
-      resourceFeedback: $('resource-feedback')
+      resourceFeedback: $('resource-feedback'),
+      societyFeedbackApproval: $('society-feedback-approval'),
+      societyFeedbackSummary: $('society-feedback-summary'),
+      societyFeedbackDetail: $('society-feedback-detail'),
+      societyFeedbackElection: $('society-feedback-election')
     };
     this.entries = [];
     // Phase 37 (S19g) — the log is two tiers. It was one 6-slot FIFO for
@@ -341,6 +345,35 @@ export class Hud {
     }
   }
 
+  /** Render the measured social state beside the council's evidence card. */
+  renderSocietySummary(society) {
+    const approval = Number(society?.approvalRate);
+    const mood = Number(society?.mood);
+    const pct = (value, fallback = '—') => Number.isFinite(value) ? `${Math.round(value * 100)}%` : fallback;
+    const neighbourhoods = Array.isArray(society?.neighbourhoods) ? society.neighbourhoods : [];
+    const crimes = society?.crimes || {};
+    const elections = Array.isArray(society?.elections) ? society.elections : [];
+    if (this.el.societyFeedbackApproval) {
+      this.el.societyFeedbackApproval.textContent = `approval ${pct(approval)}`;
+      this.flag(this.el.societyFeedbackApproval, Number.isFinite(approval) && approval < 0.45 ? 'bad' : Number.isFinite(approval) && approval < 0.6 ? 'warn' : '');
+    }
+    if (this.el.societyFeedbackSummary) {
+      this.el.societyFeedbackSummary.textContent = `${neighbourhoods.length} neighbourhood${neighbourhoods.length === 1 ? '' : 's'} · mood ${pct(mood)}`;
+      this.el.societyFeedbackSummary.title = neighbourhoods.map((n) => `${n.name} ${pct(n.mood)}`).join(' · ');
+    }
+    if (this.el.societyFeedbackDetail) {
+      this.el.societyFeedbackDetail.textContent = `${crimes.open || 0} open crime${crimes.open === 1 ? '' : 's'} · ${crimes.backlog || 0} court backlog · ${(society?.laws || []).length} laws`;
+      this.el.societyFeedbackDetail.title = `Reported ${crimes.reported || 0} · resolved ${crimes.resolved || 0}`;
+    }
+    if (this.el.societyFeedbackElection) {
+      const latest = elections[elections.length - 1];
+      this.el.societyFeedbackElection.textContent = latest
+        ? `Mayor ${latest.winner} · election day ${latest.day}`
+        : 'No election held yet.';
+      this.el.societyFeedbackElection.title = latest ? `${latest.turnout || 0} adult voters` : '';
+    }
+  }
+
   renderCouncil() {
     const el = this.el.councilList;
     if (!el) return;
@@ -538,6 +571,7 @@ export class Hud {
           ? ''
           : `${g.endpoint}${g.lastError ? ' — ' + g.lastError : ''}${g.staleReplies ? ` · ${g.staleReplies} reply(s) discarded after a regen` : ''}`;
     }
+    this.renderSocietySummary(stats.society);
     if (this.el.res) {
       const html = renderResources(stats.resources);
       if (html !== this._res) {

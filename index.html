@@ -1099,8 +1099,41 @@
         background: rgba(227, 179, 65, 0.1);
         color: #f2cc72;
       }
+      /* A compact readout beside Council evidence: public mood, approval and
+         justice pressure are live social outcomes, not a second decision feed. */
+      #society-feedback {
+        flex: 0 0 188px;
+        width: 188px;
+        min-width: 0;
+        padding: 7px 10px 8px;
+        user-select: none;
+        overflow: hidden;
+      }
+      #society-feedback .feedback-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 4px;
+        color: #7d8590;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+      #society-feedback .society-value {
+        color: #cfd6de;
+        font-size: 10px;
+        line-height: 1.45;
+        min-height: 15px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #society-feedback .society-detail { color: #9da7b3; }
+      #society-feedback .society-election { color: #79c0ff; }
       @media (max-width: 1100px) {
-        #council-feedback { display: none; }
+        #council-feedback,
+        #society-feedback { display: none; }
       }
 
       #loading {
@@ -1257,6 +1290,12 @@
         <div class="feedback-label">Self-learning</div>
         <div id="council-learning" class="feedback-value feedback-learning">No measured outcomes yet.</div>
         <div id="resource-feedback" class="feedback-event" hidden></div>
+      </div>
+      <div id="society-feedback" class="panel" aria-live="polite">
+        <div class="feedback-head"><span>Societal summary</span><span id="society-feedback-approval"></span></div>
+        <div id="society-feedback-summary" class="society-value">Waiting for the first town report.</div>
+        <div id="society-feedback-detail" class="society-value society-detail">No neighbourhood data yet.</div>
+        <div id="society-feedback-election" class="society-value society-election">No election held yet.</div>
       </div>
     </div>
 

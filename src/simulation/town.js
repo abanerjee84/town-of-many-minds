@@ -24,6 +24,7 @@ import { ResearchSystem } from './innovation.js';
 import { PerimeterSystem } from './perimeter.js';
 import { PublicTransportSystem } from './publicTransport.js';
 import { SocietySystem } from './society.js';
+import { civicVerticalCap } from '../kits/civic/civicKit.js';
 import {
   placeInitialTown, layoutLots, rebuildZone, createBuilding, isAdjacentToRoad
 } from '../placement/startPlacement.js';
@@ -1079,6 +1080,7 @@ export class Town {
     for (const [cx, cy] of cells) {
       if (!g.inBounds(cx, cy) || g.isRoad(cx, cy) || g.isPath(cx, cy) || g.isWater(cx, cy)) return null;
       if (this.resources?.ownsCell(cx, cy)) return null;
+      if (this.perimeter && !opts.allowUnacquired && !this.perimeter.isAcquired(cx, cy)) return null;
       // Occupied cells block unless this build acquires them (the caller has
       // already paid the owner — createBuilding clears them).
       if (!opts.acquire && this.buildingAt(cx, cy)) return null;
@@ -1181,7 +1183,9 @@ export class Town {
           rows: Math.max(...rec.footprint.map((c) => c[1])) - Math.min(...rec.footprint.map((c) => c[1])) + 1 }
       : null;
     const zone = rec.zone;
-    const nextFloors = Math.min(MAX_FLOORS, Math.max((rec.floors || 1) + 1, opts.floors || 1));
+    const floorCap = rec.kind === 'civic' ? civicVerticalCap(rec) : MAX_FLOORS;
+    if ((rec.floors || 1) >= floorCap) return null;
+    const nextFloors = Math.min(floorCap, Math.max((rec.floors || 1) + 1, opts.floors || 1));
     this.society?.noteDemolition(rec);
     if (!this.clearLot(rec)) return null;
     const next = this.placeBuilding(cell[0], cell[1], zone, {

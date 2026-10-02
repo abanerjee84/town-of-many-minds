@@ -15,6 +15,10 @@ const result = await page.evaluate(() => {
   const frontier = t.perimeter.frontierCells(3);
   const quote = t.perimeter.quote(frontier);
   const acquired = t.perimeter.acquire(frontier.slice(0, 2), { charge: false, reason: 'regression probe' });
+  // The geometry probe below commissions two campus-shaped civic sites. Give
+  // it a deterministic serviced frontier first, exactly as an ACQUIRE_LAND
+  // decision would, so the test does not bypass the new land ledger.
+  t.perimeter.acquire(t.perimeter.frontierCells(80), { charge: false, reason: 'regression serviced campus' });
 
   const transitParsed = window.parseIntent('BUILD A BUS DEPOT');
   const landParsed = window.parseIntent('ACQUIRE FRONTIER LAND');
@@ -36,6 +40,20 @@ const result = await page.evaluate(() => {
     t.transport.ensureFleet();
   }
 
+  // Service yards must scale horizontally or through a second facility once
+  // their authored vertical cap is reached. A recycling centre is explicitly
+  // low-rise, so neither upgrade nor restructure may select it at two floors.
+  const recyclingPlan = window.planFor(t, 'civic', { facility: 'recycling' });
+  const recyclingSite = recyclingPlan ? t.growth.findFootprintSite(recyclingPlan) : null;
+  const recycling = recyclingSite
+    ? t.placeBuilding(recyclingSite.cell[0], recyclingSite.cell[1], 'civic', {
+        footprint: recyclingPlan.footprint, facility: 'recycling', blockId: recyclingPlan.blockId
+      })
+    : null;
+  if (recycling) t.expandBuilding(recycling, { floors: 1 });
+  const upgradeProbe = window.planFor(t, 'upgrade');
+  const restructureProbe = window.planFor(t, 'restructure');
+
   const candidate = t.buildings.find((b) => b.house && b.floors < 20 && b.facility !== 'townhall');
   const beforeFloors = candidate?.floors || 0;
   const restructured = candidate ? t.restructureBuilding(candidate) : null;
@@ -56,6 +74,7 @@ const result = await page.evaluate(() => {
     },
     landPlan: !!landPlan, landQuoteOk: !!landQuote?.ok,
     transitBuilt: !!transitBuilding, transit: transport,
+    recyclingCap: !!recycling && recycling.floors === 2 && upgradeProbe?.target !== recycling && restructureProbe?.target !== recycling,
     restructure: !!restructured && restructured.floors > beforeFloors,
     society: {
       neighbourhoods: society.neighbourhoods.length,
@@ -80,6 +99,7 @@ if (result.parser.land !== 'ACQUIRE_LAND') failures.push('ACQUIRE_LAND parser');
 if (result.parser.restructure !== 'RESTRUCTURE_BUILDING') failures.push('RESTRUCTURE_BUILDING parser');
 if (!result.landPlan || !result.landQuoteOk) failures.push('land plan quote');
 if (!result.transitBuilt || !result.transit.ready || result.transit.fleet < 1) failures.push('transit route/fleet');
+if (!result.recyclingCap) failures.push('civic vertical cap');
 if (!result.restructure) failures.push('restructure');
 if (!result.society.neighbourhoods || !Number.isFinite(result.society.mood) || !Number.isFinite(result.society.approval) || result.society.elections < 1) failures.push('society stats/election');
 if (!result.validation || errors.length) failures.push('town validation/page errors');

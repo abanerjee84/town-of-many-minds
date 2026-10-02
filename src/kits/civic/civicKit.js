@@ -51,6 +51,37 @@ export const CIVIC_CAPACITY_KIND = {
   university: 'tertiary'
 };
 
+/**
+ * Facility-specific vertical limits. Civic capacity is not interchangeable:
+ * a recycling centre, bus depot, or fire station is a low-rise service yard,
+ * while a university or hospital can justify a taller institutional block.
+ * These limits leave horizontal wings and additional facilities as the normal
+ * way to scale a campus instead of turning every overloaded service into a
+ * tower.
+ */
+export const CIVIC_VERTICAL_CAPS = Object.freeze({
+  townhall: 4,
+  library: 4,
+  school: 5,
+  clinic: 3,
+  hospital: 8,
+  police: 3,
+  fire: 2,
+  government: 6,
+  community: 3,
+  postoffice: 3,
+  daycare: 2,
+  museum: 4,
+  conservatory: 4,
+  busdepot: 2,
+  courthouse: 4,
+  shelter: 3,
+  transit: 2,
+  recycling: 2,
+  college: 6,
+  university: 8
+});
+
 export const CIVIC_CATALOGUE = {
   townhall: {
     label: 'Town Hall',
@@ -421,6 +452,14 @@ export const CIVIC_ORDER = [
 
 export function civicFacility(id) {
   return CIVIC_CATALOGUE[id] || CIVIC_CATALOGUE.townhall;
+}
+
+/** Return the authored storey ceiling for a civic record or facility id. */
+export function civicVerticalCap(recordOrId) {
+  const id = typeof recordOrId === 'string'
+    ? recordOrId
+    : recordOrId?.facility || recordOrId?.house?.spec?.facility;
+  return CIVIC_VERTICAL_CAPS[id] || 4;
 }
 
 /**
