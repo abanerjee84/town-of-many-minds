@@ -142,6 +142,8 @@ The council system prompt is an epistemic contract for provider comparison: it d
 
 47. The top strip shall show a Societal summary panel immediately to the right of Council evidence. It shall update from `Town.stats().society` and display approval, aggregate mood, neighbourhood count, open crimes, court backlog, active-law count, and the current mayor/election. The panel is descriptive telemetry and shall not prescribe Council traits or hide the detailed society inspector.
 
+47a. Every Council report shall include the same social evidence used by the Societal panel: approval, citizen mood, available mood dimensions, neighbourhood count, open crimes, court backlog, active laws, and mayor. Schemes and landmark choices may respond to this evidence, but the report shall not convert it into an undisclosed automatic landmark gate.
+
 48. When measured congestion reaches 65%, a legal `EXTEND_STREET` or `ROADUP` candidate shall receive an emergency priority score above lower-band infill in the rules fallback and Council feasibility ordering. The candidate must still pass the road planner's measured-demand, connected-component, legal-run, finance, and material checks; severe congestion never authorizes arbitrary paving.
 
 The next social-system acceptance pass shall add a player-facing stop-placement tool, staffed court throughput, neighbourhood-specific budgets, and seeded provider comparisons for approval, fiscal runway, crime resolution, and land-use efficiency. These are follow-up experiments rather than hidden Council objectives.

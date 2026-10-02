@@ -1338,6 +1338,24 @@ export class GovernanceSystem {
       : '';
     const pop = lc ? lc.population : t.pedestrians.citizens.length;
     const mood = t.pedestrians.averageMood ? t.pedestrians.averageMood() : 0;
+    // Social legitimacy is decision evidence, not a hidden landmark gate. The
+    // Council needs both the town-wide approval signal and the citizen mood
+    // dimensions that explain it before it weighs a scheme or landmark.
+    const society = t.society?.stats?.() || null;
+    const citizens = t.pedestrians?.citizens || [];
+    const moodDimensions = ['needs', 'safety', 'services', 'economy', 'belonging', 'transport']
+      .map((key) => {
+        const rows = citizens.map((c) => Number(c.p?.mood?.[key])).filter(Number.isFinite);
+        return rows.length ? `${key} ${Math.round((rows.reduce((a, b) => a + b, 0) / rows.length) * 100)}%` : null;
+      })
+      .filter(Boolean)
+      .join(' · ');
+    const societyLine = society
+      ? `Society: approval ${Math.round(society.approvalRate * 100)}% · citizen mood ${Math.round(society.mood * 100)}%` +
+        (moodDimensions ? ` · dimensions ${moodDimensions}` : '') +
+        ` · neighbourhoods ${society.neighbourhoods.length} · open crimes ${society.crimes.open} · court backlog ${society.crimes.backlog}` +
+        ` · active laws ${society.laws.length}${society.mayor ? ` · mayor ${society.mayor}` : ''}`
+      : '';
     // Phase 16 — the derived band and the pull, read once and used by both the
     // Population and the Settlers lines. `lcs` is the system (it owns the
     // campaign calendar); `lc` above is its stats().
@@ -1389,6 +1407,7 @@ export class GovernanceSystem {
       `TOWN REPORT day ${t.clockDay || 0} · ${stage.label}`,
       (() => { const blocks = constructionBlockStats(); return `Construction kits: ${blocks.total} blocks · ${Object.entries(blocks.kits).map(([k, n]) => `${k} ${n}`).join(' · ')}`; })(),
       `Population ${pop} · target ${lc ? lc.target : '?'} · homes ${homes.length} · capacity ${Math.round(capacity)} · spare beds ${Math.max(0, Math.round(capacity) - pop)} · mood ${Math.round(mood * 100)}%${gr ? ` · pressure ${gr.pressure}` : ''}`,
+      societyLine,
       demogLine,
       // Phase 16 — A3/A7. The pull is a number the council can act on, and the
       // campaign is the only thing that moves it, so both belong on the report.

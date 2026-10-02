@@ -25,6 +25,7 @@ try {
       t.governance.learning.observe(t, i + 2, true);
     }
     const prompt = window.systemPrompt(t);
+    const report = t.governance.report();
     const approxTokens = Math.ceil(prompt.length / 4);
     return {
       chars: prompt.length,
@@ -34,6 +35,8 @@ try {
       rejectsTraitChecklist: /be empathetic|be clever|be prudent/i.test(prompt),
       hasLearning: /Learning record.*measured after decisions/i.test(prompt),
       hasCatalogue: /Catalogue footprints/i.test(prompt),
+      hasSocialEvidence: /Society: approval .*citizen mood/i.test(report),
+      hasSchemes: /Schemes:/i.test(report),
       lessons: t.governance.stats().learning.lessons.length,
       pending: t.governance.stats().learning.pending
     };
@@ -44,6 +47,8 @@ try {
   assert.equal(result.hasLearning, true);
   assert.equal(result.hasCatalogue, true);
   assert.ok(result.lessons >= 1, JSON.stringify(result));
+  assert.equal(result.hasSocialEvidence, true, JSON.stringify(result));
+  assert.equal(result.hasSchemes, true, JSON.stringify(result));
   assert.ok(result.lessons <= 24, JSON.stringify(result));
   assert.equal(result.pending, 0, JSON.stringify(result));
   assert.ok(result.approxTokens <= result.budget, JSON.stringify(result));
