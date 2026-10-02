@@ -1,0 +1,12 @@
+node_modules/
+dist/
+dist-check*/
+artifacts/
+shots/
+*.log
+*.pid
+*.png
+before.json
+after.json
+_ext_stress.mjs
+.town-of-many-minds.git/

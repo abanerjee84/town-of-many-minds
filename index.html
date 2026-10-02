@@ -1,0 +1,1273 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>TOWN2 — three.js town simulator</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #0d1117;
+        color: #e6edf3;
+        font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-size: 13px;
+      }
+      #app { position: fixed; inset: 0; }
+      canvas { display: block; }
+
+      /* The bottom ribbon sits at `bottom: 12px` and measures 43px tall, so it
+         occupies the 55px above the viewport edge. Both side panels stop 8px
+         above that line, which is what makes the left and right columns the
+         SAME height and ends them just over the ribbon. */
+      :root { --panel-bottom: 63px; }
+
+      .panel {
+        position: absolute;
+        background: rgba(15, 20, 28, 0.88);
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 10px;
+        backdrop-filter: blur(8px);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+      }
+
+      #hud {
+        top: 12px;
+        left: 0;
+        bottom: var(--panel-bottom);
+        /* Flush with the screen's left edge: no 12px of dead background down
+           the side, so the column reads as part of the window frame rather than
+           a card floating in it. Only the two INNER corners keep a radius. */
+        border-radius: 0 10px 10px 0;
+        padding: 10px 12px;
+        width: 306px;
+        user-select: none;
+        /* Phase 36 (S19g) — the HUD is 531px of content in a fixed-height
+           column, and `#tools` is pinned `bottom: 12px` in the same column, so
+           below ~854px of viewport height they overlapped across the tool panel's
+           full width — covering the clock, the 1x/2x/4x buttons and the Town
+           Centre button at 1280x720 (236x121), 1366x768 (236x73) and 1280x800
+           (236x41). Two of the three most common laptop sizes.
+           `#inspector` already solved exactly this for itself (max-height +
+           overflow-y, with a comment saying why); this is the same rule applied
+           to the panel that needed it.
+
+           The HUD is split rather than scrolled whole, because a scroll that
+           swallows the pause button is not a fix — the clock and the speed
+           controls are chrome the user must always be able to reach, and they
+           are the one thing here that cannot be a casualty of a short window.
+           So `#hud-scroll` takes the scrolling and the controls sit below it.
+
+           Phase 38 (S19h): the `310px` this used to reserve for the Construction
+           kit is gone — the kit is a bottom ribbon now, not a neighbour in this
+           column — so the HUD may use its whole height. At 1440x900 the stat
+           block, all four gauges and the storehouse summary now fit without a
+           scroll at all.
+
+           Phase 39: the panel is anchored top AND bottom rather than sized by
+           its content, so it ends on exactly the same line as `#inspector`
+           (both `top: 12px; bottom: var(--panel-bottom)`). The clock lost its
+           speed buttons to the ribbon and the chatter log moved in at the
+           bottom, so `#hud-scroll` is the only flexible child: it absorbs the
+           leftover height and scrolls when there is not enough. */
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      #hud-scroll {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        min-height: 0;
+        /* Room for the scrollbar inside the panel's own padding, so the gauges
+           do not shift when it appears. */
+        margin-right: -4px;
+        padding-right: 4px;
+      }
+      #hud-scroll::-webkit-scrollbar { width: 6px; }
+      #hud-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 3px; }
+      #hud-scroll::-webkit-scrollbar-track { background: transparent; }
+      #hud h1 {
+        margin: 0 0 6px;
+        font-size: 13px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: #f0883e;
+        font-weight: 700;
+      }
+      .stat-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 2px 0;
+        color: #9da7b3;
+      }
+      .stat-row b { color: #e6edf3; font-weight: 600; }
+      /* Phase 37 (S19g) — a section rule inside the stat block. The HUD used to
+         be one undifferentiated list of six counts, so nothing said which of
+         them the council actually governs. Two rules are enough. */
+      .stat-divider {
+        margin: 7px 0 3px;
+        padding-bottom: 2px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        font-size: 9.5px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #f0883e;
+        font-weight: 700;
+      }
+      /* A stat that is in trouble should not need the number read aloud. */
+      .stat-row b.warn { color: #e3b341; }
+      .stat-row b.bad { color: #f85149; }
+      #stat-mood { font-variant-numeric: tabular-nums; }
+
+      /* Phase 40 — the top strip. The clock used to be the foot of the HUD
+         column and the council card was centred on its own, so the two things a
+         reader glances at most sat at opposite ends of the screen. They are one
+         flex row now, and it is the ROW that is centred: `left: 50%;
+         translateX(-50%)` on the wrapper puts the PAIR's midpoint on the
+         viewport's midpoint, so the clock and the council balance each other
+         instead of each fighting for the centre on its own.
+
+         The wrapper's width is derived from the channel between the two side
+         panels now that both sit flush against the screen edges: the HUD ends
+         at x=306, the inspector starts at `100vw - 340`, and the pair is
+         centred on 50vw, so the RIGHT edge binds first —
+         `W <= 100vw - 680 - 2 * gutter`, with an 8px gutter. `432` is the
+         floor: 184 clock + 8 gap + 240 council, the width the council card was
+         already willing to drop to. On wide screens the evidence panel gets
+         its own 188px column without shrinking the decision list. */
+      #topbar {
+        position: absolute;
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        width: max(432px, min(920px, calc(100vw - 696px)));
+        z-index: 5;
+      }
+      /* `.panel` is absolutely positioned; inside the strip both children lay
+         out in the flex row instead. */
+      #topbar > .panel { position: static; }
+
+      /* The clock, dressed up: a phase glyph in a tinted medallion, the time at
+         a size you can read across a desk, and the day beneath it in the same
+         tracked uppercase the section rules use. */
+      #clock {
+        flex: 0 0 184px;
+        width: 184px;
+        padding: 9px 11px 10px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        user-select: none;
+        overflow: hidden;
+      }
+      #clock .cl-emoji {
+        flex: none;
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        font-size: 18px;
+        line-height: 1;
+        border-radius: 50%;
+        background: radial-gradient(circle at 34% 30%, rgba(126, 231, 135, 0.24), rgba(126, 231, 135, 0.05));
+        border: 1px solid rgba(126, 231, 135, 0.34);
+        box-shadow: 0 0 12px rgba(126, 231, 135, 0.16);
+      }
+      #clock .cl-body { min-width: 0; flex: 1 1 auto; }
+      /* Day over time, and the DAY is the loud one: it is the number a reader
+         actually tracks (what day of the run is it?), while the clock is a
+         detail under it. Both lines are `nowrap` + ellipsis so a long
+         "Afternoon" can never push the panel wider than its 176px. */
+      #clock .cl-day {
+        font-size: 21px;
+        font-weight: 700;
+        line-height: 1.05;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.005em;
+        color: #f0f6fc;
+        text-shadow: 0 0 14px rgba(126, 231, 135, 0.3);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #clock .cl-sub {
+        margin-top: 3px;
+        display: flex;
+        align-items: baseline;
+        gap: 5px;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: #7ee787;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      #clock .cl-sub > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+      #clock .cl-sub .sep { flex: none; color: #484f58; }
+      #clock .cl-sub #stat-time { flex: none; color: #cfd6de; font-weight: 700; letter-spacing: 0.04em; }
+      button {
+        font: inherit;
+        color: #c9d1d9;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        padding: 4px 9px;
+        cursor: pointer;
+      }
+      button:hover { background: rgba(255, 255, 255, 0.13); color: #fff; }
+      button.active { background: #238636; border-color: #2ea043; color: #fff; }
+
+      /* Phase 38 (S19h) — the Construction kit was a 236x286px panel in the
+         LEFT column, which is the same column the HUD lives in, and is the
+         reason the HUD could never use its own height (Phase 36 had to reserve
+         310px for it and cap itself). Turned into a full-width ribbon along
+         the bottom: the tools become one horizontal row, and the whole left
+         column is now the HUD's.
+         The static three-part prose hint ("Drag: orbit / Right-drag: pan /
+         Wheel: zoom / Click: use tool") cannot live in a 56px strip, and it did
+         not need to: `TOOLS` already carries a per-tool `hint`, which the old
+         panel had and then buried under a static line. The ribbon shows the
+         SELECTED TOOL's hint, which is the one that is actually useful. */
+      #tools {
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        padding: 7px 10px;
+        user-select: none;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        z-index: 6;
+      }
+      #tools .ribbon-label {
+        font-size: 9.5px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #6e7681;
+        flex: none;
+      }
+      #tools .tool-grid {
+        display: flex;
+        gap: 4px;
+        flex: none;
+      }
+      .tool-grid button {
+        /* 7px rather than the 9px it had: the ribbon now also carries the
+           pause/speed cluster, and at 1152 the fixed children only fit if each
+           of the eleven tool buttons gives back 4px. */
+        padding: 5px 7px;
+        font-size: 11px;
+        text-align: center;
+        white-space: nowrap;
+      }
+      /* The selected tool's own hint, in the space the static prose used to
+         occupy. Truncates rather than wrapping, so the ribbon cannot grow. */
+      #tools .ribbon-hint {
+        flex: 1 1 auto;
+        min-width: 0;
+        color: #7d8590;
+        font-size: 11px;
+        line-height: 1.3;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #tools .ribbon-sep {
+        flex: none;
+        width: 1px;
+        align-self: stretch;
+        background: rgba(255, 255, 255, 0.09);
+      }
+      /* Phase 39 — the pause/speed cluster used to live in `#clock`, which put
+         simulation chrome in the middle of the stats column while the ribbon
+         already had the room for it. One row, sized like the other ribbon
+         controls so the strip stays 43px tall. */
+      #tools .speed-row { display: flex; gap: 4px; flex: none; }
+      #tools .speed-row button {
+        padding: 4px 8px;
+        font-size: 11px;
+        text-align: center;
+        white-space: nowrap;
+      }
+      #tools .speed-row button.active { background: #238636; border-color: #2ea043; color: #fff; }
+      /* `0 1` rather than `none`: the speed cluster moved in beside this, and on
+         the narrowest laptop the ribbon supports (1152) the fixed children no
+         longer fit. The seed field gives up its spare width first, and the
+         selected tool's hint absorbs the rest — but the seed row carries a
+         125px FLOOR (64px input + 5px gap + the 56px Regen button), because a
+         seed field you cannot type four digits into is not a seed field, and a
+         row whose children spill out of it is not a row. Without the floor,
+         Chrome let this row collapse to 73px and the Regen button hung 52px
+         over its right edge. */
+      #tools .seed-row { display: flex; gap: 5px; flex: 0 1 168px; width: 168px; min-width: 125px; }
+      #tools .seed-row input {
+        flex: 1;
+        min-width: 64px;
+        font: inherit;
+        color: #e6edf3;
+        background: rgba(0, 0, 0, 0.35);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        padding: 4px 7px;
+      }
+      #tools #reset-town { flex: none; }
+      #tools #view-centre { flex: none; color: #79c0ff; }
+      #tools #view-centre:hover { color: #fff; }
+      #tools #settings-toggle {
+        flex: none;
+        min-width: 31px;
+        padding: 4px 7px;
+        color: #c9d1d9;
+        font-size: 15px;
+        line-height: 1;
+      }
+      #tools #settings-toggle:hover { color: #fff; border-color: rgba(88, 166, 255, 0.55); background: rgba(88, 166, 255, 0.16); }
+      #reset-town { color: #ffb4ae; }
+      #reset-town:hover { background: rgba(248, 81, 73, 0.22); border-color: #f85149; color: #fff; }
+      #camera-readout {
+        position: fixed;
+        left: 50%;
+        bottom: calc(var(--panel-bottom) + 7px);
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        max-width: calc(100vw - 24px);
+        z-index: 7;
+        pointer-events: none;
+        user-select: none;
+      }
+      .camera-chip {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 7px;
+        min-height: 25px;
+        padding: 4px 9px;
+        border: 1px solid rgba(255, 255, 255, 0.11);
+        border-radius: 7px;
+        background: rgba(15, 20, 28, 0.86);
+        box-shadow: 0 5px 18px rgba(0, 0, 0, 0.28);
+        white-space: nowrap;
+      }
+      .camera-chip .cam-label {
+        color: #7d8590;
+        font-size: 9px;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+      }
+      .camera-chip b {
+        color: #c9d1d9;
+        font-size: 10.5px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      /* The ribbon has to survive 1024px, where eleven tool buttons, six speed
+         buttons, the seed field, Town Centre and Reset leave the row ~90px
+         short. The two pieces that carry no action — the BUILD caption and the
+         selected tool's one-line hint — go first; then the gaps and the button
+         padding give back the rest. Nothing interactive disappears, and nothing
+         spills past the right edge of the page. */
+      @media (max-width: 1100px) {
+        #tools { gap: 6px; }
+        #tools .ribbon-label,
+        #tools .ribbon-hint { display: none; }
+        /* At 1024px the labels remain useful, but the ribbon cannot carry
+           eleven controls at the desktop padding. Zero horizontal padding
+           keeps Settings and Reset inside the panel while preserving the
+           buttons' vertical hit target. */
+        #tools .tool-grid button { padding: 5px 0; }
+        #tools .speed-row button { padding: 4px; }
+        #tools #view-centre,
+        #tools #reset-town,
+        #tools #settings-toggle { padding: 4px 6px; }
+      }
+      .comps { margin-top: 7px; padding-top: 7px; border-top: 1px solid rgba(255,255,255,0.08); }
+      /* Outside the scroll, so it must never be the thing that gives. */
+      #trade { flex: none; }
+      .comps .title {
+        font-size: 10px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #f0883e;
+        font-weight: 700;
+        margin-bottom: 5px;
+      }
+
+      /* Phase 37 (S19g) — the storehouse collapses. It was 181px of a 531px
+         panel (34% — the single largest consumer of the HUD) to show seven rows
+         of `500/900 ↑$57 ↓$40` with no header and no units, and it is what
+         pushed the panel into the tool palette at 720p. Collapsed it shows a
+         one-line summary and a full stop; the table itself is still one click
+         away, and the inspector's Trade modal has always carried it. */
+      .comps.collapsible .title {
+        display: flex;
+        align-items: baseline;
+        gap: 7px;
+        margin-bottom: 0;
+      }
+      #trade-toggle {
+        border: none;
+        background: none;
+        padding: 0;
+        font: inherit;
+        font-size: 10px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #f0883e;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      #trade-toggle::before { content: '▸ '; color: #f0883e; }
+      #trade-toggle[aria-expanded='true']::before { content: '▾ '; }
+      #trade-toggle:hover { color: #e6edf3; background: none; }
+      #trade-summary {
+        font-size: 9.5px;
+        letter-spacing: 0.02em;
+        text-transform: none;
+        color: #7d8590;
+        font-variant-numeric: tabular-nums;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #trade.collapsed #stat-trade { display: none; }
+      #trade:not(.collapsed) { padding-bottom: 2px; }
+
+      /* Phase 14 — one column per primary resource (resourceKit.ORDER). */
+      .res-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+      .res {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 6px;
+        padding: 4px 5px 5px;
+        min-width: 0;
+      }
+      .res .n {
+        display: flex;
+        justify-content: space-between;
+        gap: 4px;
+        font-size: 10px;
+        color: #9da7b3;
+        letter-spacing: 0.04em;
+      }
+      .res .n b { color: #e6edf3; font-weight: 600; font-variant-numeric: tabular-nums; }
+      .res .f {
+        margin-top: 3px;
+        font-size: 9.5px;
+        color: #7d8590;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      .res .bar {
+        height: 4px;
+        margin-top: 2px;
+        background: rgba(255, 255, 255, 0.07);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      .res.warn .bar > i { background: #d29922 !important; }
+      .res.low .bar > i { background: #f85149 !important; }
+      /* Phase 37 (S19g) — a resource with NO production is a different fact
+         from a resource that is merely low on stock, and the tile used to
+         render both as the same 55%-ish bar with a `+0 / −303` line that reads
+         exactly like a surplus. Zero output is now the loudest thing on the
+         tile. */
+      .res.dead { border-color: rgba(248, 81, 73, 0.55); background: rgba(248, 81, 73, 0.08); }
+      .res.dead .f { color: #f85149; font-weight: 600; }
+      .res.dead .n b { color: #f85149; }
+      /* The bar is percent of STORE and the line under it is FLOW — two
+         different questions, so the bar says which it is. */
+      .res .cap {
+        margin-top: 3px;
+        font-size: 8.5px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #6e7681;
+        line-height: 1;
+      }
+
+
+      /* Storehouse trade block — outside .res so hud consistency checks
+         that pair .res gauges with overview rows don't trip over it. */
+      #trade {
+        margin-top: 7px;
+        padding-top: 7px;
+        border-top: 1px solid rgba(255,255,255,0.08);
+      }
+      #trade .title {
+        font-size: 10px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #f0883e;
+        font-weight: 700;
+        margin-bottom: 5px;
+      }
+      .trade-row {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        padding: 2px 0;
+        font-size: 10.5px;
+        color: #9da7b3;
+      }
+      .trade-row .t-name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .trade-row .t-stock {
+        color: #e6edf3;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        font-size: 10px;
+      }
+      .trade-row button {
+        border: 1px solid rgba(255,255,255,0.12);
+        background: rgba(255,255,255,0.05);
+        color: #9da7b3;
+        border-radius: 5px;
+        font-size: 9.5px;
+        padding: 2px 5px;
+        cursor: pointer;
+        font-variant-numeric: tabular-nums;
+        min-width: 0;
+        font: inherit;
+        font-size: 9.5px;
+      }
+      .trade-row button:hover {
+        background: rgba(126,231,135,0.14);
+        border-color: rgba(126,231,135,0.4);
+        color: #e6edf3;
+      }
+      .trade-row button:last-child:hover {
+        background: rgba(210,153,34,0.16);
+        border-color: rgba(210,153,34,0.45);
+      }
+
+      #inspector {
+        top: 12px;
+        right: 0;
+        bottom: var(--panel-bottom);
+        /* Flush with the screen's right edge — the mirror of `#hud`. */
+        border-radius: 10px 0 0 10px;
+        /* Phase 38 (S19h) — wider. The overview's rows wrap into a ragged right
+           edge at 264px (`Daily demand: C $1,574 · I $34,000 · G $1,060` ran to
+           three lines with the last figure alone), and the extra width buys the
+           emoji section headers their indent. 340 costs the council card 76px of
+           centre, which its own width formula below accounts for. */
+        width: 340px;
+        padding: 11px 13px;
+        /* Phase 39 — the 254px this used to reserve for the log and the ribbon
+           is gone: the chatter moved into the HUD, so the Town overview runs
+           from the top edge down to the ribbon on the same line as `#hud`.
+           Anchoring top AND bottom (rather than `max-height`) is what makes the
+           two columns exactly equal; the content scrolls instead. */
+        overflow-y: auto;
+        user-select: none;
+      }
+      #inspector h2 {
+        margin: 0 0 3px;
+        font-size: 13px;
+        color: #79c0ff;
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+      }
+      /* Phase 38 (S19h) — `justify-content: space-between` was a two-item
+         layout (title, close button). Adding an emoji made it three, and the
+         title drifted to the far edge with a gap in the middle. The button is
+         pushed instead. */
+      #inspector h2 .close { margin-left: auto; }
+      #inspector .sub { color: #7d8590; font-size: 11px; margin-bottom: 8px; }
+      /* Phase 38 (S19h) — emoji section headers. Every one of the characters
+         used here was measured in this Chrome (scripts\_emoji_probe.mjs): none
+         falls back to a .notdef box, which is the failure the old `⌖` (U+2316)
+         and `❚` (U+275A) labels had. */
+      #inspector .sub.emo,
+      #inspector h2 .emo { font-size: 11.5px; color: #9da7b3; }
+      #inspector h2 .emo { font-size: 14px; }
+      /* The group-opener row: each group's name is the label of its first
+         `.kv`, so the seven sections were invisible in a wall of thirty rows.
+         Weight and a rule do the work; the markup is untouched so the
+         consistency probe's `innerText` parsing still holds. */
+      #inspector .kv.grp {
+        margin-top: 9px;
+        padding-top: 7px;
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
+      }
+      #inspector .kv.grp:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
+      #inspector .kv.grp > span:first-child {
+        color: #cfd6de;
+        font-weight: 600;
+        font-size: 11.5px;
+        letter-spacing: 0.01em;
+      }
+      /* A group row's own value must not wrap into the label's column. */
+      #inspector .kv { align-items: baseline; }
+      #inspector .kv > span:first-child { flex: none; }
+      #inspector .kv > span:last-child { text-align: right; min-width: 0; }
+      #inspector .close {
+        border: none;
+        background: none;
+        color: #7d8590;
+        padding: 0 2px;
+        font-size: 15px;
+        line-height: 1;
+      }
+      .kv { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; color: #9da7b3; }
+      .kv span:last-child { color: #e6edf3; text-align: right; }
+      .bar-wrap { margin: 3px 0 6px; }
+      .bar-label { display: flex; justify-content: space-between; color: #9da7b3; font-size: 11px; }
+      .bar {
+        height: 6px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+        margin-top: 3px;
+      }
+      .bar > i { display: block; height: 100%; background: #58a6ff; }
+      .divider { height: 1px; background: rgba(255,255,255,0.08); margin: 9px 0; }
+      .tag {
+        display: inline-block;
+        padding: 1px 6px;
+        border-radius: 10px;
+        background: rgba(88, 166, 255, 0.15);
+        border: 1px solid rgba(88, 166, 255, 0.3);
+        color: #79c0ff;
+        font-size: 10.5px;
+        margin: 2px 3px 2px 0;
+      }
+      #inspector .empty { color: #7d8590; font-size: 11.5px; line-height: 1.5; }
+
+      /* History buttons pinned to the top of the inspector. */
+      .insp-top { display: flex; gap: 6px; margin-bottom: 9px; }
+      .insp-btn { flex: 1; padding: 5px 8px; font-size: 11px; text-align: center; color: #79c0ff; }
+      .insp-btn:hover {
+        background: rgba(88, 166, 255, 0.16);
+        border-color: rgba(88, 166, 255, 0.4);
+        color: #a5d1ff;
+      }
+
+      /* Council / Trade history modal over the whole app. */
+      #insp-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(4, 7, 10, 0.6);
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding-top: 10vh;
+        z-index: 80;
+      }
+      #insp-modal.hidden { display: none; }
+      .modal-box {
+        width: min(660px, 92vw);
+        max-height: 74vh;
+        overflow-y: auto;
+        background: rgba(15, 20, 28, 0.97);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 10px;
+        box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
+        padding: 13px 16px 16px;
+      }
+      /* Settings has enough categories to outgrow a laptop viewport. Keep the
+         search bar visible while the content itself scrolls vertically. */
+      .modal-box.settings-modal-box { max-height: min(70vh, 640px); }
+      .m-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .m-head span {
+        font-size: 11px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #79c0ff;
+        font-weight: 600;
+      }
+      #modal-close {
+        border: none;
+        background: none;
+        color: #7d8590;
+        font-size: 17px;
+        padding: 0 3px;
+        line-height: 1;
+      }
+      #modal-close:hover { background: none; color: #fff; }
+      .h-row {
+        font-size: 11.5px;
+        line-height: 1.55;
+        color: #cfd6de;
+        padding: 5px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .h-row b {
+        color: #7d8590;
+        font-weight: 600;
+        margin-right: 6px;
+        font-variant-numeric: tabular-nums;
+      }
+      .h-empty { color: #7d8590; font-size: 11.5px; padding: 6px 0; }
+
+      .settings-form { display: grid; gap: 10px; }
+      .settings-toolbar {
+        position: sticky;
+        top: -13px;
+        z-index: 3;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin: -13px -16px 2px;
+        padding: 10px 16px 9px;
+        background: rgba(15, 20, 28, 0.98);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .settings-search {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex: 1 1 auto;
+        min-width: 0;
+        padding: 4px 7px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 6px;
+        background: rgba(0, 0, 0, 0.3);
+        color: #7d8590;
+      }
+      .settings-search > span { font-size: 17px; line-height: 1; }
+      .settings-search input {
+        min-width: 0;
+        flex: 1;
+        border: 0;
+        outline: 0;
+        color: #e6edf3;
+        background: transparent;
+        font: inherit;
+      }
+      .settings-search input::placeholder { color: #7d8590; }
+      .settings-search button { border: 0; background: transparent; padding: 0 2px; color: #7d8590; }
+      .settings-search button:hover { background: transparent; color: #fff; }
+      .settings-search-summary { flex: none; min-width: 65px; color: #7d8590; font-size: 10.5px; text-align: right; }
+      .settings-section { display: grid; gap: 2px; }
+      .settings-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: 7px; padding: 4px 0 3px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+      .settings-section-head h3 { margin: 0; color: #f0883e; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; }
+      .settings-section-head span { color: #7d8590; font-size: 10px; }
+      .settings-section[hidden],
+      .settings-item[hidden] { display: none; }
+      .settings-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(150px, 230px);
+        align-items: center;
+        gap: 16px;
+        padding: 7px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .settings-row b,
+      .settings-check b { display: block; color: #e6edf3; font-weight: 600; }
+      .settings-row small,
+      .settings-check small { display: block; margin-top: 3px; color: #7d8590; font-size: 10.5px; line-height: 1.35; }
+      .settings-row input[type="number"],
+      .settings-row select {
+        width: 100%;
+        min-height: 30px;
+        padding: 4px 7px;
+        color: #e6edf3;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 6px;
+        font: inherit;
+      }
+      .settings-row select option { color: #111; background: #fff; }
+      .settings-inline { display: flex; align-items: center; gap: 9px; }
+      .settings-inline input[type="range"] { flex: 1; min-width: 0; accent-color: #58a6ff; }
+      .settings-inline output { width: 42px; color: #79c0ff; text-align: right; font-variant-numeric: tabular-nums; }
+      .settings-check { display: flex; align-items: flex-start; gap: 9px; padding-top: 2px; cursor: pointer; }
+      .settings-check input { margin-top: 2px; accent-color: #2ea043; }
+      .settings-note { color: #8b949e; font-size: 10.5px; line-height: 1.45; padding-top: 2px; }
+      .settings-reset { justify-self: start; color: #79c0ff; font-size: 11px; }
+      .settings-reset:hover { color: #fff; border-color: rgba(88, 166, 255, 0.45); }
+      @media (max-width: 600px) {
+        .settings-row { grid-template-columns: 1fr; gap: 7px; }
+        #camera-readout { gap: 4px; }
+        .camera-chip { padding: 4px 6px; gap: 5px; }
+        .camera-chip b { font-size: 9.5px; }
+      }
+
+      /* Phase 39 — the chatter is the HUD's own tail, not a neighbour floating
+         over the inspector. It used to be a separate panel pinned at
+         `right: 12px; bottom: 74px`, which is what forced `#inspector` to stop
+         254px short of the bottom. Merged into `#hud` it takes the HUD's own
+         padding, keeps its own bounded scroll, and the right column is free to
+         run down to the ribbon. */
+      .log-block {
+        flex: 0 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        margin-top: 4px;
+      }
+      .log-block .stat-divider { flex: none; }
+      #log {
+        position: static;
+        padding: 0;
+        font-size: 11px;
+        line-height: 1.5;
+        color: #9da7b3;
+        max-height: 156px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        min-height: 0;
+        user-select: none;
+      }
+      #log::-webkit-scrollbar { width: 6px; }
+      #log::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 3px; }
+      #log::-webkit-scrollbar-track { background: transparent; }
+      #log .entry { border-top: 1px solid rgba(255,255,255,0.05); padding: 3px 0; }
+      #log .entry:first-child { border-top: none; }
+      #log .t { color: #7d8590; font-variant-numeric: tabular-nums; margin-right: 6px; }
+      /* Phase 37 (S19g) — a pinned entry (a decision, a refusal, a trade) is
+         held in a 6-slot log alongside expiring ambient chatter, so it needs to
+         be findable at a glance. */
+      #log .entry.pinned { color: #cfd6de; border-left: 2px solid #58a6ff; padding-left: 6px; margin-left: -2px; }
+      #log .entry.pinned .t { color: #58a6ff; }
+
+      /* Council card — the right half of the top strip. The width formula it
+         used to carry as an absolutely-positioned panel now lives on `#topbar`
+         (the pair is what has to clear the side panels), so this is a plain
+         flex child that takes whatever is left of the strip. */
+      #council {
+        flex: 1 1 auto;
+        min-width: 0;
+        padding: 7px 11px 8px;
+        user-select: none;
+      }
+      #council .c-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 7px;
+        margin-bottom: 3px;
+        min-width: 0;
+      }
+      #council .c-title {
+        font-size: 10px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #7d8590;
+        flex: none;
+      }
+      /* Phase 37 (S19g) — the card showed three motions and no state: no sitting
+         count, no cost, and a "detail" column that repeated the log verbatim.
+         Sittings and spend are the two facts a reader wants at a glance.
+         Phase 40: at 1152 the strip hands the card ~256px instead of 440, so
+         both of these ellipsize rather than pushing the "All" button out. */
+      #council .c-sittings {
+        font-size: 9.5px;
+        color: #6e7681;
+        font-variant-numeric: tabular-nums;
+        margin-right: auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #council .c-more {
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.05);
+        color: #7d8590;
+        font-size: 9.5px;
+        padding: 1px 6px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      #council .c-more:hover { background: rgba(255, 255, 255, 0.13); color: #e6edf3; }
+      #council .c-cost {
+        font-size: 9.5px;
+        color: #7d8590;
+        font-variant-numeric: tabular-nums;
+        flex: none;
+      }
+      #council .c-sub {
+        font-size: 9.5px;
+        color: #e3b341;
+        flex: none;
+      }
+      #council .c-state {
+        font-size: 10px;
+        padding: 1px 7px;
+        border-radius: 9px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #7d8590;
+        flex: none;
+        min-width: 0;
+        max-width: 46%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #council .c-state.on {
+        background: rgba(126, 231, 135, 0.14);
+        border-color: rgba(126, 231, 135, 0.4);
+        color: #7ee787;
+      }
+      #council .c-state.off {
+        background: rgba(248, 81, 73, 0.14);
+        border-color: rgba(248, 81, 73, 0.4);
+        color: #ffb4ae;
+      }
+      #council .c-row {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        padding: 1.5px 0;
+        font-size: 11px;
+        border-top: 1px solid rgba(255, 255, 255, 0.045);
+        min-width: 0;
+        overflow: hidden;
+      }
+      #council .c-row:first-child { border-top: none; }
+      /* Unified feed: two-line rows — line 1 who/what/status, line 2 why. */
+      #council .c-row.multi { display: block; padding: 3px 0; }
+      #council .c-line {
+        display: flex;
+        align-items: baseline;
+        gap: 7px;
+        min-width: 0;
+        overflow: hidden;
+      }
+      #council .c-actor {
+        flex: none;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        padding: 0 5px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.06);
+        color: #9da7b3;
+      }
+      #council .c-actor.council { color: #79c0ff; border-color: rgba(88,166,255,.4); background: rgba(88,166,255,.12); }
+      #council .c-actor.rules { color: #e3b341; border-color: rgba(227,179,65,.4); background: rgba(227,179,65,.12); }
+      #council .c-actor.you { color: #7ee787; border-color: rgba(126,231,135,.4); background: rgba(126,231,135,.12); }
+      #council .c-actor.dev { color: #d2a8ff; border-color: rgba(210,168,255,.4); background: rgba(210,168,255,.12); }
+      #council .c-actor.town { color: #9da7b3; }
+      #council .c-why {
+        margin-top: 1px;
+        padding-left: 2px;
+        font-size: 10px;
+        line-height: 1.35;
+        color: #7d8590;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        white-space: normal;
+      }
+      .h-actor {
+        display: inline-block;
+        font-size: 9.5px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #79c0ff;
+        border: 1px solid rgba(88,166,255,.35);
+        background: rgba(88,166,255,.1);
+        border-radius: 8px;
+        padding: 0 6px;
+        margin: 0 6px;
+      }
+      .h-why { color: #7d8590; font-size: 11px; }
+      #council .c-time {
+        color: #7d8590;
+        font-variant-numeric: tabular-nums;
+        flex: none;
+      }
+      /* The card lost ~180px of width when it became half of the top strip, so
+         the three nowrap fields yield to ellipses instead of shoving the row
+         past the panel edge. */
+      #council .c-intent {
+        color: #79c0ff;
+        font-weight: 600;
+        white-space: nowrap;
+        flex: 0 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #council .c-intent.muted { color: #9da7b3; }
+      #council .c-src {
+        flex: none;
+        font-size: 9.5px;
+        padding: 0 5px;
+        border-radius: 8px;
+        background: rgba(227, 179, 65, 0.14);
+        border: 1px solid rgba(227, 179, 65, 0.35);
+        color: #e3b341;
+      }
+      #council .c-status { font-weight: 600; flex: none; text-transform: lowercase; }
+      #council .c-status.done,
+      #council .c-status.started { color: #7ee787; }
+      #council .c-status.blocked,
+      #council .c-status.rejected { color: #e3b341; }
+      #council .c-status.unparsed,
+      #council .c-status.error { color: #f85149; }
+      #council .c-status.advisory { color: #a5d6ff; }
+      #council .c-status.noop,
+      #council .c-status.busy { color: #9da7b3; }
+      #council .c-detail {
+        color: #9da7b3;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
+        min-width: 0;
+      }
+      #council .c-empty { color: #7d8590; font-size: 10.5px; }
+
+      /* Small evidence readout beside the decisions card. It exposes the
+         council's current thought and its measured learning record without
+         assigning either a personality or a score-shaped virtue. */
+      #council-feedback {
+        flex: 0 0 188px;
+        width: 188px;
+        min-width: 0;
+        padding: 7px 10px 8px;
+        user-select: none;
+        overflow: hidden;
+      }
+      #council-feedback .feedback-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 4px;
+        color: #7d8590;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+      #council-feedback .feedback-label {
+        color: #79c0ff;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      #council-feedback .feedback-value {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        overflow: hidden;
+        color: #cfd6de;
+        font-size: 10px;
+        line-height: 1.35;
+        min-height: 27px;
+      }
+      #council-feedback .feedback-learning { color: #9da7b3; min-height: 22px; }
+      #council-feedback .feedback-event {
+        margin-top: 5px;
+        padding: 3px 5px;
+        border-left: 2px solid #7ee787;
+        background: rgba(126, 231, 135, 0.09);
+        color: #b7f5c0;
+        font-size: 9.5px;
+        line-height: 1.3;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #council-feedback .feedback-event.crowded {
+        border-left-color: #e3b341;
+        background: rgba(227, 179, 65, 0.1);
+        color: #f2cc72;
+      }
+      @media (max-width: 1100px) {
+        #council-feedback { display: none; }
+      }
+
+      #loading {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 10px;
+        background: #0d1117;
+        z-index: 50;
+        transition: opacity 0.4s ease;
+      }
+      #loading .brand {
+        font-size: 22px;
+        letter-spacing: 0.5em;
+        color: #7ee787;
+        font-weight: 700;
+      }
+      #loading .sub { color: #7d8590; font-size: 12px; letter-spacing: 0.1em; }
+      #loading.hidden { opacity: 0; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <div id="loading">
+      <div class="brand">TOWN2</div>
+      <div class="sub">procedurally placing the town…</div>
+    </div>
+
+    <div id="hud" class="panel">
+      <h1>TOWN3 Simulator</h1>
+      <div id="hud-scroll">
+        <div class="stat-row"><span>Population</span><b id="stat-pop">0</b></div>
+        <div class="stat-row"><span>Households</span><b id="stat-hhd">0</b></div>
+        <div class="stat-row"><span>Buildings</span><b id="stat-bld">0</b></div>
+        <div class="stat-row"><span>Vehicles</span><b id="stat-veh">0</b></div>
+        <div class="stat-row"><span>Road tiles</span><b id="stat-road">0</b></div>
+        <div class="stat-row"><span>Mood</span><b id="stat-mood">-</b></div>
+        <div class="stat-divider">Primary resources</div>
+        <div class="res-grid" id="stat-res"></div>
+        <div class="stat-divider">Economy &amp; labour</div>
+        <div class="stat-row"><span>Treasury</span><b id="stat-treasury">-</b></div>
+        <div class="stat-row"><span>Tax</span><b id="stat-tax">-</b></div>
+        <div class="stat-row"><span>Unemployment</span><b id="stat-jobs">-</b></div>
+        <div class="stat-row"><span>Beds</span><b id="stat-beds">-</b></div>
+        <div class="stat-row"><span>Debt</span><b id="stat-debt">-</b></div>
+        <div class="stat-row"><span>Congestion</span><b id="stat-traffic">-</b></div>
+      </div>
+      <!-- Phase 40 — the storehouse sits OUTSIDE `#hud-scroll`. It used to be
+           the last block of the scrolled stats, so at any height where the stats
+           overflowed it scrolled out of sight and only `?storehouse=1` put it
+            back. Pinned between the scroll and the town chatter it is a fixed
+            block of the panel: always on screen, always the same place. -->
+
+      <div class="comps collapsible" id="trade">
+        <div class="title">
+          <button id="trade-toggle" aria-expanded="true" aria-controls="stat-trade">Storehouse</button>
+          <span class="hint" id="trade-summary"></span>
+        </div>
+        <div id="stat-trade"></div>
+      </div>
+      <div class="log-block">
+        <div class="stat-divider">Town chatter</div>
+        <div id="log"></div>
+      </div>
+    </div>
+
+    <div id="camera-readout" aria-label="Camera orbit, zoom, and pan values">
+      <span class="camera-chip"><span class="cam-label">Orbit</span><b id="camera-orbit">34.5° yaw · 64.0° tilt</b></span>
+      <span class="camera-chip"><span class="cam-label">Zoom</span><b id="camera-zoom">228 m</b></span>
+      <span class="camera-chip" title="Right-drag to pan"><span class="cam-label">Pan · R-drag</span><b id="camera-pan">x -20.0 · z -40.0</b></span>
+    </div>
+
+    <div id="tools" class="panel">
+      <div class="ribbon-label">Build</div>
+      <div class="tool-grid" id="tool-grid"></div>
+      <div class="ribbon-hint" id="tool-hint"></div>
+      <div class="ribbon-sep"></div>
+      <div class="speed-row" role="group" aria-label="Simulation speed">
+        <button id="speed-0" title="Pause" aria-label="Pause">II</button>
+        <button id="speed-1" title="Normal">1&times;</button>
+        <button id="speed-2" title="Fast">2&times;</button>
+        <button id="speed-4" title="Faster">4&times;</button>
+        <button id="speed-10" title="Very fast">10&times;</button>
+        <button id="speed-20" title="Super fast">20&times;</button>
+        <button id="speed-50" title="Fast">50&times;</button>
+        <button id="speed-100" class="active" title="Maximum speed">100&times;</button>
+      </div>
+      <div class="ribbon-sep"></div>
+      <div class="seed-row">
+        <input id="seed-input" value="1337" spellcheck="false" aria-label="Town seed" />
+        <button id="regen" title="Regenerate town">Regen</button>
+      </div>
+      <button id="view-centre" title="Top-down view of the town-centre junction">Town Centre</button>
+      <button id="settings-toggle" title="Open simulation settings" aria-label="Open simulation settings">⚙</button>
+      <button id="reset-town" title="Reset town, clock, camera and log">Reset</button>
+    </div>
+    <div id="inspector" class="panel">
+      <div class="insp-top">
+        <button class="insp-btn" data-modal="council">Decisions</button>
+        <button class="insp-btn" data-modal="trade">Trade</button>
+        <button class="insp-btn" data-modal="construction">Palette</button>
+      </div>
+      <div class="empty">
+        Nothing selected.<br /><br />
+        Click a citizen, vehicle or building to inspect it.
+        Pick a tool below to modify the town.
+      </div>
+    </div>
+
+    <div id="insp-modal" class="hidden">
+      <div class="modal-box">
+        <div class="m-head">
+          <span id="modal-title"></span>
+          <button id="modal-close" title="Close">×</button>
+        </div>
+        <div id="modal-body"></div>
+      </div>
+    </div>
+
+    <!-- Phase 40 — the clock moved out of the HUD and beside the council card,
+         as its own panel. The WRAPPER is what is centred, so the pair shares the
+         viewport's midpoint instead of each of them claiming it alone. -->
+    <div id="topbar">
+      <div id="clock" class="panel">
+        <div class="cl-emoji" id="stat-phase" aria-hidden="true">🌅</div>
+        <div class="cl-body">
+          <div class="cl-day" id="stat-day">Day 1</div>
+          <div class="cl-sub">
+            <span id="stat-period">Morning</span>
+            <span class="sep">&middot;</span>
+            <span id="stat-time">07:30</span>
+          </div>
+        </div>
+      </div>
+      <div id="council" class="panel">
+        <div class="c-head">
+          <span class="c-title">Decisions</span>
+          <span class="c-sittings" id="council-sittings" title="Sittings held by the council so far"></span>
+          <span class="c-state" id="council-state">idle</span>
+          <button id="council-history" class="c-more" title="Open the full decision history">All</button>
+        </div>
+        <div id="council-list">
+          <div class="c-empty">Waiting for the first council decision.</div>
+        </div>
+      </div>
+      <div id="council-feedback" class="panel" aria-live="polite">
+        <div class="feedback-head"><span>Council evidence</span><span id="council-feedback-age"></span></div>
+        <div class="feedback-label">Thought</div>
+        <div id="council-thought" class="feedback-value">Waiting for the first sitting.</div>
+        <div class="feedback-label">Self-learning</div>
+        <div id="council-learning" class="feedback-value feedback-learning">No measured outcomes yet.</div>
+        <div id="resource-feedback" class="feedback-event" hidden></div>
+      </div>
+    </div>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "./node_modules/three/build/three.module.js",
+        "three/addons/": "./node_modules/three/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,35 @@
+{
+  "name": "town2",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:ui": "node scripts/_ui_check.mjs",
+    "test:economy": "node scripts/_banking_check.mjs",
+    "test:governor": "node scripts/_governor_regression.mjs",
+    "test:soak": "node scripts/_simulation_soak_check.mjs",
+    "test:glow": "node scripts/_glow_regression.mjs",
+    "test:resources": "node scripts/_resource_feedback_check.mjs",
+    "test:footway": "node scripts/_footway_check.mjs",
+    "test:council": "node scripts/_council_provider_check.mjs",
+    "test:prompt": "node scripts/_council_prompt_check.mjs",
+    "test:kits": "node scripts/_construction_kits_check.mjs",
+    "test:metropolis": "node scripts/_metropolis_horizon_check.mjs",
+    "test:metropolis-fast": "node scripts/_metropolis_horizon_check.mjs --fast",
+    "test:road-horizon": "node scripts/_road_horizon_check.mjs",
+    "test:road-horizon-fast": "node scripts/_road_horizon_check.mjs --fast",
+    "test:road": "node scripts/_road_extension_check.mjs",
+    "test:vehicle-parking": "node scripts/_vehicle_parking_check.mjs"
+  },
+  "dependencies": {
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0",
+    "puppeteer-core": "^25.12.0",
+    "vite": "^5.4.10"
+  }
+}

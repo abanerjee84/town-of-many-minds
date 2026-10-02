@@ -1,0 +1,3668 @@
+{
+  "errors": [],
+  "results": [
+    {
+      "seed": "42",
+      "mode": "operations",
+      "initial": {
+        "treasury": 965300,
+        "pop": 30,
+        "beds": 30,
+        "buildings": 15,
+        "validation": {
+          "ok": true,
+          "total": 20,
+          "passed": 19,
+          "errors": [],
+          "warnings": [
+            "Every network reaches at least one building: no coverage: sewage"
+          ],
+          "checks": [
+            {
+              "id": "roads.present",
+              "label": "Roads laid",
+              "status": "ok",
+              "detail": "120 road tiles"
+            },
+            {
+              "id": "roads.connected",
+              "label": "Road graph covers every road cell",
+              "status": "ok",
+              "detail": "120 cells linked"
+            },
+            {
+              "id": "parcels.coverage",
+              "label": "Parcels cover every buildable cell",
+              "status": "ok",
+              "detail": "1748 of 1748 land cells"
+            },
+            {
+              "id": "buildings.present",
+              "label": "Buildings placed",
+              "status": "ok",
+              "detail": "15 buildings"
+            },
+            {
+              "id": "buildings.placement",
+              "label": "Buildings sit on buildable cells",
+              "status": "ok",
+              "detail": "0 off-grid, 0 on road/water"
+            },
+            {
+              "id": "buildings.frontage",
+              "label": "Every building fronts a road",
+              "status": "ok",
+              "detail": "0 of 15 without frontage"
+            },
+            {
+              "id": "roads.single",
+              "label": "Road network is one connected component",
+              "status": "ok",
+              "detail": "1 component"
+            },
+            {
+              "id": "buildings.access",
+              "label": "Every building reaches the main network",
+              "status": "ok",
+              "detail": "0 of 15 cut off"
+            },
+            {
+              "id": "buildings.parcels",
+              "label": "Buildings assigned to a parcel",
+              "status": "ok",
+              "detail": "0 of 15 unassigned"
+            },
+            {
+              "id": "buildings.finite",
+              "label": "Building transforms are finite",
+              "status": "ok",
+              "detail": "all matrices finite"
+            },
+            {
+              "id": "civic.complete",
+              "label": "Basic civic amenities present",
+              "status": "ok",
+              "detail": "5 built · 9 more to grow"
+            },
+            {
+              "id": "utilities.networks",
+              "label": "Power, water and sewage networks exist",
+              "status": "ok",
+              "detail": "3 networks, 3 plants"
+            },
+            {
+              "id": "utilities.coverage",
+              "label": "Every network reaches at least one building",
+              "status": "warn",
+              "detail": "no coverage: sewage"
+            },
+            {
+              "id": "utilities.capacity",
+              "label": "Networks within capacity",
+              "status": "ok",
+              "detail": "power 495/2600 · water 73/460 · sewage 59/340"
+            },
+            {
+              "id": "resources.present",
+              "label": "Primary resources sited on the outskirts",
+              "status": "ok",
+              "detail": "8 sites · lake 7 cells · water 84/62 · energy 590/216 · food 90/46 · fuel 110/35"
+            },
+            {
+              "id": "resources.connected",
+              "label": "Every resource site is road-connected",
+              "status": "ok",
+              "detail": "8 of 8 linked to the network"
+            },
+            {
+              "id": "publicSpace.present",
+              "label": "Public spaces planned",
+              "status": "ok",
+              "detail": "1 paths, 1 pitches, 8 cells"
+            },
+            {
+              "id": "agents.spawned",
+              "label": "Population spawned",
+              "status": "ok",
+              "detail": "30 citizens"
+            },
+            {
+              "id": "founding.population",
+              "label": "Founding population matches the settlement brief",
+              "status": "ok",
+              "detail": "30 of 30 citizens"
+            },
+            {
+              "id": "founding.beds",
+              "label": "Founding homes cover the settlement population",
+              "status": "ok",
+              "detail": "30 beds for 30 citizens"
+            }
+          ]
+        },
+        "resources": {
+          "sites": 8,
+          "connected": 8,
+          "disconnected": 0,
+          "core": {
+            "x0": 14,
+            "y0": 13,
+            "x1": 32,
+            "y1": 28
+          },
+          "lakeCells": 7,
+          "types": {
+            "water": {
+              "label": "Water",
+              "unit": "m³",
+              "flowUnit": "m³/day",
+              "production": 84,
+              "demand": 62,
+              "capacity": 900,
+              "siteLevel": 1,
+              "upgradeCost": 90000,
+              "level": 495,
+              "percent": 55,
+              "storage": 1,
+              "sites": 2,
+              "remedy": "upgrade existing water treatment/pumping site",
+              "shortage": false,
+              "deficit": false
+            },
+            "energy": {
+              "label": "Energy",
+              "unit": "kWh",
+              "flowUnit": "kW",
+              "production": 590,
+              "demand": 216,
+              "capacity": 4500,
+              "siteLevel": 1,
+              "upgradeCost": 70000,
+              "level": 2475,
+              "percent": 55,
+              "storage": 0,
+              "sites": 3,
+              "shortage": false,
+              "deficit": false
+            },
+            "food": {
+              "label": "Food",
+              "unit": "t",
+              "flowUnit": "t/day",
+              "production": 90,
+              "demand": 46,
+              "capacity": 1560,
+              "siteLevel": 1,
+              "upgradeCost": 60000,
+              "level": 858,
+              "percent": 55,
+              "storage": 1,
+              "sites": 2,
+              "shortage": false,
+              "deficit": false
+            },
+            "fuel": {
+              "label": "Fuel",
+              "unit": "L",
+              "flowUnit": "L/day",
+              "production": 110,
+              "demand": 63,
+              "capacity": 650,
+              "siteLevel": 1,
+              "upgradeCost": 50000,
+              "level": 358,
+              "percent": 55,
+              "storage": 1,
+              "sites": 1,
+              "shortage": false,
+              "deficit": false
+            }
+          },
+          "strained": [],
+          "fuelImported": {
+            "litres": 0,
+            "cost": 0
+          },
+          "staff": {
+            "farm": 2,
+            "power": 3,
+            "fuel": 1
+          },
+          "staffTotal": 6
+        },
+        "utilities": {
+          "plants": 3,
+          "nodes": 11,
+          "edges": 10,
+          "types": {
+            "power": {
+              "label": "Electricity",
+              "capacity": 2600,
+              "demand": 495,
+              "unit": "kW",
+              "coverage": 93.3,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 2105,
+              "edges": 7,
+              "served": 7
+            },
+            "water": {
+              "label": "Water",
+              "capacity": 460,
+              "demand": 73,
+              "unit": "m³/day",
+              "coverage": 73.3,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 387,
+              "edges": 7,
+              "served": 7
+            },
+            "sewage": {
+              "label": "Sewage",
+              "capacity": 340,
+              "demand": 59,
+              "unit": "m³/day",
+              "coverage": 0,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 281,
+              "edges": 6,
+              "served": 0
+            }
+          },
+          "strained": []
+        }
+      },
+      "timeline": [
+        {
+          "day": 2,
+          "treasury": 964750,
+          "reserve": 0,
+          "inflows": 400,
+          "outflows": 950,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 3,
+          "treasury": 964245,
+          "reserve": 0,
+          "inflows": 444,
+          "outflows": 950,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 4,
+          "treasury": 963729,
+          "reserve": 0,
+          "inflows": 435,
+          "outflows": 950,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 5,
+          "treasury": 963243,
+          "reserve": 0,
+          "inflows": 463,
+          "outflows": 950,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 6,
+          "treasury": 962727,
+          "reserve": 0,
+          "inflows": 434,
+          "outflows": 950,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 7,
+          "treasury": 962221,
+          "reserve": 0,
+          "inflows": 443,
+          "outflows": 950,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 8,
+          "treasury": 961720,
+          "reserve": 0,
+          "inflows": 448,
+          "outflows": 950,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 31,
+          "treasury": 948901,
+          "reserve": 0,
+          "inflows": 316,
+          "outflows": 950,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        }
+      ]
+    },
+    {
+      "seed": "42",
+      "mode": "rules",
+      "initial": {
+        "treasury": 965300,
+        "pop": 30,
+        "beds": 30,
+        "buildings": 15,
+        "validation": {
+          "ok": true,
+          "total": 20,
+          "passed": 19,
+          "errors": [],
+          "warnings": [
+            "Every network reaches at least one building: no coverage: sewage"
+          ],
+          "checks": [
+            {
+              "id": "roads.present",
+              "label": "Roads laid",
+              "status": "ok",
+              "detail": "120 road tiles"
+            },
+            {
+              "id": "roads.connected",
+              "label": "Road graph covers every road cell",
+              "status": "ok",
+              "detail": "120 cells linked"
+            },
+            {
+              "id": "parcels.coverage",
+              "label": "Parcels cover every buildable cell",
+              "status": "ok",
+              "detail": "1748 of 1748 land cells"
+            },
+            {
+              "id": "buildings.present",
+              "label": "Buildings placed",
+              "status": "ok",
+              "detail": "15 buildings"
+            },
+            {
+              "id": "buildings.placement",
+              "label": "Buildings sit on buildable cells",
+              "status": "ok",
+              "detail": "0 off-grid, 0 on road/water"
+            },
+            {
+              "id": "buildings.frontage",
+              "label": "Every building fronts a road",
+              "status": "ok",
+              "detail": "0 of 15 without frontage"
+            },
+            {
+              "id": "roads.single",
+              "label": "Road network is one connected component",
+              "status": "ok",
+              "detail": "1 component"
+            },
+            {
+              "id": "buildings.access",
+              "label": "Every building reaches the main network",
+              "status": "ok",
+              "detail": "0 of 15 cut off"
+            },
+            {
+              "id": "buildings.parcels",
+              "label": "Buildings assigned to a parcel",
+              "status": "ok",
+              "detail": "0 of 15 unassigned"
+            },
+            {
+              "id": "buildings.finite",
+              "label": "Building transforms are finite",
+              "status": "ok",
+              "detail": "all matrices finite"
+            },
+            {
+              "id": "civic.complete",
+              "label": "Basic civic amenities present",
+              "status": "ok",
+              "detail": "5 built · 9 more to grow"
+            },
+            {
+              "id": "utilities.networks",
+              "label": "Power, water and sewage networks exist",
+              "status": "ok",
+              "detail": "3 networks, 3 plants"
+            },
+            {
+              "id": "utilities.coverage",
+              "label": "Every network reaches at least one building",
+              "status": "warn",
+              "detail": "no coverage: sewage"
+            },
+            {
+              "id": "utilities.capacity",
+              "label": "Networks within capacity",
+              "status": "ok",
+              "detail": "power 495/2600 · water 73/460 · sewage 59/340"
+            },
+            {
+              "id": "resources.present",
+              "label": "Primary resources sited on the outskirts",
+              "status": "ok",
+              "detail": "8 sites · lake 7 cells · water 84/62 · energy 590/216 · food 90/46 · fuel 110/35"
+            },
+            {
+              "id": "resources.connected",
+              "label": "Every resource site is road-connected",
+              "status": "ok",
+              "detail": "8 of 8 linked to the network"
+            },
+            {
+              "id": "publicSpace.present",
+              "label": "Public spaces planned",
+              "status": "ok",
+              "detail": "1 paths, 1 pitches, 8 cells"
+            },
+            {
+              "id": "agents.spawned",
+              "label": "Population spawned",
+              "status": "ok",
+              "detail": "30 citizens"
+            },
+            {
+              "id": "founding.population",
+              "label": "Founding population matches the settlement brief",
+              "status": "ok",
+              "detail": "30 of 30 citizens"
+            },
+            {
+              "id": "founding.beds",
+              "label": "Founding homes cover the settlement population",
+              "status": "ok",
+              "detail": "30 beds for 30 citizens"
+            }
+          ]
+        },
+        "resources": {
+          "sites": 8,
+          "connected": 8,
+          "disconnected": 0,
+          "core": {
+            "x0": 14,
+            "y0": 13,
+            "x1": 32,
+            "y1": 28
+          },
+          "lakeCells": 7,
+          "types": {
+            "water": {
+              "label": "Water",
+              "unit": "m³",
+              "flowUnit": "m³/day",
+              "production": 84,
+              "demand": 62,
+              "capacity": 900,
+              "siteLevel": 1,
+              "upgradeCost": 90000,
+              "level": 495,
+              "percent": 55,
+              "storage": 1,
+              "sites": 2,
+              "remedy": "upgrade existing water treatment/pumping site",
+              "shortage": false,
+              "deficit": false
+            },
+            "energy": {
+              "label": "Energy",
+              "unit": "kWh",
+              "flowUnit": "kW",
+              "production": 590,
+              "demand": 216,
+              "capacity": 4500,
+              "siteLevel": 1,
+              "upgradeCost": 70000,
+              "level": 2475,
+              "percent": 55,
+              "storage": 0,
+              "sites": 3,
+              "shortage": false,
+              "deficit": false
+            },
+            "food": {
+              "label": "Food",
+              "unit": "t",
+              "flowUnit": "t/day",
+              "production": 90,
+              "demand": 46,
+              "capacity": 1560,
+              "siteLevel": 1,
+              "upgradeCost": 60000,
+              "level": 858,
+              "percent": 55,
+              "storage": 1,
+              "sites": 2,
+              "shortage": false,
+              "deficit": false
+            },
+            "fuel": {
+              "label": "Fuel",
+              "unit": "L",
+              "flowUnit": "L/day",
+              "production": 110,
+              "demand": 63,
+              "capacity": 650,
+              "siteLevel": 1,
+              "upgradeCost": 50000,
+              "level": 358,
+              "percent": 55,
+              "storage": 1,
+              "sites": 1,
+              "shortage": false,
+              "deficit": false
+            }
+          },
+          "strained": [],
+          "fuelImported": {
+            "litres": 0,
+            "cost": 0
+          },
+          "staff": {
+            "farm": 2,
+            "power": 3,
+            "fuel": 1
+          },
+          "staffTotal": 6
+        },
+        "utilities": {
+          "plants": 3,
+          "nodes": 11,
+          "edges": 10,
+          "types": {
+            "power": {
+              "label": "Electricity",
+              "capacity": 2600,
+              "demand": 495,
+              "unit": "kW",
+              "coverage": 93.3,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 2105,
+              "edges": 7,
+              "served": 7
+            },
+            "water": {
+              "label": "Water",
+              "capacity": 460,
+              "demand": 73,
+              "unit": "m³/day",
+              "coverage": 73.3,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 387,
+              "edges": 7,
+              "served": 7
+            },
+            "sewage": {
+              "label": "Sewage",
+              "capacity": 340,
+              "demand": 59,
+              "unit": "m³/day",
+              "coverage": 0,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 281,
+              "edges": 6,
+              "served": 0
+            }
+          },
+          "strained": []
+        }
+      },
+      "timeline": [
+        {
+          "day": 2,
+          "treasury": 965650,
+          "reserve": 0,
+          "inflows": 1300,
+          "outflows": 950,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [
+            "DEVELOP_HOUSING:started",
+            "DEVELOP_HOUSING:started",
+            "HIRE_WORKERS:rejected",
+            "HIRE_WORKERS:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 3,
+          "treasury": 965145,
+          "reserve": 0,
+          "inflows": 444,
+          "outflows": 950,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [
+            "HIRE_WORKERS:rejected",
+            "HIRE_WORKERS:rejected",
+            "HIRE_WORKERS:rejected",
+            "HIRE_WORKERS:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 4,
+          "treasury": 964629,
+          "reserve": 0,
+          "inflows": 435,
+          "outflows": 950,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [
+            "HIRE_WORKERS:rejected",
+            "HIRE_WORKERS:rejected",
+            "HIRE_WORKERS:rejected",
+            "HIRE_WORKERS:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 5,
+          "treasury": 964143,
+          "reserve": 0,
+          "inflows": 463,
+          "outflows": 950,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [
+            "HIRE_WORKERS:rejected",
+            "HIRE_WORKERS:rejected",
+            "HIRE_WORKERS:done",
+            "NO_ACTION:noop"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 6,
+          "treasury": 963649,
+          "reserve": 0,
+          "inflows": 467,
+          "outflows": 962,
+          "operations": 628,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 7,
+          "treasury": 963172,
+          "reserve": 0,
+          "inflows": 485,
+          "outflows": 962,
+          "operations": 628,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 8,
+          "treasury": 962688,
+          "reserve": 0,
+          "inflows": 478,
+          "outflows": 962,
+          "operations": 628,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 31,
+          "treasury": 949760,
+          "reserve": 0,
+          "inflows": 322,
+          "outflows": 962,
+          "operations": 628,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop"
+          ],
+          "reconciled": true,
+          "audit": true
+        }
+      ]
+    },
+    {
+      "seed": "42",
+      "mode": "reserve",
+      "initial": {
+        "treasury": 965300,
+        "pop": 30,
+        "beds": 30,
+        "buildings": 15,
+        "validation": {
+          "ok": true,
+          "total": 20,
+          "passed": 19,
+          "errors": [],
+          "warnings": [
+            "Every network reaches at least one building: no coverage: sewage"
+          ],
+          "checks": [
+            {
+              "id": "roads.present",
+              "label": "Roads laid",
+              "status": "ok",
+              "detail": "120 road tiles"
+            },
+            {
+              "id": "roads.connected",
+              "label": "Road graph covers every road cell",
+              "status": "ok",
+              "detail": "120 cells linked"
+            },
+            {
+              "id": "parcels.coverage",
+              "label": "Parcels cover every buildable cell",
+              "status": "ok",
+              "detail": "1748 of 1748 land cells"
+            },
+            {
+              "id": "buildings.present",
+              "label": "Buildings placed",
+              "status": "ok",
+              "detail": "15 buildings"
+            },
+            {
+              "id": "buildings.placement",
+              "label": "Buildings sit on buildable cells",
+              "status": "ok",
+              "detail": "0 off-grid, 0 on road/water"
+            },
+            {
+              "id": "buildings.frontage",
+              "label": "Every building fronts a road",
+              "status": "ok",
+              "detail": "0 of 15 without frontage"
+            },
+            {
+              "id": "roads.single",
+              "label": "Road network is one connected component",
+              "status": "ok",
+              "detail": "1 component"
+            },
+            {
+              "id": "buildings.access",
+              "label": "Every building reaches the main network",
+              "status": "ok",
+              "detail": "0 of 15 cut off"
+            },
+            {
+              "id": "buildings.parcels",
+              "label": "Buildings assigned to a parcel",
+              "status": "ok",
+              "detail": "0 of 15 unassigned"
+            },
+            {
+              "id": "buildings.finite",
+              "label": "Building transforms are finite",
+              "status": "ok",
+              "detail": "all matrices finite"
+            },
+            {
+              "id": "civic.complete",
+              "label": "Basic civic amenities present",
+              "status": "ok",
+              "detail": "5 built · 9 more to grow"
+            },
+            {
+              "id": "utilities.networks",
+              "label": "Power, water and sewage networks exist",
+              "status": "ok",
+              "detail": "3 networks, 3 plants"
+            },
+            {
+              "id": "utilities.coverage",
+              "label": "Every network reaches at least one building",
+              "status": "warn",
+              "detail": "no coverage: sewage"
+            },
+            {
+              "id": "utilities.capacity",
+              "label": "Networks within capacity",
+              "status": "ok",
+              "detail": "power 495/2600 · water 73/460 · sewage 59/340"
+            },
+            {
+              "id": "resources.present",
+              "label": "Primary resources sited on the outskirts",
+              "status": "ok",
+              "detail": "8 sites · lake 7 cells · water 84/62 · energy 590/216 · food 90/46 · fuel 110/35"
+            },
+            {
+              "id": "resources.connected",
+              "label": "Every resource site is road-connected",
+              "status": "ok",
+              "detail": "8 of 8 linked to the network"
+            },
+            {
+              "id": "publicSpace.present",
+              "label": "Public spaces planned",
+              "status": "ok",
+              "detail": "1 paths, 1 pitches, 8 cells"
+            },
+            {
+              "id": "agents.spawned",
+              "label": "Population spawned",
+              "status": "ok",
+              "detail": "30 citizens"
+            },
+            {
+              "id": "founding.population",
+              "label": "Founding population matches the settlement brief",
+              "status": "ok",
+              "detail": "30 of 30 citizens"
+            },
+            {
+              "id": "founding.beds",
+              "label": "Founding homes cover the settlement population",
+              "status": "ok",
+              "detail": "30 beds for 30 citizens"
+            }
+          ]
+        },
+        "resources": {
+          "sites": 8,
+          "connected": 8,
+          "disconnected": 0,
+          "core": {
+            "x0": 14,
+            "y0": 13,
+            "x1": 32,
+            "y1": 28
+          },
+          "lakeCells": 7,
+          "types": {
+            "water": {
+              "label": "Water",
+              "unit": "m³",
+              "flowUnit": "m³/day",
+              "production": 84,
+              "demand": 62,
+              "capacity": 900,
+              "siteLevel": 1,
+              "upgradeCost": 90000,
+              "level": 495,
+              "percent": 55,
+              "storage": 1,
+              "sites": 2,
+              "remedy": "upgrade existing water treatment/pumping site",
+              "shortage": false,
+              "deficit": false
+            },
+            "energy": {
+              "label": "Energy",
+              "unit": "kWh",
+              "flowUnit": "kW",
+              "production": 590,
+              "demand": 216,
+              "capacity": 4500,
+              "siteLevel": 1,
+              "upgradeCost": 70000,
+              "level": 2475,
+              "percent": 55,
+              "storage": 0,
+              "sites": 3,
+              "shortage": false,
+              "deficit": false
+            },
+            "food": {
+              "label": "Food",
+              "unit": "t",
+              "flowUnit": "t/day",
+              "production": 90,
+              "demand": 46,
+              "capacity": 1560,
+              "siteLevel": 1,
+              "upgradeCost": 60000,
+              "level": 858,
+              "percent": 55,
+              "storage": 1,
+              "sites": 2,
+              "shortage": false,
+              "deficit": false
+            },
+            "fuel": {
+              "label": "Fuel",
+              "unit": "L",
+              "flowUnit": "L/day",
+              "production": 110,
+              "demand": 63,
+              "capacity": 650,
+              "siteLevel": 1,
+              "upgradeCost": 50000,
+              "level": 358,
+              "percent": 55,
+              "storage": 1,
+              "sites": 1,
+              "shortage": false,
+              "deficit": false
+            }
+          },
+          "strained": [],
+          "fuelImported": {
+            "litres": 0,
+            "cost": 0
+          },
+          "staff": {
+            "farm": 2,
+            "power": 3,
+            "fuel": 1
+          },
+          "staffTotal": 6
+        },
+        "utilities": {
+          "plants": 3,
+          "nodes": 11,
+          "edges": 10,
+          "types": {
+            "power": {
+              "label": "Electricity",
+              "capacity": 2600,
+              "demand": 495,
+              "unit": "kW",
+              "coverage": 93.3,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 2105,
+              "edges": 7,
+              "served": 7
+            },
+            "water": {
+              "label": "Water",
+              "capacity": 460,
+              "demand": 73,
+              "unit": "m³/day",
+              "coverage": 73.3,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 387,
+              "edges": 7,
+              "served": 7
+            },
+            "sewage": {
+              "label": "Sewage",
+              "capacity": 340,
+              "demand": 59,
+              "unit": "m³/day",
+              "coverage": 0,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 281,
+              "edges": 6,
+              "served": 0
+            }
+          },
+          "strained": []
+        }
+      },
+      "timeline": [
+        {
+          "day": 2,
+          "treasury": 714750,
+          "reserve": 250000,
+          "inflows": 400,
+          "outflows": 250950,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [
+            "SET_ASIDE_RESERVE:done",
+            "SET_ASIDE_RESERVE:done",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 3,
+          "treasury": 714245,
+          "reserve": 250000,
+          "inflows": 444,
+          "outflows": 950,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 4,
+          "treasury": 713729,
+          "reserve": 250000,
+          "inflows": 435,
+          "outflows": 950,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 5,
+          "treasury": 713243,
+          "reserve": 250000,
+          "inflows": 463,
+          "outflows": 950,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 6,
+          "treasury": 712727,
+          "reserve": 250000,
+          "inflows": 434,
+          "outflows": 950,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 7,
+          "treasury": 712221,
+          "reserve": 250000,
+          "inflows": 443,
+          "outflows": 950,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 8,
+          "treasury": 711720,
+          "reserve": 250000,
+          "inflows": 448,
+          "outflows": 950,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 31,
+          "treasury": 698901,
+          "reserve": 250000,
+          "inflows": 316,
+          "outflows": 950,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 133,
+          "decisions": [
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        }
+      ]
+    },
+    {
+      "seed": "1337",
+      "mode": "operations",
+      "initial": {
+        "treasury": 965300,
+        "pop": 30,
+        "beds": 30,
+        "buildings": 15,
+        "validation": {
+          "ok": true,
+          "total": 20,
+          "passed": 19,
+          "errors": [],
+          "warnings": [
+            "Every network reaches at least one building: no coverage: water"
+          ],
+          "checks": [
+            {
+              "id": "roads.present",
+              "label": "Roads laid",
+              "status": "ok",
+              "detail": "127 road tiles"
+            },
+            {
+              "id": "roads.connected",
+              "label": "Road graph covers every road cell",
+              "status": "ok",
+              "detail": "127 cells linked"
+            },
+            {
+              "id": "parcels.coverage",
+              "label": "Parcels cover every buildable cell",
+              "status": "ok",
+              "detail": "1740 of 1740 land cells"
+            },
+            {
+              "id": "buildings.present",
+              "label": "Buildings placed",
+              "status": "ok",
+              "detail": "15 buildings"
+            },
+            {
+              "id": "buildings.placement",
+              "label": "Buildings sit on buildable cells",
+              "status": "ok",
+              "detail": "0 off-grid, 0 on road/water"
+            },
+            {
+              "id": "buildings.frontage",
+              "label": "Every building fronts a road",
+              "status": "ok",
+              "detail": "0 of 15 without frontage"
+            },
+            {
+              "id": "roads.single",
+              "label": "Road network is one connected component",
+              "status": "ok",
+              "detail": "1 component"
+            },
+            {
+              "id": "buildings.access",
+              "label": "Every building reaches the main network",
+              "status": "ok",
+              "detail": "0 of 15 cut off"
+            },
+            {
+              "id": "buildings.parcels",
+              "label": "Buildings assigned to a parcel",
+              "status": "ok",
+              "detail": "0 of 15 unassigned"
+            },
+            {
+              "id": "buildings.finite",
+              "label": "Building transforms are finite",
+              "status": "ok",
+              "detail": "all matrices finite"
+            },
+            {
+              "id": "civic.complete",
+              "label": "Basic civic amenities present",
+              "status": "ok",
+              "detail": "5 built · 9 more to grow"
+            },
+            {
+              "id": "utilities.networks",
+              "label": "Power, water and sewage networks exist",
+              "status": "ok",
+              "detail": "3 networks, 3 plants"
+            },
+            {
+              "id": "utilities.coverage",
+              "label": "Every network reaches at least one building",
+              "status": "warn",
+              "detail": "no coverage: water"
+            },
+            {
+              "id": "utilities.capacity",
+              "label": "Networks within capacity",
+              "status": "ok",
+              "detail": "power 494/2600 · water 73/460 · sewage 59/340"
+            },
+            {
+              "id": "resources.present",
+              "label": "Primary resources sited on the outskirts",
+              "status": "ok",
+              "detail": "8 sites · lake 7 cells · water 84/62 · energy 590/216 · food 90/46 · fuel 110/35"
+            },
+            {
+              "id": "resources.connected",
+              "label": "Every resource site is road-connected",
+              "status": "ok",
+              "detail": "8 of 8 linked to the network"
+            },
+            {
+              "id": "publicSpace.present",
+              "label": "Public spaces planned",
+              "status": "ok",
+              "detail": "2 paths, 1 pitches, 19 cells"
+            },
+            {
+              "id": "agents.spawned",
+              "label": "Population spawned",
+              "status": "ok",
+              "detail": "30 citizens"
+            },
+            {
+              "id": "founding.population",
+              "label": "Founding population matches the settlement brief",
+              "status": "ok",
+              "detail": "30 of 30 citizens"
+            },
+            {
+              "id": "founding.beds",
+              "label": "Founding homes cover the settlement population",
+              "status": "ok",
+              "detail": "30 beds for 30 citizens"
+            }
+          ]
+        },
+        "resources": {
+          "sites": 8,
+          "connected": 8,
+          "disconnected": 0,
+          "core": {
+            "x0": 14,
+            "y0": 11,
+            "x1": 32,
+            "y1": 28
+          },
+          "lakeCells": 7,
+          "types": {
+            "water": {
+              "label": "Water",
+              "unit": "m³",
+              "flowUnit": "m³/day",
+              "production": 84,
+              "demand": 62,
+              "capacity": 900,
+              "siteLevel": 1,
+              "upgradeCost": 90000,
+              "level": 495,
+              "percent": 55,
+              "storage": 1,
+              "sites": 2,
+              "remedy": "upgrade existing water treatment/pumping site",
+              "shortage": false,
+              "deficit": false
+            },
+            "energy": {
+              "label": "Energy",
+              "unit": "kWh",
+              "flowUnit": "kW",
+              "production": 590,
+              "demand": 216,
+              "capacity": 4500,
+              "siteLevel": 1,
+              "upgradeCost": 70000,
+              "level": 2475,
+              "percent": 55,
+              "storage": 0,
+              "sites": 3,
+              "shortage": false,
+              "deficit": false
+            },
+            "food": {
+              "label": "Food",
+              "unit": "t",
+              "flowUnit": "t/day",
+              "production": 90,
+              "demand": 46,
+              "capacity": 1560,
+              "siteLevel": 1,
+              "upgradeCost": 60000,
+              "level": 858,
+              "percent": 55,
+              "storage": 1,
+              "sites": 2,
+              "shortage": false,
+              "deficit": false
+            },
+            "fuel": {
+              "label": "Fuel",
+              "unit": "L",
+              "flowUnit": "L/day",
+              "production": 110,
+              "demand": 70,
+              "capacity": 650,
+              "siteLevel": 1,
+              "upgradeCost": 50000,
+              "level": 358,
+              "percent": 55,
+              "storage": 1,
+              "sites": 1,
+              "shortage": false,
+              "deficit": false
+            }
+          },
+          "strained": [],
+          "fuelImported": {
+            "litres": 0,
+            "cost": 0
+          },
+          "staff": {
+            "farm": 2,
+            "power": 3,
+            "fuel": 3
+          },
+          "staffTotal": 8
+        },
+        "utilities": {
+          "plants": 3,
+          "nodes": 18,
+          "edges": 19,
+          "types": {
+            "power": {
+              "label": "Electricity",
+              "capacity": 2600,
+              "demand": 494,
+              "unit": "kW",
+              "coverage": 86.7,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 2106,
+              "edges": 13,
+              "served": 13
+            },
+            "water": {
+              "label": "Water",
+              "capacity": 460,
+              "demand": 73,
+              "unit": "m³/day",
+              "coverage": 0,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 387,
+              "edges": 13,
+              "served": 0
+            },
+            "sewage": {
+              "label": "Sewage",
+              "capacity": 340,
+              "demand": 59,
+              "unit": "m³/day",
+              "coverage": 46.7,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 281,
+              "edges": 12,
+              "served": 12
+            }
+          },
+          "strained": []
+        }
+      },
+      "timeline": [
+        {
+          "day": 2,
+          "treasury": 964594,
+          "reserve": 0,
+          "inflows": 381,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 3,
+          "treasury": 963934,
+          "reserve": 0,
+          "inflows": 427,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 4,
+          "treasury": 963315,
+          "reserve": 0,
+          "inflows": 469,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 5,
+          "treasury": 962660,
+          "reserve": 0,
+          "inflows": 432,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 6,
+          "treasury": 962030,
+          "reserve": 0,
+          "inflows": 458,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 7,
+          "treasury": 961393,
+          "reserve": 0,
+          "inflows": 451,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 8,
+          "treasury": 960754,
+          "reserve": 0,
+          "inflows": 448,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 31,
+          "treasury": 944431,
+          "reserve": 0,
+          "inflows": 363,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        }
+      ]
+    },
+    {
+      "seed": "1337",
+      "mode": "rules",
+      "initial": {
+        "treasury": 965300,
+        "pop": 30,
+        "beds": 30,
+        "buildings": 15,
+        "validation": {
+          "ok": true,
+          "total": 20,
+          "passed": 19,
+          "errors": [],
+          "warnings": [
+            "Every network reaches at least one building: no coverage: water"
+          ],
+          "checks": [
+            {
+              "id": "roads.present",
+              "label": "Roads laid",
+              "status": "ok",
+              "detail": "127 road tiles"
+            },
+            {
+              "id": "roads.connected",
+              "label": "Road graph covers every road cell",
+              "status": "ok",
+              "detail": "127 cells linked"
+            },
+            {
+              "id": "parcels.coverage",
+              "label": "Parcels cover every buildable cell",
+              "status": "ok",
+              "detail": "1740 of 1740 land cells"
+            },
+            {
+              "id": "buildings.present",
+              "label": "Buildings placed",
+              "status": "ok",
+              "detail": "15 buildings"
+            },
+            {
+              "id": "buildings.placement",
+              "label": "Buildings sit on buildable cells",
+              "status": "ok",
+              "detail": "0 off-grid, 0 on road/water"
+            },
+            {
+              "id": "buildings.frontage",
+              "label": "Every building fronts a road",
+              "status": "ok",
+              "detail": "0 of 15 without frontage"
+            },
+            {
+              "id": "roads.single",
+              "label": "Road network is one connected component",
+              "status": "ok",
+              "detail": "1 component"
+            },
+            {
+              "id": "buildings.access",
+              "label": "Every building reaches the main network",
+              "status": "ok",
+              "detail": "0 of 15 cut off"
+            },
+            {
+              "id": "buildings.parcels",
+              "label": "Buildings assigned to a parcel",
+              "status": "ok",
+              "detail": "0 of 15 unassigned"
+            },
+            {
+              "id": "buildings.finite",
+              "label": "Building transforms are finite",
+              "status": "ok",
+              "detail": "all matrices finite"
+            },
+            {
+              "id": "civic.complete",
+              "label": "Basic civic amenities present",
+              "status": "ok",
+              "detail": "5 built · 9 more to grow"
+            },
+            {
+              "id": "utilities.networks",
+              "label": "Power, water and sewage networks exist",
+              "status": "ok",
+              "detail": "3 networks, 3 plants"
+            },
+            {
+              "id": "utilities.coverage",
+              "label": "Every network reaches at least one building",
+              "status": "warn",
+              "detail": "no coverage: water"
+            },
+            {
+              "id": "utilities.capacity",
+              "label": "Networks within capacity",
+              "status": "ok",
+              "detail": "power 494/2600 · water 73/460 · sewage 59/340"
+            },
+            {
+              "id": "resources.present",
+              "label": "Primary resources sited on the outskirts",
+              "status": "ok",
+              "detail": "8 sites · lake 7 cells · water 84/62 · energy 590/216 · food 90/46 · fuel 110/35"
+            },
+            {
+              "id": "resources.connected",
+              "label": "Every resource site is road-connected",
+              "status": "ok",
+              "detail": "8 of 8 linked to the network"
+            },
+            {
+              "id": "publicSpace.present",
+              "label": "Public spaces planned",
+              "status": "ok",
+              "detail": "2 paths, 1 pitches, 19 cells"
+            },
+            {
+              "id": "agents.spawned",
+              "label": "Population spawned",
+              "status": "ok",
+              "detail": "30 citizens"
+            },
+            {
+              "id": "founding.population",
+              "label": "Founding population matches the settlement brief",
+              "status": "ok",
+              "detail": "30 of 30 citizens"
+            },
+            {
+              "id": "founding.beds",
+              "label": "Founding homes cover the settlement population",
+              "status": "ok",
+              "detail": "30 beds for 30 citizens"
+            }
+          ]
+        },
+        "resources": {
+          "sites": 8,
+          "connected": 8,
+          "disconnected": 0,
+          "core": {
+            "x0": 14,
+            "y0": 11,
+            "x1": 32,
+            "y1": 28
+          },
+          "lakeCells": 7,
+          "types": {
+            "water": {
+              "label": "Water",
+              "unit": "m³",
+              "flowUnit": "m³/day",
+              "production": 84,
+              "demand": 62,
+              "capacity": 900,
+              "siteLevel": 1,
+              "upgradeCost": 90000,
+              "level": 495,
+              "percent": 55,
+              "storage": 1,
+              "sites": 2,
+              "remedy": "upgrade existing water treatment/pumping site",
+              "shortage": false,
+              "deficit": false
+            },
+            "energy": {
+              "label": "Energy",
+              "unit": "kWh",
+              "flowUnit": "kW",
+              "production": 590,
+              "demand": 216,
+              "capacity": 4500,
+              "siteLevel": 1,
+              "upgradeCost": 70000,
+              "level": 2475,
+              "percent": 55,
+              "storage": 0,
+              "sites": 3,
+              "shortage": false,
+              "deficit": false
+            },
+            "food": {
+              "label": "Food",
+              "unit": "t",
+              "flowUnit": "t/day",
+              "production": 90,
+              "demand": 46,
+              "capacity": 1560,
+              "siteLevel": 1,
+              "upgradeCost": 60000,
+              "level": 858,
+              "percent": 55,
+              "storage": 1,
+              "sites": 2,
+              "shortage": false,
+              "deficit": false
+            },
+            "fuel": {
+              "label": "Fuel",
+              "unit": "L",
+              "flowUnit": "L/day",
+              "production": 110,
+              "demand": 70,
+              "capacity": 650,
+              "siteLevel": 1,
+              "upgradeCost": 50000,
+              "level": 358,
+              "percent": 55,
+              "storage": 1,
+              "sites": 1,
+              "shortage": false,
+              "deficit": false
+            }
+          },
+          "strained": [],
+          "fuelImported": {
+            "litres": 0,
+            "cost": 0
+          },
+          "staff": {
+            "farm": 2,
+            "power": 3,
+            "fuel": 3
+          },
+          "staffTotal": 8
+        },
+        "utilities": {
+          "plants": 3,
+          "nodes": 18,
+          "edges": 19,
+          "types": {
+            "power": {
+              "label": "Electricity",
+              "capacity": 2600,
+              "demand": 494,
+              "unit": "kW",
+              "coverage": 86.7,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 2106,
+              "edges": 13,
+              "served": 13
+            },
+            "water": {
+              "label": "Water",
+              "capacity": 460,
+              "demand": 73,
+              "unit": "m³/day",
+              "coverage": 0,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 387,
+              "edges": 13,
+              "served": 0
+            },
+            "sewage": {
+              "label": "Sewage",
+              "capacity": 340,
+              "demand": 59,
+              "unit": "m³/day",
+              "coverage": 46.7,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 281,
+              "edges": 12,
+              "served": 12
+            }
+          },
+          "strained": []
+        }
+      },
+      "timeline": [
+        {
+          "day": 2,
+          "treasury": 965494,
+          "reserve": 0,
+          "inflows": 1281,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [
+            "DEVELOP_HOUSING:started",
+            "DEVELOP_HOUSING:started",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 3,
+          "treasury": 964834,
+          "reserve": 0,
+          "inflows": 427,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 4,
+          "treasury": 964215,
+          "reserve": 0,
+          "inflows": 469,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 5,
+          "treasury": 964460,
+          "reserve": 0,
+          "inflows": 1332,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "DEVELOP_HOUSING:started",
+            "DEVELOP_HOUSING:started"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 6,
+          "treasury": 963839,
+          "reserve": 0,
+          "inflows": 468,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 7,
+          "treasury": 963212,
+          "reserve": 0,
+          "inflows": 460,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 8,
+          "treasury": 962582,
+          "reserve": 0,
+          "inflows": 458,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 31,
+          "treasury": 946682,
+          "reserve": 0,
+          "inflows": 381,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop"
+          ],
+          "reconciled": true,
+          "audit": true
+        }
+      ]
+    },
+    {
+      "seed": "1337",
+      "mode": "reserve",
+      "initial": {
+        "treasury": 965300,
+        "pop": 30,
+        "beds": 30,
+        "buildings": 15,
+        "validation": {
+          "ok": true,
+          "total": 20,
+          "passed": 19,
+          "errors": [],
+          "warnings": [
+            "Every network reaches at least one building: no coverage: water"
+          ],
+          "checks": [
+            {
+              "id": "roads.present",
+              "label": "Roads laid",
+              "status": "ok",
+              "detail": "127 road tiles"
+            },
+            {
+              "id": "roads.connected",
+              "label": "Road graph covers every road cell",
+              "status": "ok",
+              "detail": "127 cells linked"
+            },
+            {
+              "id": "parcels.coverage",
+              "label": "Parcels cover every buildable cell",
+              "status": "ok",
+              "detail": "1740 of 1740 land cells"
+            },
+            {
+              "id": "buildings.present",
+              "label": "Buildings placed",
+              "status": "ok",
+              "detail": "15 buildings"
+            },
+            {
+              "id": "buildings.placement",
+              "label": "Buildings sit on buildable cells",
+              "status": "ok",
+              "detail": "0 off-grid, 0 on road/water"
+            },
+            {
+              "id": "buildings.frontage",
+              "label": "Every building fronts a road",
+              "status": "ok",
+              "detail": "0 of 15 without frontage"
+            },
+            {
+              "id": "roads.single",
+              "label": "Road network is one connected component",
+              "status": "ok",
+              "detail": "1 component"
+            },
+            {
+              "id": "buildings.access",
+              "label": "Every building reaches the main network",
+              "status": "ok",
+              "detail": "0 of 15 cut off"
+            },
+            {
+              "id": "buildings.parcels",
+              "label": "Buildings assigned to a parcel",
+              "status": "ok",
+              "detail": "0 of 15 unassigned"
+            },
+            {
+              "id": "buildings.finite",
+              "label": "Building transforms are finite",
+              "status": "ok",
+              "detail": "all matrices finite"
+            },
+            {
+              "id": "civic.complete",
+              "label": "Basic civic amenities present",
+              "status": "ok",
+              "detail": "5 built · 9 more to grow"
+            },
+            {
+              "id": "utilities.networks",
+              "label": "Power, water and sewage networks exist",
+              "status": "ok",
+              "detail": "3 networks, 3 plants"
+            },
+            {
+              "id": "utilities.coverage",
+              "label": "Every network reaches at least one building",
+              "status": "warn",
+              "detail": "no coverage: water"
+            },
+            {
+              "id": "utilities.capacity",
+              "label": "Networks within capacity",
+              "status": "ok",
+              "detail": "power 494/2600 · water 73/460 · sewage 59/340"
+            },
+            {
+              "id": "resources.present",
+              "label": "Primary resources sited on the outskirts",
+              "status": "ok",
+              "detail": "8 sites · lake 7 cells · water 84/62 · energy 590/216 · food 90/46 · fuel 110/35"
+            },
+            {
+              "id": "resources.connected",
+              "label": "Every resource site is road-connected",
+              "status": "ok",
+              "detail": "8 of 8 linked to the network"
+            },
+            {
+              "id": "publicSpace.present",
+              "label": "Public spaces planned",
+              "status": "ok",
+              "detail": "2 paths, 1 pitches, 19 cells"
+            },
+            {
+              "id": "agents.spawned",
+              "label": "Population spawned",
+              "status": "ok",
+              "detail": "30 citizens"
+            },
+            {
+              "id": "founding.population",
+              "label": "Founding population matches the settlement brief",
+              "status": "ok",
+              "detail": "30 of 30 citizens"
+            },
+            {
+              "id": "founding.beds",
+              "label": "Founding homes cover the settlement population",
+              "status": "ok",
+              "detail": "30 beds for 30 citizens"
+            }
+          ]
+        },
+        "resources": {
+          "sites": 8,
+          "connected": 8,
+          "disconnected": 0,
+          "core": {
+            "x0": 14,
+            "y0": 11,
+            "x1": 32,
+            "y1": 28
+          },
+          "lakeCells": 7,
+          "types": {
+            "water": {
+              "label": "Water",
+              "unit": "m³",
+              "flowUnit": "m³/day",
+              "production": 84,
+              "demand": 62,
+              "capacity": 900,
+              "siteLevel": 1,
+              "upgradeCost": 90000,
+              "level": 495,
+              "percent": 55,
+              "storage": 1,
+              "sites": 2,
+              "remedy": "upgrade existing water treatment/pumping site",
+              "shortage": false,
+              "deficit": false
+            },
+            "energy": {
+              "label": "Energy",
+              "unit": "kWh",
+              "flowUnit": "kW",
+              "production": 590,
+              "demand": 216,
+              "capacity": 4500,
+              "siteLevel": 1,
+              "upgradeCost": 70000,
+              "level": 2475,
+              "percent": 55,
+              "storage": 0,
+              "sites": 3,
+              "shortage": false,
+              "deficit": false
+            },
+            "food": {
+              "label": "Food",
+              "unit": "t",
+              "flowUnit": "t/day",
+              "production": 90,
+              "demand": 46,
+              "capacity": 1560,
+              "siteLevel": 1,
+              "upgradeCost": 60000,
+              "level": 858,
+              "percent": 55,
+              "storage": 1,
+              "sites": 2,
+              "shortage": false,
+              "deficit": false
+            },
+            "fuel": {
+              "label": "Fuel",
+              "unit": "L",
+              "flowUnit": "L/day",
+              "production": 110,
+              "demand": 70,
+              "capacity": 650,
+              "siteLevel": 1,
+              "upgradeCost": 50000,
+              "level": 358,
+              "percent": 55,
+              "storage": 1,
+              "sites": 1,
+              "shortage": false,
+              "deficit": false
+            }
+          },
+          "strained": [],
+          "fuelImported": {
+            "litres": 0,
+            "cost": 0
+          },
+          "staff": {
+            "farm": 2,
+            "power": 3,
+            "fuel": 3
+          },
+          "staffTotal": 8
+        },
+        "utilities": {
+          "plants": 3,
+          "nodes": 18,
+          "edges": 19,
+          "types": {
+            "power": {
+              "label": "Electricity",
+              "capacity": 2600,
+              "demand": 494,
+              "unit": "kW",
+              "coverage": 86.7,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 2106,
+              "edges": 13,
+              "served": 13
+            },
+            "water": {
+              "label": "Water",
+              "capacity": 460,
+              "demand": 73,
+              "unit": "m³/day",
+              "coverage": 0,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 387,
+              "edges": 13,
+              "served": 0
+            },
+            "sewage": {
+              "label": "Sewage",
+              "capacity": 340,
+              "demand": 59,
+              "unit": "m³/day",
+              "coverage": 46.7,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 281,
+              "edges": 12,
+              "served": 12
+            }
+          },
+          "strained": []
+        }
+      },
+      "timeline": [
+        {
+          "day": 2,
+          "treasury": 714594,
+          "reserve": 250000,
+          "inflows": 381,
+          "outflows": 251088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [
+            "SET_ASIDE_RESERVE:done",
+            "SET_ASIDE_RESERVE:done",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 3,
+          "treasury": 713934,
+          "reserve": 250000,
+          "inflows": 427,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 4,
+          "treasury": 713315,
+          "reserve": 250000,
+          "inflows": 469,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 5,
+          "treasury": 712660,
+          "reserve": 250000,
+          "inflows": 432,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 6,
+          "treasury": 712030,
+          "reserve": 250000,
+          "inflows": 458,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 7,
+          "treasury": 711393,
+          "reserve": 250000,
+          "inflows": 451,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 8,
+          "treasury": 710754,
+          "reserve": 250000,
+          "inflows": 448,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 31,
+          "treasury": 694431,
+          "reserve": 250000,
+          "inflows": 363,
+          "outflows": 1088,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 263,
+          "decisions": [
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        }
+      ]
+    },
+    {
+      "seed": "9001",
+      "mode": "operations",
+      "initial": {
+        "treasury": 965300,
+        "pop": 30,
+        "beds": 30,
+        "buildings": 15,
+        "validation": {
+          "ok": true,
+          "total": 20,
+          "passed": 20,
+          "errors": [],
+          "warnings": [],
+          "checks": [
+            {
+              "id": "roads.present",
+              "label": "Roads laid",
+              "status": "ok",
+              "detail": "119 road tiles"
+            },
+            {
+              "id": "roads.connected",
+              "label": "Road graph covers every road cell",
+              "status": "ok",
+              "detail": "119 cells linked"
+            },
+            {
+              "id": "parcels.coverage",
+              "label": "Parcels cover every buildable cell",
+              "status": "ok",
+              "detail": "1749 of 1749 land cells"
+            },
+            {
+              "id": "buildings.present",
+              "label": "Buildings placed",
+              "status": "ok",
+              "detail": "15 buildings"
+            },
+            {
+              "id": "buildings.placement",
+              "label": "Buildings sit on buildable cells",
+              "status": "ok",
+              "detail": "0 off-grid, 0 on road/water"
+            },
+            {
+              "id": "buildings.frontage",
+              "label": "Every building fronts a road",
+              "status": "ok",
+              "detail": "0 of 15 without frontage"
+            },
+            {
+              "id": "roads.single",
+              "label": "Road network is one connected component",
+              "status": "ok",
+              "detail": "1 component"
+            },
+            {
+              "id": "buildings.access",
+              "label": "Every building reaches the main network",
+              "status": "ok",
+              "detail": "0 of 15 cut off"
+            },
+            {
+              "id": "buildings.parcels",
+              "label": "Buildings assigned to a parcel",
+              "status": "ok",
+              "detail": "0 of 15 unassigned"
+            },
+            {
+              "id": "buildings.finite",
+              "label": "Building transforms are finite",
+              "status": "ok",
+              "detail": "all matrices finite"
+            },
+            {
+              "id": "civic.complete",
+              "label": "Basic civic amenities present",
+              "status": "ok",
+              "detail": "5 built · 9 more to grow"
+            },
+            {
+              "id": "utilities.networks",
+              "label": "Power, water and sewage networks exist",
+              "status": "ok",
+              "detail": "3 networks, 3 plants"
+            },
+            {
+              "id": "utilities.coverage",
+              "label": "Every network reaches at least one building",
+              "status": "ok",
+              "detail": "power 86.7% · water 86.7% · sewage 46.7%"
+            },
+            {
+              "id": "utilities.capacity",
+              "label": "Networks within capacity",
+              "status": "ok",
+              "detail": "power 512/2600 · water 73/460 · sewage 59/340"
+            },
+            {
+              "id": "resources.present",
+              "label": "Primary resources sited on the outskirts",
+              "status": "ok",
+              "detail": "8 sites · lake 7 cells · water 84/62 · energy 590/216 · food 90/46 · fuel 110/35"
+            },
+            {
+              "id": "resources.connected",
+              "label": "Every resource site is road-connected",
+              "status": "ok",
+              "detail": "8 of 8 linked to the network"
+            },
+            {
+              "id": "publicSpace.present",
+              "label": "Public spaces planned",
+              "status": "ok",
+              "detail": "1 paths, 1 pitches, 18 cells"
+            },
+            {
+              "id": "agents.spawned",
+              "label": "Population spawned",
+              "status": "ok",
+              "detail": "30 citizens"
+            },
+            {
+              "id": "founding.population",
+              "label": "Founding population matches the settlement brief",
+              "status": "ok",
+              "detail": "30 of 30 citizens"
+            },
+            {
+              "id": "founding.beds",
+              "label": "Founding homes cover the settlement population",
+              "status": "ok",
+              "detail": "30 beds for 30 citizens"
+            }
+          ]
+        },
+        "resources": {
+          "sites": 8,
+          "connected": 8,
+          "disconnected": 0,
+          "core": {
+            "x0": 14,
+            "y0": 13,
+            "x1": 33,
+            "y1": 28
+          },
+          "lakeCells": 7,
+          "types": {
+            "water": {
+              "label": "Water",
+              "unit": "m³",
+              "flowUnit": "m³/day",
+              "production": 84,
+              "demand": 62,
+              "capacity": 900,
+              "siteLevel": 1,
+              "upgradeCost": 90000,
+              "level": 495,
+              "percent": 55,
+              "storage": 1,
+              "sites": 2,
+              "remedy": "upgrade existing water treatment/pumping site",
+              "shortage": false,
+              "deficit": false
+            },
+            "energy": {
+              "label": "Energy",
+              "unit": "kWh",
+              "flowUnit": "kW",
+              "production": 590,
+              "demand": 216,
+              "capacity": 4500,
+              "siteLevel": 1,
+              "upgradeCost": 70000,
+              "level": 2475,
+              "percent": 55,
+              "storage": 0,
+              "sites": 3,
+              "shortage": false,
+              "deficit": false
+            },
+            "food": {
+              "label": "Food",
+              "unit": "t",
+              "flowUnit": "t/day",
+              "production": 90,
+              "demand": 46,
+              "capacity": 1560,
+              "siteLevel": 1,
+              "upgradeCost": 60000,
+              "level": 858,
+              "percent": 55,
+              "storage": 1,
+              "sites": 2,
+              "shortage": false,
+              "deficit": false
+            },
+            "fuel": {
+              "label": "Fuel",
+              "unit": "L",
+              "flowUnit": "L/day",
+              "production": 110,
+              "demand": 63,
+              "capacity": 650,
+              "siteLevel": 1,
+              "upgradeCost": 50000,
+              "level": 358,
+              "percent": 55,
+              "storage": 1,
+              "sites": 1,
+              "shortage": false,
+              "deficit": false
+            }
+          },
+          "strained": [],
+          "fuelImported": {
+            "litres": 0,
+            "cost": 0
+          },
+          "staff": {
+            "farm": 2,
+            "power": 3,
+            "fuel": 1
+          },
+          "staffTotal": 6
+        },
+        "utilities": {
+          "plants": 3,
+          "nodes": 13,
+          "edges": 12,
+          "types": {
+            "power": {
+              "label": "Electricity",
+              "capacity": 2600,
+              "demand": 512,
+              "unit": "kW",
+              "coverage": 86.7,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 2088,
+              "edges": 8,
+              "served": 8
+            },
+            "water": {
+              "label": "Water",
+              "capacity": 460,
+              "demand": 73,
+              "unit": "m³/day",
+              "coverage": 86.7,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 387,
+              "edges": 8,
+              "served": 8
+            },
+            "sewage": {
+              "label": "Sewage",
+              "capacity": 340,
+              "demand": 59,
+              "unit": "m³/day",
+              "coverage": 46.7,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 281,
+              "edges": 8,
+              "served": 8
+            }
+          },
+          "strained": []
+        }
+      },
+      "timeline": [
+        {
+          "day": 2,
+          "treasury": 964734,
+          "reserve": 0,
+          "inflows": 377,
+          "outflows": 943,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 158,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 3,
+          "treasury": 964187,
+          "reserve": 0,
+          "inflows": 396,
+          "outflows": 943,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 158,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 4,
+          "treasury": 963658,
+          "reserve": 0,
+          "inflows": 414,
+          "outflows": 943,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 158,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 5,
+          "treasury": 963133,
+          "reserve": 0,
+          "inflows": 418,
+          "outflows": 943,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 158,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 6,
+          "treasury": 962742,
+          "reserve": 0,
+          "inflows": 394,
+          "outflows": 785,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 0,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 7,
+          "treasury": 962228,
+          "reserve": 0,
+          "inflows": 429,
+          "outflows": 943,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 158,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 8,
+          "treasury": 961703,
+          "reserve": 0,
+          "inflows": 419,
+          "outflows": 943,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 158,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 31,
+          "treasury": 948726,
+          "reserve": 0,
+          "inflows": 253,
+          "outflows": 943,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 158,
+          "decisions": [],
+          "reconciled": true,
+          "audit": true
+        }
+      ]
+    },
+    {
+      "seed": "9001",
+      "mode": "rules",
+      "initial": {
+        "treasury": 965300,
+        "pop": 30,
+        "beds": 30,
+        "buildings": 15,
+        "validation": {
+          "ok": true,
+          "total": 20,
+          "passed": 20,
+          "errors": [],
+          "warnings": [],
+          "checks": [
+            {
+              "id": "roads.present",
+              "label": "Roads laid",
+              "status": "ok",
+              "detail": "119 road tiles"
+            },
+            {
+              "id": "roads.connected",
+              "label": "Road graph covers every road cell",
+              "status": "ok",
+              "detail": "119 cells linked"
+            },
+            {
+              "id": "parcels.coverage",
+              "label": "Parcels cover every buildable cell",
+              "status": "ok",
+              "detail": "1749 of 1749 land cells"
+            },
+            {
+              "id": "buildings.present",
+              "label": "Buildings placed",
+              "status": "ok",
+              "detail": "15 buildings"
+            },
+            {
+              "id": "buildings.placement",
+              "label": "Buildings sit on buildable cells",
+              "status": "ok",
+              "detail": "0 off-grid, 0 on road/water"
+            },
+            {
+              "id": "buildings.frontage",
+              "label": "Every building fronts a road",
+              "status": "ok",
+              "detail": "0 of 15 without frontage"
+            },
+            {
+              "id": "roads.single",
+              "label": "Road network is one connected component",
+              "status": "ok",
+              "detail": "1 component"
+            },
+            {
+              "id": "buildings.access",
+              "label": "Every building reaches the main network",
+              "status": "ok",
+              "detail": "0 of 15 cut off"
+            },
+            {
+              "id": "buildings.parcels",
+              "label": "Buildings assigned to a parcel",
+              "status": "ok",
+              "detail": "0 of 15 unassigned"
+            },
+            {
+              "id": "buildings.finite",
+              "label": "Building transforms are finite",
+              "status": "ok",
+              "detail": "all matrices finite"
+            },
+            {
+              "id": "civic.complete",
+              "label": "Basic civic amenities present",
+              "status": "ok",
+              "detail": "5 built · 9 more to grow"
+            },
+            {
+              "id": "utilities.networks",
+              "label": "Power, water and sewage networks exist",
+              "status": "ok",
+              "detail": "3 networks, 3 plants"
+            },
+            {
+              "id": "utilities.coverage",
+              "label": "Every network reaches at least one building",
+              "status": "ok",
+              "detail": "power 86.7% · water 86.7% · sewage 46.7%"
+            },
+            {
+              "id": "utilities.capacity",
+              "label": "Networks within capacity",
+              "status": "ok",
+              "detail": "power 512/2600 · water 73/460 · sewage 59/340"
+            },
+            {
+              "id": "resources.present",
+              "label": "Primary resources sited on the outskirts",
+              "status": "ok",
+              "detail": "8 sites · lake 7 cells · water 84/62 · energy 590/216 · food 90/46 · fuel 110/35"
+            },
+            {
+              "id": "resources.connected",
+              "label": "Every resource site is road-connected",
+              "status": "ok",
+              "detail": "8 of 8 linked to the network"
+            },
+            {
+              "id": "publicSpace.present",
+              "label": "Public spaces planned",
+              "status": "ok",
+              "detail": "1 paths, 1 pitches, 18 cells"
+            },
+            {
+              "id": "agents.spawned",
+              "label": "Population spawned",
+              "status": "ok",
+              "detail": "30 citizens"
+            },
+            {
+              "id": "founding.population",
+              "label": "Founding population matches the settlement brief",
+              "status": "ok",
+              "detail": "30 of 30 citizens"
+            },
+            {
+              "id": "founding.beds",
+              "label": "Founding homes cover the settlement population",
+              "status": "ok",
+              "detail": "30 beds for 30 citizens"
+            }
+          ]
+        },
+        "resources": {
+          "sites": 8,
+          "connected": 8,
+          "disconnected": 0,
+          "core": {
+            "x0": 14,
+            "y0": 13,
+            "x1": 33,
+            "y1": 28
+          },
+          "lakeCells": 7,
+          "types": {
+            "water": {
+              "label": "Water",
+              "unit": "m³",
+              "flowUnit": "m³/day",
+              "production": 84,
+              "demand": 62,
+              "capacity": 900,
+              "siteLevel": 1,
+              "upgradeCost": 90000,
+              "level": 495,
+              "percent": 55,
+              "storage": 1,
+              "sites": 2,
+              "remedy": "upgrade existing water treatment/pumping site",
+              "shortage": false,
+              "deficit": false
+            },
+            "energy": {
+              "label": "Energy",
+              "unit": "kWh",
+              "flowUnit": "kW",
+              "production": 590,
+              "demand": 216,
+              "capacity": 4500,
+              "siteLevel": 1,
+              "upgradeCost": 70000,
+              "level": 2475,
+              "percent": 55,
+              "storage": 0,
+              "sites": 3,
+              "shortage": false,
+              "deficit": false
+            },
+            "food": {
+              "label": "Food",
+              "unit": "t",
+              "flowUnit": "t/day",
+              "production": 90,
+              "demand": 46,
+              "capacity": 1560,
+              "siteLevel": 1,
+              "upgradeCost": 60000,
+              "level": 858,
+              "percent": 55,
+              "storage": 1,
+              "sites": 2,
+              "shortage": false,
+              "deficit": false
+            },
+            "fuel": {
+              "label": "Fuel",
+              "unit": "L",
+              "flowUnit": "L/day",
+              "production": 110,
+              "demand": 63,
+              "capacity": 650,
+              "siteLevel": 1,
+              "upgradeCost": 50000,
+              "level": 358,
+              "percent": 55,
+              "storage": 1,
+              "sites": 1,
+              "shortage": false,
+              "deficit": false
+            }
+          },
+          "strained": [],
+          "fuelImported": {
+            "litres": 0,
+            "cost": 0
+          },
+          "staff": {
+            "farm": 2,
+            "power": 3,
+            "fuel": 1
+          },
+          "staffTotal": 6
+        },
+        "utilities": {
+          "plants": 3,
+          "nodes": 13,
+          "edges": 12,
+          "types": {
+            "power": {
+              "label": "Electricity",
+              "capacity": 2600,
+              "demand": 512,
+              "unit": "kW",
+              "coverage": 86.7,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 2088,
+              "edges": 8,
+              "served": 8
+            },
+            "water": {
+              "label": "Water",
+              "capacity": 460,
+              "demand": 73,
+              "unit": "m³/day",
+              "coverage": 86.7,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 387,
+              "edges": 8,
+              "served": 8
+            },
+            "sewage": {
+              "label": "Sewage",
+              "capacity": 340,
+              "demand": 59,
+              "unit": "m³/day",
+              "coverage": 46.7,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 281,
+              "edges": 8,
+              "served": 8
+            }
+          },
+          "strained": []
+        }
+      },
+      "timeline": [
+        {
+          "day": 2,
+          "treasury": 965634,
+          "reserve": 0,
+          "inflows": 1277,
+          "outflows": 943,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 158,
+          "decisions": [
+            "DEVELOP_HOUSING:started",
+            "DEVELOP_HOUSING:started",
+            "HIRE_WORKERS:rejected",
+            "HIRE_WORKERS:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 3,
+          "treasury": 965087,
+          "reserve": 0,
+          "inflows": 396,
+          "outflows": 943,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 158,
+          "decisions": [
+            "HIRE_WORKERS:rejected",
+            "HIRE_WORKERS:rejected",
+            "HIRE_WORKERS:rejected",
+            "HIRE_WORKERS:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 4,
+          "treasury": 964558,
+          "reserve": 0,
+          "inflows": 414,
+          "outflows": 943,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 158,
+          "decisions": [
+            "HIRE_WORKERS:rejected",
+            "HIRE_WORKERS:rejected",
+            "HIRE_WORKERS:rejected",
+            "HIRE_WORKERS:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 5,
+          "treasury": 964708,
+          "reserve": 0,
+          "inflows": 1093,
+          "outflows": 943,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 158,
+          "decisions": [
+            "HIRE_WORKERS:rejected",
+            "HIRE_WORKERS:rejected",
+            "DEVELOP_HOUSING:started",
+            "OPEN_SHOP:started"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 6,
+          "treasury": 964194,
+          "reserve": 0,
+          "inflows": 429,
+          "outflows": 943,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 158,
+          "decisions": [
+            "HIRE_WORKERS:done",
+            "HIRE_WORKERS:rejected",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 7,
+          "treasury": 963695,
+          "reserve": 0,
+          "inflows": 463,
+          "outflows": 961,
+          "operations": 634,
+          "construction": 0,
+          "payroll": 158,
+          "decisions": [
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 8,
+          "treasury": 963197,
+          "reserve": 0,
+          "inflows": 463,
+          "outflows": 961,
+          "operations": 634,
+          "construction": 0,
+          "payroll": 158,
+          "decisions": [
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 31,
+          "treasury": 866082,
+          "reserve": 0,
+          "inflows": 571,
+          "outflows": 1009,
+          "operations": 682,
+          "construction": 0,
+          "payroll": 158,
+          "decisions": [
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop",
+            "NO_ACTION:noop"
+          ],
+          "reconciled": true,
+          "audit": true
+        }
+      ]
+    },
+    {
+      "seed": "9001",
+      "mode": "reserve",
+      "initial": {
+        "treasury": 965300,
+        "pop": 30,
+        "beds": 30,
+        "buildings": 15,
+        "validation": {
+          "ok": true,
+          "total": 20,
+          "passed": 20,
+          "errors": [],
+          "warnings": [],
+          "checks": [
+            {
+              "id": "roads.present",
+              "label": "Roads laid",
+              "status": "ok",
+              "detail": "119 road tiles"
+            },
+            {
+              "id": "roads.connected",
+              "label": "Road graph covers every road cell",
+              "status": "ok",
+              "detail": "119 cells linked"
+            },
+            {
+              "id": "parcels.coverage",
+              "label": "Parcels cover every buildable cell",
+              "status": "ok",
+              "detail": "1749 of 1749 land cells"
+            },
+            {
+              "id": "buildings.present",
+              "label": "Buildings placed",
+              "status": "ok",
+              "detail": "15 buildings"
+            },
+            {
+              "id": "buildings.placement",
+              "label": "Buildings sit on buildable cells",
+              "status": "ok",
+              "detail": "0 off-grid, 0 on road/water"
+            },
+            {
+              "id": "buildings.frontage",
+              "label": "Every building fronts a road",
+              "status": "ok",
+              "detail": "0 of 15 without frontage"
+            },
+            {
+              "id": "roads.single",
+              "label": "Road network is one connected component",
+              "status": "ok",
+              "detail": "1 component"
+            },
+            {
+              "id": "buildings.access",
+              "label": "Every building reaches the main network",
+              "status": "ok",
+              "detail": "0 of 15 cut off"
+            },
+            {
+              "id": "buildings.parcels",
+              "label": "Buildings assigned to a parcel",
+              "status": "ok",
+              "detail": "0 of 15 unassigned"
+            },
+            {
+              "id": "buildings.finite",
+              "label": "Building transforms are finite",
+              "status": "ok",
+              "detail": "all matrices finite"
+            },
+            {
+              "id": "civic.complete",
+              "label": "Basic civic amenities present",
+              "status": "ok",
+              "detail": "5 built · 9 more to grow"
+            },
+            {
+              "id": "utilities.networks",
+              "label": "Power, water and sewage networks exist",
+              "status": "ok",
+              "detail": "3 networks, 3 plants"
+            },
+            {
+              "id": "utilities.coverage",
+              "label": "Every network reaches at least one building",
+              "status": "ok",
+              "detail": "power 86.7% · water 86.7% · sewage 46.7%"
+            },
+            {
+              "id": "utilities.capacity",
+              "label": "Networks within capacity",
+              "status": "ok",
+              "detail": "power 512/2600 · water 73/460 · sewage 59/340"
+            },
+            {
+              "id": "resources.present",
+              "label": "Primary resources sited on the outskirts",
+              "status": "ok",
+              "detail": "8 sites · lake 7 cells · water 84/62 · energy 590/216 · food 90/46 · fuel 110/35"
+            },
+            {
+              "id": "resources.connected",
+              "label": "Every resource site is road-connected",
+              "status": "ok",
+              "detail": "8 of 8 linked to the network"
+            },
+            {
+              "id": "publicSpace.present",
+              "label": "Public spaces planned",
+              "status": "ok",
+              "detail": "1 paths, 1 pitches, 18 cells"
+            },
+            {
+              "id": "agents.spawned",
+              "label": "Population spawned",
+              "status": "ok",
+              "detail": "30 citizens"
+            },
+            {
+              "id": "founding.population",
+              "label": "Founding population matches the settlement brief",
+              "status": "ok",
+              "detail": "30 of 30 citizens"
+            },
+            {
+              "id": "founding.beds",
+              "label": "Founding homes cover the settlement population",
+              "status": "ok",
+              "detail": "30 beds for 30 citizens"
+            }
+          ]
+        },
+        "resources": {
+          "sites": 8,
+          "connected": 8,
+          "disconnected": 0,
+          "core": {
+            "x0": 14,
+            "y0": 13,
+            "x1": 33,
+            "y1": 28
+          },
+          "lakeCells": 7,
+          "types": {
+            "water": {
+              "label": "Water",
+              "unit": "m³",
+              "flowUnit": "m³/day",
+              "production": 84,
+              "demand": 62,
+              "capacity": 900,
+              "siteLevel": 1,
+              "upgradeCost": 90000,
+              "level": 495,
+              "percent": 55,
+              "storage": 1,
+              "sites": 2,
+              "remedy": "upgrade existing water treatment/pumping site",
+              "shortage": false,
+              "deficit": false
+            },
+            "energy": {
+              "label": "Energy",
+              "unit": "kWh",
+              "flowUnit": "kW",
+              "production": 590,
+              "demand": 216,
+              "capacity": 4500,
+              "siteLevel": 1,
+              "upgradeCost": 70000,
+              "level": 2475,
+              "percent": 55,
+              "storage": 0,
+              "sites": 3,
+              "shortage": false,
+              "deficit": false
+            },
+            "food": {
+              "label": "Food",
+              "unit": "t",
+              "flowUnit": "t/day",
+              "production": 90,
+              "demand": 46,
+              "capacity": 1560,
+              "siteLevel": 1,
+              "upgradeCost": 60000,
+              "level": 858,
+              "percent": 55,
+              "storage": 1,
+              "sites": 2,
+              "shortage": false,
+              "deficit": false
+            },
+            "fuel": {
+              "label": "Fuel",
+              "unit": "L",
+              "flowUnit": "L/day",
+              "production": 110,
+              "demand": 63,
+              "capacity": 650,
+              "siteLevel": 1,
+              "upgradeCost": 50000,
+              "level": 358,
+              "percent": 55,
+              "storage": 1,
+              "sites": 1,
+              "shortage": false,
+              "deficit": false
+            }
+          },
+          "strained": [],
+          "fuelImported": {
+            "litres": 0,
+            "cost": 0
+          },
+          "staff": {
+            "farm": 2,
+            "power": 3,
+            "fuel": 1
+          },
+          "staffTotal": 6
+        },
+        "utilities": {
+          "plants": 3,
+          "nodes": 13,
+          "edges": 12,
+          "types": {
+            "power": {
+              "label": "Electricity",
+              "capacity": 2600,
+              "demand": 512,
+              "unit": "kW",
+              "coverage": 86.7,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 2088,
+              "edges": 8,
+              "served": 8
+            },
+            "water": {
+              "label": "Water",
+              "capacity": 460,
+              "demand": 73,
+              "unit": "m³/day",
+              "coverage": 86.7,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 387,
+              "edges": 8,
+              "served": 8
+            },
+            "sewage": {
+              "label": "Sewage",
+              "capacity": 340,
+              "demand": 59,
+              "unit": "m³/day",
+              "coverage": 46.7,
+              "saturated": false,
+              "expanded": 0,
+              "headroom": 281,
+              "edges": 8,
+              "served": 8
+            }
+          },
+          "strained": []
+        }
+      },
+      "timeline": [
+        {
+          "day": 2,
+          "treasury": 714734,
+          "reserve": 250000,
+          "inflows": 377,
+          "outflows": 250943,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 158,
+          "decisions": [
+            "SET_ASIDE_RESERVE:done",
+            "SET_ASIDE_RESERVE:done",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 3,
+          "treasury": 714187,
+          "reserve": 250000,
+          "inflows": 396,
+          "outflows": 943,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 158,
+          "decisions": [
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 4,
+          "treasury": 713658,
+          "reserve": 250000,
+          "inflows": 414,
+          "outflows": 943,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 158,
+          "decisions": [
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 5,
+          "treasury": 713133,
+          "reserve": 250000,
+          "inflows": 418,
+          "outflows": 943,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 158,
+          "decisions": [
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 6,
+          "treasury": 712742,
+          "reserve": 250000,
+          "inflows": 394,
+          "outflows": 785,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 0,
+          "decisions": [
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 7,
+          "treasury": 712228,
+          "reserve": 250000,
+          "inflows": 429,
+          "outflows": 943,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 158,
+          "decisions": [
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 8,
+          "treasury": 711703,
+          "reserve": 250000,
+          "inflows": 419,
+          "outflows": 943,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 158,
+          "decisions": [
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        },
+        {
+          "day": 31,
+          "treasury": 698726,
+          "reserve": 250000,
+          "inflows": 253,
+          "outflows": 943,
+          "operations": 616,
+          "construction": 0,
+          "payroll": 158,
+          "decisions": [
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected",
+            "SET_ASIDE_RESERVE:rejected"
+          ],
+          "reconciled": true,
+          "audit": true
+        }
+      ]
+    }
+  ]
+}

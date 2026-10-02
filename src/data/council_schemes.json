@@ -1,0 +1,86 @@
+{
+  "$comment": "Phase 15 (A1) — council schemes. Data only: the SchemeSystem interprets the GENERIC effect keys below through one registry (src/simulation/policy.js) and never branches on a scheme id. Add a row here and it appears in the board, the prompt and the parser with no code change. `days` is the duration, `per` what one day of it costs, `needs` the preconditions checked at enact.",
+  "schemes": [
+    {
+      "id": "clean_streets",
+      "label": "Clean streets",
+      "cost": 9000,
+      "per": 700,
+      "days": 20,
+      "needs": {},
+      "effects": { "moodDrift": 0.004, "patienceDrift": 0.01 }
+    },
+    {
+      "id": "street_party",
+      "label": "Street festival",
+      "cost": 6000,
+      "per": 500,
+      "days": 7,
+      "needs": { "spareBeds": 1 },
+      "effects": { "moodDrift": 0.02, "moodTarget": 0.05 }
+    },
+    {
+      "id": "small_business_grant",
+      "label": "Small business grant",
+      "cost": 14000,
+      "per": 900,
+      "days": 25,
+      "needs": {},
+      "effects": { "businessRevenue": 0.12, "staffPay": 0.05 }
+    },
+    {
+      "id": "winter_relief",
+      "label": "Winter relief fund",
+      "cost": 8000,
+      "per": 1100,
+      "days": 18,
+      "needs": { "strained": true },
+      "effects": { "resourceBuffer": 0.35, "moodDrift": 0.008 }
+    },
+    {
+      "id": "settler_campaign",
+      "label": "Settler recruitment drive",
+      "cost": 16000,
+      "per": 1200,
+      "days": 22,
+      "needs": { "spareBeds": 6 },
+      "effects": { "immigrationPull": 0.22, "moodDrift": 0.004 }
+    },
+    {
+      "id": "night_shift",
+      "label": "Night shift",
+      "cost": 12000,
+      "per": 1000,
+      "days": 15,
+      "needs": { "unemployment": 0.08 },
+      "effects": { "emigrationPull": -0.5, "moodTarget": -0.02, "staffingFloor": 0.25 }
+    },
+    {
+      "id": "housing_push",
+      "label": "Housing push",
+      "cost": 22000,
+      "per": 1400,
+      "days": 30,
+      "needs": { "spareBeds": 0 },
+      "effects": { "buildCost": -0.12, "buildHours": -0.15 }
+    },
+    {
+      "id": "research_grant",
+      "label": "Research grant",
+      "cost": 20000,
+      "per": 1600,
+      "days": 40,
+      "needs": {},
+      "effects": { "researchRate": 0.5 }
+    },
+    {
+      "id": "low_spending",
+      "label": "Economy drive",
+      "cost": 4000,
+      "per": 250,
+      "days": 14,
+      "needs": { "treasury": 0 },
+      "effects": { "spendingScale": -0.15, "taxScale": 0.1 }
+    }
+  ]
+}
