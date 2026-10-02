@@ -159,8 +159,9 @@ export function planCode(plan) {
   return code || 'NO_ACTION';
 }
 
-/** How often the council convenes, in game hours (slot boundary). */
-const CADENCE_HOURS = 6;
+/** Default council cadence. The persisted setting may make this 1–12 sittings/day. */
+const DEFAULT_SITTINGS_PER_DAY = 2;
+const clampSittingsPerDay = (value) => Math.max(1, Math.min(12, Math.round(Number(value) || DEFAULT_SITTINGS_PER_DAY)));
 
 /**
  * Phase 30 (S19b) — how long one sitting may take before it is abandoned.
@@ -1184,6 +1185,7 @@ export class GovernanceSystem {
     this.temperature = councilTemperature(
       opts.temperature ?? (opts.creativity === 'creative' ? 0.3 : undefined)
     );
+    this.sittingsPerDay = clampSittingsPerDay(opts.sittingsPerDay);
     this.provider = resolveLLMProvider(opts.provider || opts.providerId, {
       endpoint: this.endpoint,
       model: this.model
@@ -2539,9 +2541,11 @@ export class GovernanceSystem {
 
   update(dt, clock) {
     if (!this.enabled || !clock) return;
-    // Convene whenever the 6-hour slot turns over — day rollover (hour 0) is a
-    // slot boundary too, so one check covers both cadences.
-    const slot = Math.floor(clock.hour / CADENCE_HOURS);
+    // Convene whenever the configured daily slot turns over. Day rollover is a
+    // slot boundary too, so a 2/day setting means roughly 00:00 and 12:00.
+    const sittingsPerDay = clampSittingsPerDay(this.sittingsPerDay);
+    const cadenceHours = 24 / sittingsPerDay;
+    const slot = Math.floor(clock.hour / cadenceHours);
     if (clock.day === this.lastDay && slot === this.lastSlot) return;
     const first = this.lastDay === -1;
     this.lastDay = clock.day;
@@ -2554,22 +2558,10 @@ export class GovernanceSystem {
     this.cycles++;
     if (!this.auto) return;
     this.activeSittingId = `sitting-${++this.sittingSeq}`;
-    // Convene when the town changed (a site opened or finished, a need gate
-    // flipped, staff or utilities moved) or at the daily heartbeat; an
-    // unchanged slot stands down without waking the model.
+    // Every configured slot is a real sitting. An unchanged report is still
+    // shown to the provider so the Council can revisit priorities twice a day
+    // (or at the user-selected cadence) instead of silently standing down.
     const key = this.situationKey();
-    const dayChanged = clock.day !== this.lastConveneDay;
-    if (!dayChanged && key === this.lastSitKey) {
-      this.record({
-        day: this.town.clockDay || 0,
-        source: 'rules',
-        intent: 'NO_ACTION',
-        status: 'noop',
-        detail: 'no change since the last sitting — council stands down',
-        cost: 0
-      });
-      return;
-    }
     this.lastConveneDay = clock.day;
     this.lastSitKey = key;
     // Phase 30 (S19b) — after ASK_FAIL_LIMIT consecutive failures the endpoint
@@ -2618,6 +2610,8 @@ export class GovernanceSystem {
       providerId: this.provider?.id || 'unknown',
       providerLabel: this.provider?.label || this.provider?.id || 'unknown',
       temperature: this.temperature,
+      sittingsPerDay: clampSittingsPerDay(this.sittingsPerDay),
+      cadenceHours: 24 / clampSittingsPerDay(this.sittingsPerDay),
       available: this.available,
       pending: this.pending,
       lastError: this.lastError,

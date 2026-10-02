@@ -49,6 +49,8 @@ Updated 2026-10-02 after the population-cap, factory-archetype, fuel-siting, fou
 - [x] Added a compact Blender-style vertical camera rail beside the left HUD with orbit, tilt, zoom, home, whole-town fit, and ISO/TOP/N/E presets; Playwright verifies the rail geometry and that every pose updates the readout without NaN values.
 - [x] Road demand keeps a bounded completed-trip history, samples live vehicle pressure, and memoizes planner input only while its measured state is unchanged. Hotspot fallback now prevents persistent congestion from starving `EXTEND_STREET` when OD trips are sparse.
 - [x] Added 100× simulation speed to the ribbon, Clock, and validated Settings default; Reset and reload now restore 100×.
+- [x] Added a persisted Council cadence setting (default two sittings per game day, configurable from 1–12) and moved the live scheduler from a fixed six-hour slot to that setting.
+- [x] Fit Town now reframes automatically at three-game-hour boundaries while enabled, while retaining immediate framing on load, Reset, and perimeter growth.
 - [x] Agriculture yards now start as exact 7×4 rectangles (28 tiles) and expand to 8×5 and 9×6 tiers for farms, livestock, and poultry, with matching catalogue footprints.
 - [x] `UPDATE_RESOURCE` now emits an auditable event, a transient world-space pulse at the upgraded yard, and a visible HUD notice that reports the site, level change, and yard area.
 - [x] Added the `UPDATE_RESOURCE` parser spelling as a canonical alias for `UPGRADE_RESOURCE`, so provider wording and the visible feedback use the same resource-upgrade path.
@@ -89,7 +91,7 @@ Updated 2026-10-02 after the population-cap, factory-archetype, fuel-siting, fou
 - [x] `node scripts/_governor_parser_check.mjs` (including `EXPAND_STREET` aliases)
 - [x] `node scripts/_buildings_check.mjs` (floor-area staffing monotonicity and post-market sanity)
 - [x] UI probe opens the Settings modal and verifies the documented defaults and controls.
-- [x] UI probe verifies camera readouts, pan-target wiring, camera defaults, section filtering, Fit Town persistence/perimeter framing, and ribbon containment at 1024px.
+- [x] UI probe verifies camera readouts, pan-target wiring, camera defaults, searchable settings, Council cadence wiring, Fit Town persistence/perimeter framing, and ribbon containment at 1024px.
 - [x] Added `scripts/_council_prompt_check.mjs` / `npm run test:prompt`; it checks the emergent-traits wording, dynamic learning context, catalogue exposure, lesson creation, and the 4,000-token approximation cap.
 - [x] Added `scripts/_resource_feedback_check.mjs` / `npm run test:resources`; it upgrades a real founding farm, checks the 40-cell tier-2 yard, verifies the world pulse, and verifies the HUD `UPDATE_RESOURCE` notice and Council evidence panel.
 - [x] Added `scripts/_resource_neighbour_check.mjs` / `npm run test:resource-neighbour`; it checks the two-tile rule in both directions, the industrial exception, clean seed-1337 founding placement, and Council survey rejection.

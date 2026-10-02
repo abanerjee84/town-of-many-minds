@@ -15,6 +15,7 @@
     "test:resources": "node scripts/_resource_feedback_check.mjs",
     "test:footway": "node scripts/_footway_check.mjs",
     "test:council": "node scripts/_council_provider_check.mjs",
+    "test:council-cadence": "node scripts/_council_cadence_check.mjs",
     "test:prompt": "node scripts/_council_prompt_check.mjs",
     "test:kits": "node scripts/_construction_kits_check.mjs",
     "test:metropolis": "node scripts/_metropolis_horizon_check.mjs",

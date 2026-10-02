@@ -35,6 +35,7 @@ const interaction = new Interaction({
 
 let fitTownEnabled = getSettings().fitTown !== false;
 const fitTownButton = document.getElementById('fit-town');
+let fitTownClockSlot = null;
 
 function updateFitTownControl() {
   if (!fitTownButton) return;
@@ -95,6 +96,9 @@ function applySettingsToRuntime({ speed = false, camera = false, population = fa
   updateFitTownControl();
   if (fit && fitTownEnabled) fitTownToView();
   if (town.governance) {
+    const nextSittings = settings.councilSittingsPerDay;
+    if (town.governance.sittingsPerDay !== nextSittings) town.governance.lastSlot = -1;
+    town.governance.sittingsPerDay = nextSittings;
     town.governance.temperature = settings.councilTemperature;
     town.governance.auto = settings.autoCouncil;
   }
@@ -140,6 +144,10 @@ function renderSettings() {
         <label class="settings-row settings-item" data-setting-search="council creativity llm temperature variety proposals">
           <span><b>Council creativity</b><small>LLM temperature for varied proposals</small></span>
           <span class="settings-inline"><input id="setting-temperature" type="range" min="0" max="1" step="0.05" value="${settings.councilTemperature}" /><output id="setting-temperature-value">${settings.councilTemperature.toFixed(2)}</output></span>
+        </label>
+        <label class="settings-row settings-item" data-setting-search="council sittings meetings cadence decisions per day schedule">
+          <span><b>Council sittings per day</b><small>How many scheduled decision windows the Council gets</small></span>
+          <input id="setting-council-sittings" type="number" min="1" max="12" step="1" value="${settings.councilSittingsPerDay}" />
         </label>
         <label class="settings-check settings-item" data-setting-search="automatic llm council decisions governance">
           <input id="setting-auto-council" type="checkbox"${settings.autoCouncil ? ' checked' : ''} /> <span><b>Automatic LLM Council</b><small>Let the council make scheduled decisions</small></span>
@@ -241,6 +249,12 @@ function renderSettings() {
     updateSettings({ autoCouncil: event.target.checked });
     applySettingsToRuntime();
   });
+  const councilSittings = document.getElementById('setting-council-sittings');
+  councilSittings.addEventListener('change', () => {
+    const next = updateSettings({ councilSittingsPerDay: councilSittings.value });
+    councilSittings.value = String(next.councilSittingsPerDay);
+    applySettingsToRuntime();
+  });
   const bindCameraRange = (id, key, outputId, format) => {
     const input = document.getElementById(id);
     const output = document.getElementById(outputId);
@@ -299,6 +313,20 @@ function generate(seed) {
     for (const w of s.validation.warnings.slice(0, 4)) events.emit('log', { kind: 'event', text: `Validation · ${w}` });
   }
   interaction.select(null);
+}
+
+// Fit Town is an automatic framing policy, so it runs at a bounded clock
+// cadence rather than on every render frame. Manual orbit/pan remains usable
+// until the next three-hour game boundary.
+function fitTownOnClockBoundary() {
+  if (!fitTownEnabled) {
+    fitTownClockSlot = null;
+    return;
+  }
+  const slot = `${clock.day}:${Math.floor(clock.hour / 3)}`;
+  if (slot === fitTownClockSlot) return;
+  fitTownClockSlot = slot;
+  fitTownToView();
 }
 
 document.getElementById('regen').addEventListener('click', () => {
@@ -426,6 +454,7 @@ function frame(now) {
 
   try {
     step('clock', () => clock.update(dt));
+    step('fit-town-clock', fitTownOnClockBoundary);
     const simDt = dt * clock.speed;
 
     // Traffic, signals, incidents and pedestrians share one fixed step (P-E04):

@@ -13,6 +13,7 @@ export const SETTINGS_DEFAULTS = Object.freeze({
   maxPopulation: 1000,
   glowIntensity: 1,
   councilTemperature: 0.15,
+  councilSittingsPerDay: 2,
   autoCouncil: true,
   fitTown: true,
   defaultSpeed: 100,
@@ -30,6 +31,7 @@ function normalise(patch = {}) {
   const maxPopulation = Number(patch.maxPopulation);
   const glow = Number(patch.glowIntensity);
   const temperature = Number(patch.councilTemperature);
+  const sittingsPerDay = Number(patch.councilSittingsPerDay);
   const speed = Number(patch.defaultSpeed);
   const cameraYaw = Number(patch.cameraYaw);
   const cameraPitch = Number(patch.cameraPitch);
@@ -49,6 +51,9 @@ function normalise(patch = {}) {
     councilTemperature: Number.isFinite(temperature)
       ? Math.round(clamp(temperature, 0, 1) * 100) / 100
       : SETTINGS_DEFAULTS.councilTemperature,
+    councilSittingsPerDay: Number.isFinite(sittingsPerDay)
+      ? Math.round(clamp(sittingsPerDay, 1, 12))
+      : SETTINGS_DEFAULTS.councilSittingsPerDay,
     autoCouncil: patch.autoCouncil !== false,
     fitTown: patch.fitTown !== false,
     defaultSpeed: [0, 1, 2, 4, 10, 20, 50, 100].includes(speed)

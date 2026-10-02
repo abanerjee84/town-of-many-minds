@@ -110,6 +110,7 @@ result.stats.settings = await page.evaluate(() => ({
   speed: document.getElementById('setting-speed')?.value,
   speedOptions: [...(document.getElementById('setting-speed')?.options || [])].map((option) => option.value),
   autoCouncil: document.getElementById('setting-auto-council')?.checked,
+  councilSittings: document.getElementById('setting-council-sittings')?.value,
   cameraYaw: document.getElementById('setting-camera-yaw')?.value,
   cameraPitch: document.getElementById('setting-camera-pitch')?.value,
   cameraZoom: document.getElementById('setting-camera-zoom')?.value,
@@ -133,6 +134,13 @@ result.stats.temperatureMutation = await page.evaluate(() => ({
   stored: JSON.parse(localStorage.getItem('town3.settings') || '{}').councilTemperature,
   runtime: window.town?.governance?.temperature,
   max: document.getElementById('setting-temperature')?.max
+}));
+await page.fill('#setting-council-sittings', '4');
+await page.locator('#setting-council-sittings').press('Tab');
+result.stats.councilCadenceMutation = await page.evaluate(() => ({
+  stored: JSON.parse(localStorage.getItem('town3.settings') || '{}').councilSittingsPerDay,
+  runtime: window.town?.governance?.sittingsPerDay,
+  cadenceHours: window.town?.governance?.stats?.().cadenceHours
 }));
 await page.fill('#setting-residents', '4');
 await page.locator('#setting-residents').press('Tab');
@@ -158,6 +166,7 @@ await page.click('#settings-reset');
 result.stats.settingsReset = await page.evaluate(() => ({
   residents: document.getElementById('setting-residents')?.value,
   maxPopulation: document.getElementById('setting-max-population')?.value,
+  councilSittings: document.getElementById('setting-council-sittings')?.value,
   stored: JSON.parse(localStorage.getItem('town3.settings') || '{}').residentsPerTilePerFloor,
   targetX: window.sceneMgr.controls.target.x,
   targetZ: window.sceneMgr.controls.target.z,
@@ -196,6 +205,7 @@ const failures = [
   ...(result.stats.settings?.glow !== '1' ? ['settings modal has the wrong glow default'] : []),
   ...(result.stats.settings?.temperatureMax !== '1' ? ['settings modal temperature does not allow 1.0'] : []),
   ...(result.stats.settings?.speed !== '100' ? ['settings modal has the wrong speed default'] : []),
+  ...(result.stats.settings?.councilSittings !== '2' ? ['settings modal has the wrong Council cadence default'] : []),
   ...(!result.stats.settings?.speedOptions?.includes('100') ? ['settings modal is missing the 100x speed option'] : []),
   ...(result.stats.settings?.cameraYaw !== '34.5' || result.stats.settings?.cameraPitch !== '64' || result.stats.settings?.cameraZoom !== '228' || result.stats.settings?.cameraTargetX !== '-20' || result.stats.settings?.cameraTargetZ !== '-40' ? ['settings modal has the wrong camera defaults'] : []),
   ...(result.stats.settings?.sectionCount !== 4 || !result.stats.settings?.searchable ? ['settings modal is missing search or sections'] : []),
@@ -205,7 +215,8 @@ const failures = [
   ...(result.stats.settingsMutation?.stored !== 4 || result.stats.settingsMutation?.capacity !== 4 ? ['residential density setting did not apply to kit capacity'] : []),
   ...(result.stats.settingsMutation?.maxPopulation !== 900 ? ['maximum population setting did not persist'] : []),
   ...(result.stats.temperatureMutation?.stored !== 1 || result.stats.temperatureMutation?.runtime !== 1 ? ['temperature 1.0 did not persist or reach the live Council'] : []),
-  ...(result.stats.settingsReset?.residents !== '3' || result.stats.settingsReset?.maxPopulation !== '1000' || result.stats.settingsReset?.stored !== 3 ? ['settings restore defaults did not persist'] : []),
+  ...(result.stats.councilCadenceMutation?.stored !== 4 || result.stats.councilCadenceMutation?.runtime !== 4 || result.stats.councilCadenceMutation?.cadenceHours !== 6 ? ['Council cadence setting did not reach the live Council'] : []),
+  ...(result.stats.settingsReset?.residents !== '3' || result.stats.settingsReset?.maxPopulation !== '1000' || result.stats.settingsReset?.councilSittings !== '2' || result.stats.settingsReset?.stored !== 3 ? ['settings restore defaults did not persist'] : []),
   ...(result.stats.settingsReset?.fitTown !== true || Math.abs((result.stats.settingsReset?.targetX ?? 0) - (((result.stats.resetFitTown?.bounds?.minX + result.stats.resetFitTown?.bounds?.maxX) / 2 - 49.5) * 4)) > 8 || Math.abs((result.stats.settingsReset?.targetZ ?? 0) - (((result.stats.resetFitTown?.bounds?.minY + result.stats.resetFitTown?.bounds?.maxY) / 2 - 49.5) * 4)) > 8 ? ['settings restore defaults did not restore Fit Town framing'] : []),
   ...(result.stats.ribbon1024?.overflow ? ['bottom ribbon controls overflow at 1024px'] : []),
   ...pageErrors.map((message) => `page error: ${message}`)
