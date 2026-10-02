@@ -120,6 +120,29 @@ export class PerimeterSystem {
 
   isAcquired(x, y) { return this.acquired.has(this.key(x, y)); }
 
+  /**
+   * Bounds of the cells the town actually owns. `minX..maxY` is the serviced
+   * perimeter envelope used by frontier surveys and the ground plane; it can
+   * include empty gaps while the ledger is expanding around an irregular
+   * edge. Camera framing must use the acquired-cell set itself.
+   */
+  acquiredBounds() {
+    const g = this.town.grid;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const key of this.acquired) {
+      const [x, y] = key.split(',').map(Number);
+      if (!g.inBounds(x, y) || g.isWater(x, y)) continue;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+    return Number.isFinite(minX) ? { minX, minY, maxX, maxY } : null;
+  }
+
   quote(cells = []) {
     const fresh = [];
     for (const [x, y] of cells) {

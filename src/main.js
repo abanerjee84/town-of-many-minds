@@ -47,7 +47,11 @@ function updateFitTownControl() {
 }
 
 function fitTownToView() {
-  const bounds = town.perimeter?.stats?.().bounds;
+  // Fit the cells actually in the acquisition ledger. The perimeter's
+  // envelope is intentionally broader while a frontier edge is irregular;
+  // using that envelope makes Fit Town zoom out over land the town does not
+  // own yet.
+  const bounds = town.perimeter?.acquiredBounds?.() || town.perimeter?.stats?.().bounds;
   if (!bounds) return null;
   const pose = sceneMgr.fitTown(bounds, town.grid);
   updateCameraReadout();

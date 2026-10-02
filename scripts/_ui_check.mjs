@@ -44,7 +44,8 @@ const result = await page.evaluate((required) => {
       active: document.getElementById('fit-town')?.classList.contains('active'),
       stored: JSON.parse(localStorage.getItem('town3.settings') || '{}').fitTown,
       target: window.sceneMgr.controls.target.toArray(),
-      bounds: town.perimeter?.stats?.().bounds || null
+      bounds: town.perimeter?.stats?.().bounds || null,
+      acquiredBounds: town.perimeter?.acquiredBounds?.() || null
     }
   };
   return { missing, stats };
@@ -63,7 +64,8 @@ result.stats.resetCameraTarget = resetCameraTarget;
 result.stats.resetFitTown = await page.evaluate(() => ({
   pressed: document.getElementById('fit-town')?.getAttribute('aria-pressed'),
   target: window.sceneMgr.controls.target.toArray(),
-  bounds: window.town.perimeter?.stats?.().bounds || null
+  bounds: window.town.perimeter?.stats?.().bounds || null,
+  acquiredBounds: window.town.perimeter?.acquiredBounds?.() || null
 }));
 await page.click('[data-camera-action="orbit-right"]');
 result.stats.cameraToolbarMutation = await page.evaluate(() => ({
@@ -91,9 +93,11 @@ await page.evaluate(() => {
 });
 result.stats.expansionFit = await page.evaluate(() => {
   const bounds = window.town.perimeter?.stats?.().bounds;
+  const acquiredBounds = window.town.perimeter?.acquiredBounds?.();
   return {
     target: window.sceneMgr.controls.target.toArray(),
     bounds,
+    acquiredBounds,
     zoom: window.sceneMgr.camera.position.distanceTo(window.sceneMgr.controls.target)
   };
 });
@@ -196,8 +200,8 @@ const failures = [
   ...(result.stats.fitTown?.pressed !== 'true' || !result.stats.fitTown?.active ? ['Fit Town is not enabled by default'] : []),
   ...(result.stats.fitTownOff?.pressed !== 'false' || result.stats.fitTownOff?.stored !== false ? ['Fit Town toggle did not persist off'] : []),
   ...(result.stats.fitTownOn?.pressed !== 'true' || result.stats.fitTownOn?.stored !== true ? ['Fit Town toggle did not persist on'] : []),
-  ...(result.stats.fitTown?.bounds && Math.abs((result.stats.fitTown?.target?.[0] ?? 0) - (((result.stats.fitTown.bounds.minX + result.stats.fitTown.bounds.maxX) / 2 - 49.5) * 4)) > 8 ? ['initial camera did not fit the acquired town bounds'] : []),
-  ...(result.stats.expansionFit?.bounds && (Math.abs((result.stats.expansionFit.target?.[0] ?? 0) - (((result.stats.expansionFit.bounds.minX + result.stats.expansionFit.bounds.maxX) / 2 - 49.5) * 4)) > 8 || Math.abs((result.stats.expansionFit.target?.[2] ?? 0) - (((result.stats.expansionFit.bounds.minY + result.stats.expansionFit.bounds.maxY) / 2 - 49.5) * 4)) > 8) ? ['Fit Town did not reframe after perimeter growth'] : []),
+  ...(result.stats.fitTown?.acquiredBounds && Math.abs((result.stats.fitTown?.target?.[0] ?? 0) - (((result.stats.fitTown.acquiredBounds.minX + result.stats.fitTown.acquiredBounds.maxX) / 2 - 49.5) * 4)) > 8 ? ['initial camera did not fit the acquired land bounds'] : []),
+  ...(result.stats.expansionFit?.acquiredBounds && (Math.abs((result.stats.expansionFit.target?.[0] ?? 0) - (((result.stats.expansionFit.acquiredBounds.minX + result.stats.expansionFit.acquiredBounds.maxX) / 2 - 49.5) * 4)) > 8 || Math.abs((result.stats.expansionFit.target?.[2] ?? 0) - (((result.stats.expansionFit.acquiredBounds.minY + result.stats.expansionFit.acquiredBounds.maxY) / 2 - 49.5) * 4)) > 8) ? ['Fit Town did not reframe after acquired-land growth'] : []),
   ...(result.stats.settingsReset?.fitTown !== true ? ['settings restore defaults did not re-enable Fit Town'] : []),
   ...(!result.stats.settings?.open ? ['settings modal did not open'] : []),
   ...(result.stats.settings?.residents !== '3' ? ['settings modal has the wrong residential density default'] : []),
@@ -217,7 +221,7 @@ const failures = [
   ...(result.stats.temperatureMutation?.stored !== 1 || result.stats.temperatureMutation?.runtime !== 1 ? ['temperature 1.0 did not persist or reach the live Council'] : []),
   ...(result.stats.councilCadenceMutation?.stored !== 4 || result.stats.councilCadenceMutation?.runtime !== 4 || result.stats.councilCadenceMutation?.cadenceHours !== 6 ? ['Council cadence setting did not reach the live Council'] : []),
   ...(result.stats.settingsReset?.residents !== '3' || result.stats.settingsReset?.maxPopulation !== '1000' || result.stats.settingsReset?.councilSittings !== '2' || result.stats.settingsReset?.stored !== 3 ? ['settings restore defaults did not persist'] : []),
-  ...(result.stats.settingsReset?.fitTown !== true || Math.abs((result.stats.settingsReset?.targetX ?? 0) - (((result.stats.resetFitTown?.bounds?.minX + result.stats.resetFitTown?.bounds?.maxX) / 2 - 49.5) * 4)) > 8 || Math.abs((result.stats.settingsReset?.targetZ ?? 0) - (((result.stats.resetFitTown?.bounds?.minY + result.stats.resetFitTown?.bounds?.maxY) / 2 - 49.5) * 4)) > 8 ? ['settings restore defaults did not restore Fit Town framing'] : []),
+  ...(result.stats.settingsReset?.fitTown !== true || Math.abs((result.stats.settingsReset?.targetX ?? 0) - (((result.stats.resetFitTown?.acquiredBounds?.minX + result.stats.resetFitTown?.acquiredBounds?.maxX) / 2 - 49.5) * 4)) > 8 || Math.abs((result.stats.settingsReset?.targetZ ?? 0) - (((result.stats.resetFitTown?.acquiredBounds?.minY + result.stats.resetFitTown?.acquiredBounds?.maxY) / 2 - 49.5) * 4)) > 8 ? ['settings restore defaults did not restore acquired-land framing'] : []),
   ...(result.stats.ribbon1024?.overflow ? ['bottom ribbon controls overflow at 1024px'] : []),
   ...pageErrors.map((message) => `page error: ${message}`)
 ];

@@ -12,6 +12,7 @@ await page.evaluate(() => window.town.generate(1337));
 const result = await page.evaluate(() => {
   const t = window.town;
   const bounds = t.perimeter.stats().bounds;
+  const acquiredBounds = t.perimeter.acquiredBounds();
   const g = t.grid;
   const acquiredBefore = t.perimeter.acquired.size;
   const frontierBefore = t.perimeter.frontierCells(6);
@@ -48,6 +49,7 @@ const result = await page.evaluate(() => {
   };
   return {
     bounds,
+    acquiredBounds,
     assetBounds,
     boundsMatch,
     acquired: acquiredBefore,
@@ -64,6 +66,9 @@ if (errors.length) throw new Error(`page errors: ${errors.join('; ')}`);
 if (!result.boundsMatch) throw new Error(`founding perimeter is not asset-tight: ${JSON.stringify(result)}`);
 if (!result.resourcesOwned || !result.envelopeLedger) {
   throw new Error(`founding asset ownership was lost: ${JSON.stringify(result)}`);
+}
+if (!result.acquiredBounds || Object.entries(result.acquiredBounds).some(([key, value]) => value !== result.bounds[key])) {
+  throw new Error(`acquired-cell bounds are not exposed consistently: ${JSON.stringify(result)}`);
 }
 if (!result.expansion.ok || (result.groundAfter.width <= result.groundBefore.width && result.groundAfter.height <= result.groundBefore.height)) {
   throw new Error(`playable ground did not expand with acquired land: ${JSON.stringify(result)}`);
