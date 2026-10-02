@@ -89,6 +89,11 @@ export class SceneManager {
     const homeOffset = this.homeCamera.clone().sub(this.homeTarget);
     this.homePolar = Math.acos(homeOffset.y / homeOffset.length());
     this.homeAzimuth = Math.atan2(homeOffset.x, homeOffset.z);
+    // At an exact top-down pose the spherical azimuth is mathematically
+    // undefined and OrbitControls normalises it to zero. Keep the requested
+    // yaw separately so the HUD and Settings can still report the user's
+    // chosen orientation while pitch is 0°.
+    this.cameraYaw = this.homeAzimuth;
 
     this.hemi = new THREE.HemisphereLight(0xbfe3ff, 0x4c6b3f, 1.1);
     this.scene.add(this.hemi);
@@ -130,17 +135,10 @@ export class SceneManager {
   }
 
   /**
-   * The ground is the buildable extent and nothing else.
-   *
-   * The inner plane is EXACTLY the grid's world size — every tile of it is a
-   * tile the player can build on, so the visible land and the playable land are
-   * the same rectangle. It used to be the grid plus a 240 m apron, which meant
-   * most of what you could see was scenery you could not click.
-   *
-   * The skirt is a larger, flatter, darker plane sitting just beneath it. It is
-   * not playable and does not pretend to be: it reads as the country the town
-   * sits in, and the inner plane's edge is the visible boundary of where the
-   * town can ever grow.
+   * The inner plane is the currently acquired town land. The darker skirt is
+   * the finite world the council can buy into later. Keeping those surfaces
+   * separate makes the founding perimeter visible instead of presenting the
+   * whole future grid as already-owned empty land.
    */
   buildGround(width, height) {
     this.groundMat.map.repeat.set(width / 9, height / 9);
@@ -161,7 +159,23 @@ export class SceneManager {
     skirt.position.y = -0.12;
     skirt.receiveShadow = true;
     this.scene.add(skirt);
+    this.skirt = skirt;
     return ground;
+  }
+
+  /** Resize and move the light playable plane to the acquired cell envelope. */
+  setPlayableBounds(bounds, grid) {
+    if (!this.ground || !bounds || !grid ||
+      ![bounds.minX, bounds.minY, bounds.maxX, bounds.maxY].every(Number.isFinite)) return;
+    const min = grid.cellToWorld(bounds.minX, bounds.minY);
+    const max = grid.cellToWorld(bounds.maxX, bounds.maxY);
+    const width = (bounds.maxX - bounds.minX + 1) * CELL;
+    const height = (bounds.maxY - bounds.minY + 1) * CELL;
+    this.ground.geometry.dispose();
+    this.ground.geometry = new THREE.PlaneGeometry(width, height, 1, 1);
+    this.ground.position.set((min.x + max.x) / 2, -0.04, (min.z + max.z) / 2);
+    this.ground.userData.playableBounds = { ...bounds };
+    this.groundMat.map.repeat.set(width / 9, height / 9);
   }
 
   updateLighting(clock) {
@@ -215,7 +229,9 @@ export class SceneManager {
    */
   applyCameraDefaults({ cameraYaw = 34.5, cameraPitch = 64, cameraZoom = 228, cameraTargetX, cameraTargetZ } = {}) {
     const yaw = THREE.MathUtils.degToRad(Number(cameraYaw) || 0);
-    const polar = THREE.MathUtils.degToRad(Math.max(25, Math.min(80, Number(cameraPitch) || 64)));
+    const requestedPitch = Number(cameraPitch);
+    const pitch = Number.isFinite(requestedPitch) ? requestedPitch : 64;
+    const polar = THREE.MathUtils.degToRad(Math.max(0, Math.min(80, pitch)));
     const distance = Math.max(this.controls.minDistance, Math.min(this.controls.maxDistance, Number(cameraZoom) || 228));
     const target = this.homeTarget.clone();
     if (Number.isFinite(Number(cameraTargetX))) target.x = Number(cameraTargetX);
@@ -234,6 +250,7 @@ export class SceneManager {
     this.homeCamera.copy(this.camera.position);
     this.homePolar = polar;
     this.homeAzimuth = yaw;
+    this.cameraYaw = yaw;
   }
 
   resetView() {
@@ -241,6 +258,7 @@ export class SceneManager {
     this.camera.position.copy(this.homeCamera);
     this.controls.target.copy(this.homeTarget);
     this.controls.update();
+    this.cameraYaw = this.homeAzimuth;
   }
 
   /**
@@ -262,7 +280,7 @@ export class SceneManager {
       : this.homeAzimuth;
     const polar = legacyHeight == null
       ? THREE.MathUtils.degToRad(Number.isFinite(requestedPitch)
-        ? Math.max(25, Math.min(80, requestedPitch))
+        ? Math.max(0, Math.min(80, requestedPitch))
         : THREE.MathUtils.radToDeg(this.homePolar))
       : this.homePolar;
     const distance = legacyHeight == null
@@ -278,6 +296,7 @@ export class SceneManager {
     );
     this.camera.lookAt(x, 0, z);
     this.controls.update();
+    this.cameraYaw = yaw;
   }
 
   render() {

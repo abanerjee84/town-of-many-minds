@@ -33,14 +33,25 @@ const interaction = new Interaction({
   clock
 });
 
+// The pale ground is the acquired town perimeter. The broader dark skirt is
+// future land; each successful acquisition expands the visible buildable
+// surface so perimeter growth is legible in the world, not only in the HUD.
+const syncPlayableGround = () => sceneMgr.setPlayableBounds(town.perimeter?.stats?.().bounds, town.grid);
+events.on('land-acquired', syncPlayableGround);
+events.on('land-released', syncPlayableGround);
+
 function updateCameraReadout() {
   const controls = sceneMgr.controls;
   const orbit = document.getElementById('camera-orbit');
   const zoom = document.getElementById('camera-zoom');
   const pan = document.getElementById('camera-pan');
   if (!orbit || !zoom || !pan) return;
-  const yaw = THREE.MathUtils.radToDeg(controls.getAzimuthalAngle());
   const pitch = THREE.MathUtils.radToDeg(controls.getPolarAngle());
+  // OrbitControls has no meaningful azimuth at the exact pole and reports
+  // 0° there. Preserve the requested Settings yaw for that one pose so a
+  // 90°/0°/300 m inspection remains truthful in the readout.
+  const azimuth = pitch < 0.05 ? sceneMgr.cameraYaw : controls.getAzimuthalAngle();
+  const yaw = THREE.MathUtils.radToDeg(azimuth);
   const distance = sceneMgr.camera.position.distanceTo(controls.target);
   orbit.textContent = `${yaw.toFixed(1)}° yaw · ${pitch.toFixed(1)}° tilt`;
   zoom.textContent = `${distance.toFixed(0)} m`;
@@ -121,7 +132,7 @@ function renderSettings() {
         </label>
         <label class="settings-row settings-item" data-setting-search="camera orbit pitch tilt elevation angle">
           <span><b>Default orbit tilt</b><small>Vertical camera angle from the top</small></span>
-          <span class="settings-inline"><input id="setting-camera-pitch" type="range" min="25" max="80" step="1" value="${settings.cameraPitch}" /><output id="setting-camera-pitch-value">${settings.cameraPitch.toFixed(0)}°</output></span>
+          <span class="settings-inline"><input id="setting-camera-pitch" type="range" min="0" max="80" step="1" value="${settings.cameraPitch}" /><output id="setting-camera-pitch-value">${settings.cameraPitch.toFixed(0)}°</output></span>
         </label>
         <label class="settings-row settings-item" data-setting-search="camera zoom distance view scale">
           <span><b>Default zoom distance</b><small>Camera distance restored on Reset</small></span>
@@ -243,6 +254,7 @@ function currentSeed() {
 
 function generate(seed) {
   town.generate(seed);
+  syncPlayableGround();
   // Town generation resets governance state; carry the user's council controls
   // back onto the new run without changing the currently selected speed.
   applySettingsToRuntime();
@@ -276,6 +288,7 @@ document.getElementById('seed-input').addEventListener('keydown', (e) => {
 document.getElementById('reset-town').addEventListener('click', () => {
   const seed = currentSeed();
   town.fullReset(seed);
+  syncPlayableGround();
   clock.reset();
   sceneMgr.resetView();
   applySettingsToRuntime({ speed: true, camera: true, population: true });

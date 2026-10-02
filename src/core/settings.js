@@ -56,7 +56,7 @@ function normalise(patch = {}) {
       ? Math.round(clamp(cameraYaw, -180, 180) * 2) / 2
       : SETTINGS_DEFAULTS.cameraYaw,
     cameraPitch: Number.isFinite(cameraPitch)
-      ? Math.round(clamp(cameraPitch, 25, 80))
+      ? Math.round(clamp(cameraPitch, 0, 80))
       : SETTINGS_DEFAULTS.cameraPitch,
     cameraZoom: Number.isFinite(cameraZoom)
       ? Math.round(clamp(cameraZoom, 40, 500))

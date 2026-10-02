@@ -41,7 +41,7 @@ Updated 2026-10-02 after the population-cap, factory-archetype, fuel-siting, fou
 - [x] Progression audit covers tier-ups, vertical upgrades, civic-first wings, housing bootstrap pressure, college/university gates, recycling, resource/utility gates, and 2,200-day vertical-metropolis growth.
 - [x] Added a persisted Settings cog to the bottom ribbon. The modal exposes residents per tiled residential floor (default 3), night-glow intensity (default 1.0×), council creativity/temperature (default 0.15), automatic council control (default on), and the speed restored by Reset (default 100×).
 - [x] Settings are validated at the simulation boundary: residential density affects new homes and vertical growth, glow and council controls apply live, and Reset/re-generation reapply the chosen council and speed settings without corrupting the founding five-bed contract.
-- [x] Added centered camera readouts immediately above the bottom ribbon for live orbit yaw/tilt, zoom distance, and right-drag pan target X/Z. Camera defaults are persisted alongside the other settings (34.5° yaw, 64° tilt, 228 m distance, target -20/-40) and are restored on load and Reset.
+- [x] Added centered camera readouts immediately above the bottom ribbon for live orbit yaw/tilt, zoom distance, and right-drag pan target X/Z. Camera defaults are persisted alongside the other settings (34.5° yaw, 64° tilt, 228 m distance, target -20/-40) and are restored on load and Reset; tilt now permits a true 0° top-down audit while retaining the requested yaw in the readout.
 - [x] Town Centre now uses the configured camera yaw, tilt, and zoom while changing only the focus pivot; it no longer replaces the user's camera values with a fixed height.
 - [x] Settings is now a vertically scrollable, searchable modal with Simulation, Council, Visuals, and Camera sections; search hides unrelated sections without losing the live controls.
 - [x] Road demand keeps a bounded completed-trip history, samples live vehicle pressure, and memoizes planner input only while its measured state is unchanged. Hotspot fallback now prevents persistent congestion from starving `EXTEND_STREET` when OD trips are sparse.
@@ -145,5 +145,5 @@ Updated 2026-10-02 after the population-cap, factory-archetype, fuel-siting, fou
 ### Follow-up checks
 
 - [ ] Run a normal-council 800-day matrix with congestion snapshots and compare EXTEND_STREET/ROADUP response latency after the emergency priority band.
-- [ ] Add a visual perimeter overlay showing acquired cells, frontier candidates, and the latest acquisition pulse.
+- [x] Made the light playable ground follow the acquired perimeter envelope. The outer skirt remains future land, and a successful land acquisition expands the light plane so the boundary is visible during growth.
 

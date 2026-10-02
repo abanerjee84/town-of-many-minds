@@ -133,9 +133,16 @@ export class Town {
 
   generate(seed) {
     this.clearTown();
-    this.seed = seed;
+    // Treat a numeric seed entered in the browser the same as the numeric
+    // seed used by headless probes. Without this normalization, `1337` and
+    // `"1337"` hash through different RNG paths and produce two different
+    // founding footprints, which makes visual audits and regressions disagree.
+    const normalizedSeed = typeof seed === 'string' && /^[-+]?\d+$/.test(seed.trim())
+      ? Number(seed)
+      : seed;
+    this.seed = normalizedSeed;
     this.entityIds = { building: 1, household: 1 };
-    this.rng = makeRng(seed);
+    this.rng = makeRng(normalizedSeed);
     this.swapGrid();
     this.roadKit = new RoadKit(this.grid, this.rng);
     this.parcels = new ParcelKit();

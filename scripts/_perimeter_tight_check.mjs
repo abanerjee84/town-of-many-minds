@@ -13,6 +13,12 @@ const result = await page.evaluate(() => {
   const t = window.town;
   const bounds = t.perimeter.stats().bounds;
   const g = t.grid;
+  const acquiredBefore = t.perimeter.acquired.size;
+  const frontierBefore = t.perimeter.frontierCells(6);
+  const groundBefore = {
+    width: window.sceneMgr.ground.geometry.parameters.width,
+    height: window.sceneMgr.ground.geometry.parameters.height
+  };
   const allAssets = [];
   for (const building of t.buildings) allAssets.push(...(building.footprint?.length ? building.footprint : [building.cell]));
   for (const site of t.resources.sites) allAssets.push(...(site.cells || []));
@@ -28,14 +34,27 @@ const result = await page.evaluate(() => {
   const acquiredKeys = [...t.perimeter.acquired];
   const exactAssetLedger = acquiredKeys.every((key) => assetKeys.has(key));
   const resourcesOwned = acquiredAssets.every(([x, y]) => t.perimeter.isAcquired(x, y));
+  const expansionCell = t.perimeter.frontierCells(64).find(([x, y]) =>
+    x === bounds.minX - 1 || x === bounds.maxX + 1 || y === bounds.minY - 1 || y === bounds.maxY + 1
+  );
+  const expansion = expansionCell
+    ? t.perimeter.acquire([expansionCell], { charge: false, reason: 'perimeter regression' })
+    : { ok: false, reason: 'no outer frontier cell' };
+  const groundAfter = {
+    width: window.sceneMgr.ground.geometry.parameters.width,
+    height: window.sceneMgr.ground.geometry.parameters.height
+  };
   return {
     bounds,
     assetBounds,
     boundsMatch,
-    acquired: t.perimeter.acquired.size,
+    acquired: acquiredBefore,
     resourcesOwned,
     exactAssetLedger,
-    frontier: t.perimeter.frontierCells(6)
+    frontier: frontierBefore,
+    groundBefore,
+    groundAfter,
+    expansion
   };
 });
 
@@ -43,6 +62,9 @@ if (errors.length) throw new Error(`page errors: ${errors.join('; ')}`);
 if (!result.boundsMatch) throw new Error(`founding perimeter is not asset-tight: ${JSON.stringify(result)}`);
 if (!result.resourcesOwned || !result.exactAssetLedger) {
   throw new Error(`founding asset ownership was lost: ${JSON.stringify(result)}`);
+}
+if (!result.expansion.ok || (result.groundAfter.width <= result.groundBefore.width && result.groundAfter.height <= result.groundBefore.height)) {
+  throw new Error(`playable ground did not expand with acquired land: ${JSON.stringify(result)}`);
 }
 if (!result.frontier.length || result.frontier.some(([x, y]) => x < result.bounds.minX - 1 || x > result.bounds.maxX + 1 || y < result.bounds.minY - 1 || y > result.bounds.maxY + 1)) {
   throw new Error(`frontier did not grow from the asset envelope: ${JSON.stringify(result)}`);

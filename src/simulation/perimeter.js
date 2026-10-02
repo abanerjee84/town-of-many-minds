@@ -211,6 +211,7 @@ export class PerimeterSystem {
       this.minX = Math.min(this.minX, x); this.minY = Math.min(this.minY, y);
       this.maxX = Math.max(this.maxX, x); this.maxY = Math.max(this.maxY, y);
     }
+    events.emit('land-released', { cells: [...removed].map((key) => key.split(',').map(Number)) });
     return removed.size;
   }
 
