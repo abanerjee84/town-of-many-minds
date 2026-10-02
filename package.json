@@ -24,7 +24,8 @@
     "test:road": "node scripts/_road_extension_check.mjs",
     "test:vehicle-parking": "node scripts/_vehicle_parking_check.mjs",
     "test:factory-site": "node scripts/_factory_site_regression.mjs",
-    "test:society": "node scripts/_society_transport_check.mjs"
+    "test:society": "node scripts/_society_transport_check.mjs",
+    "test:agriculture": "node scripts/_agricultural_setback_check.mjs"
   },
   "dependencies": {
     "three": "^0.169.0"

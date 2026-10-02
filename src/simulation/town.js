@@ -36,6 +36,7 @@ import { ResourceSystem, resourceStress } from '../kits/resources/resourceKit.js
 import { publicSpaceStats, publicSpaceUse } from '../kits/publicspace/publicKit.js';
 import { validateTown } from '../placement/validator.js';
 import { planConnectedRoad, splitsNetwork, hasNetworkAccess, planFootway } from '../placement/placementController.js';
+import { agriculturalSetbackConflict } from '../placement/siteRules.js';
 import { events } from '../core/events.js';
 import { exportIntegrityState, importIntegrityState } from './integrityState.js';
 
@@ -1087,6 +1088,13 @@ export class Town {
       if (hasNetworkAccess(g, cx, cy, comps)) frontage = true;
     }
     if (!frontage) return null;
+    // Keep ordinary development out of working fields and paddocks. Resource
+    // sites are deliberately sited first and can grow horizontally later, so
+    // this check belongs at the final placement boundary as well as in the
+    // council survey. The founding layout runs before resources are created;
+    // an explicit override remains available for a scenario that intentionally
+    // co-locates a specialist facility.
+    if (!opts.allowAgriculturalAdjacency && agriculturalSetbackConflict(this.resources, cells)) return null;
     // Construction replaces whatever decoration stood on its cell — timber
     // from felled trees goes to the storehouse.
     for (const [cx, cy] of cells) this.clearProps(cx, cy);

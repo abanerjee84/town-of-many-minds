@@ -14,6 +14,7 @@ import { DIRS } from '../core/grid.js';
 import { chooseRoadExtension } from './roadExtensionPlanner.js';
 import { constructionBlock, constructionBlockQuote } from '../kits/constructionBlocks.js';
 import { civicVerticalCap } from '../kits/civic/civicKit.js';
+import { agriculturalSetbackConflict } from '../placement/siteRules.js';
 const COST = {
   house: 9000, shop: 11000, civic: 30000, park: 3000, road: 2000, utility: 0,
   footway: 600,
@@ -3125,6 +3126,11 @@ export class GrowthSystem {
           }
         }
         if (!ok || cells.length !== cols * rows) continue;
+        // Farms, paddocks and poultry runs are working yards. Leave a real
+        // buffer around their full footprint so a large civic, commercial or
+        // industrial block cannot be dropped against the fence just because
+        // its anchor cell happens to look attractive.
+        if (!plan.allowAgriculturalAdjacency && agriculturalSetbackConflict(t.resources, cells)) continue;
         // Parcels: the block must contain at least one parcel's street-facing
         // cell (so it sits on the street, like findCell's front-cell rule).
         // Vacancy is checked per footprint cell above. A parcel can contain
@@ -3596,6 +3602,22 @@ export class GrowthSystem {
         ? firstRoads === 2 && backRoad && forwardRoad
         : firstRoads === 1 && backRoad;
       const endOk = !joins ? lastRoads === 0 : lastRoads >= 1 && forwardRoad;
+      // A corridor that closes onto two already-busy junctions creates a
+      // compact lattice of crossings rather than a useful street. Keep
+      // EXTEND_STREET for open road ends and single-junction continuations;
+      // a planned intersection can still be authored explicitly when the
+      // town has a reason to spend a whole project on it.
+      const endpointTouchesBusyJunction = (i) => {
+        const [ex, ey] = cells[i];
+        for (const [ox, oy] of nbrs) {
+          const nx = ex + ox;
+          const ny = ey + oy;
+          if (added.has(`${nx},${ny}`) || !g.isRoad(nx, ny)) continue;
+          if (roadDegree(nx, ny) >= 3) return true;
+        }
+        return false;
+      };
+      const busyEndpoint = endpointTouchesBusyJunction(0) || endpointTouchesBusyJunction(cells.length - 1);
       // A one-cell closure between two already-busy junctions makes a tiny
       // square of asphalt rather than a useful street. Leave that geometry to
       // a planned intersection/upgrade; gap closures between open road ends
@@ -3604,8 +3626,13 @@ export class GrowthSystem {
         roadDegree(anchor[0] + ox, anchor[1] + oy) < 3
       );
       const shapeOk = !sideTouch && startOk && endOk;
-      if (!shapeOk || !bridgeEndsOpen) continue;
+      // More than one newly-created junction is the visual signature of the
+      // checkerboard failure: repeated four-tile orders turn every block into
+      // a zebra crossing. One is enough for a normal continuation; reject the
+      // multi-junction shortcut before demand scoring can reward it.
+      if (!shapeOk || !bridgeEndsOpen || busyEndpoint) continue;
       const delta = junctionDelta(cells);
+      if (delta > 1) continue;
       // Length is the point of the order, a join is worth a nudge (EXTEND_STREET
       // may either connect two roads or add a run), but every junction it lays
       // costs more than the tile that caused it.
@@ -3721,7 +3748,7 @@ export class GrowthSystem {
     return best;
   }
 
-  findCell(type, zone, { allowUnacquired = false } = {}) {
+  findCell(type, zone, { allowUnacquired = false, allowAgriculturalAdjacency = false } = {}) {
     const t = this.town;
     const g = t.grid;
     const claimed = (x, y) => this.claims.has(`${x},${y}`);
@@ -3856,6 +3883,9 @@ export class GrowthSystem {
       if (!allowUnacquired && t.perimeter && !t.perimeter.isAcquired(x, y)) return;
       if (t.buildingAt(x, y) || claimed(x, y)) return;
       if (t.resources?.ownsCell(x, y)) return;
+      // Keep every new building type away from agricultural yards. Props and
+      // public-space branches returned above do not pass through this path.
+      if (!isProp && !allowAgriculturalAdjacency && agriculturalSetbackConflict(t.resources, [[x, y]])) return;
       // Industry is refused the middle of town outright (see industryEligible).
       if (industrial && !this.industryEligible(profile, x, y)) return;
       const parcel = t.parcels?.at(x, y);

@@ -100,6 +100,8 @@ Updated 2026-10-02 after the population-cap, factory-archetype, fuel-siting, fou
 - [x] Re-ran the UI and construction-kit probes after the 64-row catalogue and population setting; settings default to 1,000 and the three deterministic kit seeds pass.
 - [x] Added `scripts/_vehicle_parking_check.mjs` / `npm run test:vehicle-parking`; an 80-day seed-42 run verifies no claimed/docking vehicle backs, no parked vehicle moves during its dwell, idle station holds do not release without a routed call, and no vehicle exceeds the lane-width envelope. The focused probe and the 800-day fast road horizon pass after the resize.
 - [x] Added `scripts/_factory_site_regression.mjs` / `npm run test:factory-site`; seed 1337 now commissions a 3×3+ factory campus without an unnecessary street carve, and the projected expansion path is site-aware for later blocked campuses.
+- [x] Added shared agricultural setbacks: farm, husbandry, and poultry yards reserve a two-tile buffer; Council footprint/cell surveys and final player/Council placement reject residential, commercial, civic, and industrial buildings inside it. Added `npm run test:agriculture` for the exact boundary and seed-1337 placement audit.
+- [x] Hardened `EXTEND_STREET` against checkerboard corridors: runs that touch a busy junction at either endpoint or create more than one new junction are rejected before demand scoring, while straight open-end continuations remain eligible. Added a regression for a two-sided busy-junction closure.
 
 ## Optional operator experiments (require external provider credentials)
 

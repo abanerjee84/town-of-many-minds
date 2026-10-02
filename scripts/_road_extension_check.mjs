@@ -120,6 +120,30 @@ const trips = (from, to) => Array.from({ length: 8 }, () => ({ from, to, weight:
 }
 
 {
+  const g = new Grid(9, 8);
+  // Two parallel streets with a short vertical gap. Both ends of the gap are
+  // already junctions, so closing it would create the dense ladder of crossings
+  // seen in the long-run visual regression rather than a logical extension.
+  for (let x = 2; x <= 6; x++) {
+    g.setKind(x, 1, CELL_KIND.ROAD);
+    g.setKind(x, 5, CELL_KIND.ROAD);
+  }
+  g.setKind(3, 0, CELL_KIND.ROAD);
+  g.setKind(3, 6, CELL_KIND.ROAD);
+  g.computeRoadMask();
+  const town = {
+    grid: g,
+    buildingAt: () => null,
+    resources: { ownsCell: () => false }
+  };
+  const growth = Object.create(GrowthSystem.prototype);
+  growth.town = town;
+  growth.claims = new Set();
+  assert.equal(growth.roadRuns([3, 2]).length, 0,
+    'a four-tile closure between busy junctions is rejected');
+}
+
+{
   const g = makeGrid(true);
   let funded = 0;
   const town = {
