@@ -83,7 +83,9 @@ const NULL_PLAN_DETAIL = {
   UPZONE: 'every cell is already upzoned',
   ANNEX_EDGE: 'the edge is already annexed',
   // Phase 9.
-  BUILD_BRIDGE: 'no river gap is left to span'
+  BUILD_BRIDGE: 'no river gap is left to span',
+  ACQUIRE_LAND: 'no unacquired frontier tiles remain, or the reserve is too low',
+  RESTRUCTURE_BUILDING: 'no occupied building has a safe higher floor to add'
 };
 
 /** The replay code a plan round-trips through the phrase table. */
@@ -119,7 +121,11 @@ export function planCode(plan) {
     return plan.factory ? `BUILD_FACTORY type=${plan.factory}` : 'BUILD_FACTORY';
   // A civic build replays as BUILD_CIVIC, carrying the facility when one was
   // ordered (planner-chosen builds carry none and let the model pick).
-  if (plan.type === 'civic') return plan.facility ? `BUILD_CIVIC facility=${plan.facility}` : 'BUILD_CIVIC';
+  if (plan.type === 'civic') return plan.facility === 'transit'
+    ? 'BUILD_TRANSIT'
+    : plan.facility ? `BUILD_CIVIC facility=${plan.facility}` : 'BUILD_CIVIC';
+  if (plan.type === 'land') return 'ACQUIRE_LAND';
+  if (plan.type === 'restructure') return 'RESTRUCTURE_BUILDING';
   // In-place work replays with the rung it was climbing to (Phase 5).
   if (plan.type === 'renovate') return plan.budget ? `RENOVATE budget=${plan.budget}` : 'RENOVATE';
   if (plan.type === 'tierup') return plan.tier ? `TIERUP tier=${plan.tier}` : 'TIERUP';
@@ -235,6 +241,9 @@ const PHRASES = [
     'PAVING FOR PARKING', 'PARK THE CARS', 'RESERVE PARKING BAYS',
     'PARKING BAYS', 'PARKING', 'BAYS'
   ]],
+  ['BUILD_TRANSIT', ['BUILD TRANSIT', 'BUILD A BUS DEPOT', 'BUILD BUS DEPOT', 'OPEN BUS SERVICE', 'TRANSIT HUB', 'BUILD A TRANSIT HUB', 'PUBLIC TRANSPORT']],
+  ['ACQUIRE_LAND', ['ACQUIRE NEW LAND', 'ACQUIRE FRONTIER LAND', 'BUY FRONTIER LAND', 'EXTEND THE PERIMETER', 'GROW THE PERIMETER', 'ACQUIRE THE FRONTIER']],
+  ['RESTRUCTURE_BUILDING', ['RESTRUCTURE THE BUILDING', 'RESTRUCTURE BUILDINGS', 'REBUILD THE BUILDING', 'REDEVELOP THE BUILDING', 'REBUILD THIS SITE']],
   ['BUILD_CIVIC', ['BUILD CLINIC', 'NEW CLINIC', 'CLINIC', 'CIVIC', 'SCHOOL', 'LIBRARY', 'POLICE', 'FIRE STATION', 'BUILD A SCHOOL', 'NEW SCHOOL', 'BUILD A LIBRARY', 'NEW LIBRARY', 'TOWN HALL', 'CIVIC BUILDING']],
   ['OPEN_SHOP', ['OPEN SHOP', 'NEW SHOP', 'BUILD SHOP', 'SHOPS', 'SHOP', 'BUSINESS', 'STORE', 'RETAIL']],
   ['BUILD_OFFICE', ['BUILD OFFICE', 'BUILD AN OFFICE', 'NEW OFFICE', 'OFFICE BLOCK', 'OFFICE', 'COMMERCIAL OFFICES', 'BUSINESS CENTRE', 'BUSINESS CENTER', 'LET OFFICES', 'OPEN AN OFFICE', 'OFFICES']],
@@ -492,6 +501,9 @@ const PROMPT_BODY = [
   'and a finished programme applies one of these gains: ' + LEVER_IDS.map((k) => `${k} (${LEVERS[k].hint})`).join(' · ') +
     '. The next programme is always the town\u2019s own weakest number, printed on the Research line,',
   'EXTEND_STREET (also EXPAND_STREET) chooses a legal run only when congestion is above the road gate and observed trips or a disconnected component justify it; the council chooses whether to order it, not its coordinates,',
+  'ACQUIRE_LAND buys the surveyed frontier tiles when the town needs room; it is priced per fresh tile and must leave the public reserve intact,',
+  'BUILD_TRANSIT commissions a bus depot or transit hub, after which registered buses can serve marked stops; read coverage and ridership before expanding the fleet,',
+  'RESTRUCTURE_BUILDING clears and rebuilds one eligible occupied lot with a safe additional floor; it preserves the footprint and facility and records the demolition,',
   'UPGRADE_ROAD widens the longest eligible straight corridor one rung up the ladder ' +
     XS_CLASS_ORDER.join('>') +
     ' (optional spec: class=' +
@@ -548,6 +560,7 @@ const PROMPT_BODY = [
   // ends, so a plain (redundant) crossing also needs the declaration.
   'PAVE_PLAZA, ADD_PARKING, REZONE, UPZONE, CLEAR_LOT, ANNEX_EDGE and BUILD_BRIDGE are also always available —' +
     ' the planner only lists PAVE_PLAZA/ADD_PARKING when a square or a bay is wanted and BUILD_BRIDGE when a gap would reconnect two road ends,',
+  'ACQUIRE_LAND and RESTRUCTURE_BUILDING are discretionary Feasible-now rows when frontier or renewal candidates exist; they stay out of the demand fallback,',
   'PARK_LAND, PAVE_PLAZA, IMAGINE_ARCHETYPE, a filler floor, a comfortable-town RENOVATE and a WING are amenity work: they show up in Feasible now but never in Priority —',
   'TIERUP only reaches Priority while unemployment is above ' + UNEMPLOYMENT_PCT + '%, since it grows shop capacity without a new lot,',
   'when Priority reads "none outstanding", reply NO_ACTION rather than inventing work.',
@@ -904,6 +917,7 @@ export function parseIntent(text) {
   else if (r.intent === 'TRADE_BUY' || r.intent === 'TRADE_SELL') r.params = parseTradeSpec(text);
   else if (r.intent === 'UPGRADE_RESOURCE') r.params = parseResourceSpec(text);
   else if (r.intent === 'BUILD_CIVIC' || r.intent === 'EXPAND_CLINIC') r.params = parseCivicSpec(text);
+  else if (r.intent === 'BUILD_TRANSIT') r.params = { facility: 'transit' };
   else if (r.intent === 'RENOVATE') r.params = parseRenovateSpec(text);
   else if (r.intent === 'TIERUP') r.params = parseTierupSpec(text);
   else if (r.intent === 'UPGRADE_ROAD') r.params = parseRoadClassSpec(text);
@@ -1526,6 +1540,7 @@ export class GovernanceSystem {
         parsed.intent === 'TRADE_SELL' ||
         parsed.intent === 'BUILD_CIVIC' ||
         parsed.intent === 'EXPAND_CLINIC' ||
+        parsed.intent === 'BUILD_TRANSIT' ||
         parsed.intent === 'UPGRADE_ROAD' ||
         parsed.intent === 'REZONE' ||
         parsed.intent === 'ANNEX_EDGE' ||
@@ -1673,7 +1688,7 @@ export class GovernanceSystem {
     }
     plan.origin = source === 'llm' ? 'LLM' : source === 'test' ? 'TEST' : 'RULE';
 
-    const unneeded = source === 'llm' && !t.growth.wanted(plan.type === 'utility' ? plan.kind : plan.type);
+    const unneeded = source === 'llm' && !plan.forceNeed && !t.growth.wanted(plan.type === 'utility' ? plan.kind : plan.type);
     const quoted = t.growth.quote(plan);
     if (!quoted.ok) {
       decision.status = 'blocked';

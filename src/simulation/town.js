@@ -21,6 +21,9 @@ import { GovernanceSystem } from './governance.js';
 import { IndustrySystem } from './industry.js';
 import { PolicySystem } from './policy.js';
 import { ResearchSystem } from './innovation.js';
+import { PerimeterSystem } from './perimeter.js';
+import { PublicTransportSystem } from './publicTransport.js';
+import { SocietySystem } from './society.js';
 import {
   placeInitialTown, layoutLots, rebuildZone, createBuilding, isAdjacentToRoad
 } from '../placement/startPlacement.js';
@@ -107,6 +110,9 @@ export class Town {
     this.governance = new GovernanceSystem(this);
     this.industry = new IndustrySystem(this);
     this.incidents = new IncidentBoard(this);
+    this.perimeter = new PerimeterSystem(this);
+    this.transport = new PublicTransportSystem(this);
+    this.society = new SocietySystem(this);
     // Phase 15 — schemes, statutes and jurisdiction. One interpreter, read by
     // economy, lifecycle, pedestrians, growth and the resources.
     this.policy = new PolicySystem();
@@ -133,6 +139,11 @@ export class Town {
     this.parcels = new ParcelKit();
     this.utilities = new UtilitySystem();
     this.incidents?.resetRng(this.rng);
+    this.perimeter.reset();
+    this.transport.rng = this.rng.fork(8181);
+    this.transport.reset();
+    this.society.rng = this.rng.fork(9191);
+    this.society.reset();
     this.publicPlan = null;
     this.pipeline = null;
     this.pipelineSummary = null;
@@ -160,6 +171,9 @@ export class Town {
     this.research.townRef = this;
     this.research.reset();
     placeInitialTown(this, this.rng);
+    this.perimeter.seed();
+    this.society.rebuild();
+    this.transport.rebuild();
     this.economy.rebuild();
     // Now that every founding citizen's opening cash has been reconciled against
     // the outside world, give each household a savings account — so a household
@@ -243,6 +257,9 @@ export class Town {
     this.parkingPlanned?.clear();
     this.streetGlow?.clear();
     this.incidents?.clear();
+    this.perimeter?.reset();
+    this.transport?.reset();
+    this.society?.reset();
     this.publicPlan = null;
     this.clearGroup(this.roadsGroup);
     this.clearGroup(this.lotsGroup);
@@ -685,6 +702,8 @@ export class Town {
   advance(dt, clock = null) {
     this.traffic.runShared(dt, clock);
     this.streetGlow?.update(dt);
+    this.transport?.update(dt, clock);
+    this.society?.update(dt, clock);
   }
 
   randomRoadCell(rng = this.rng) {
@@ -977,7 +996,7 @@ export class Town {
    * charged for them), or false when the carve is impossible (water / too
    * far / busy).
    */
-  expandTown(x, y) {
+  expandTown(x, y, opts = {}) {
     const g = this.grid;
     if (!g.inBounds(x, y)) return false;
     if (g.kindAt(x, y) !== CELL_KIND.EMPTY) return false;
@@ -985,6 +1004,11 @@ export class Town {
     if (this.buildingAt(x, y)) return false;
     const cells = planConnectedRoad(g, x, y);
     if (!cells || !cells.length) return false;
+    const acquired = this.perimeter?.acquire(cells, {
+      reason: opts.reason || 'street extension',
+      charge: opts.chargeLand !== false
+    });
+    if (acquired && !acquired.ok) return false;
     let felled = 0;
     for (const [cx, cy] of cells) {
       this.clearCell(cx, cy);
@@ -1145,6 +1169,36 @@ export class Town {
     return true;
   }
 
+  /** Replace a standing building on its existing footprint with a denser
+   * version. Demolition is explicit and occupants are re-homed before the new
+   * record is authored, so restructuring cannot leave ghost ownership behind.
+   */
+  restructureBuilding(rec, opts = {}) {
+    if (!rec || !this.buildings.includes(rec)) return null;
+    const cell = rec.cell?.slice();
+    const footprint = rec.footprint?.length
+      ? { cols: Math.max(...rec.footprint.map((c) => c[0])) - Math.min(...rec.footprint.map((c) => c[0])) + 1,
+          rows: Math.max(...rec.footprint.map((c) => c[1])) - Math.min(...rec.footprint.map((c) => c[1])) + 1 }
+      : null;
+    const zone = rec.zone;
+    const nextFloors = Math.min(MAX_FLOORS, Math.max((rec.floors || 1) + 1, opts.floors || 1));
+    this.society?.noteDemolition(rec);
+    if (!this.clearLot(rec)) return null;
+    const next = this.placeBuilding(cell[0], cell[1], zone, {
+      footprint,
+      floors: nextFloors,
+      factory: rec.house?.spec?.factoryType || undefined,
+      factoryModules: rec.house?.spec?.factoryModules || undefined,
+      facility: rec.facility || undefined,
+      kind: rec.kind === 'office' ? 'office' : undefined,
+      acquire: false,
+      name: rec.name ? `${rec.name} renewal` : undefined
+    });
+    if (!next) return null;
+    events.emit('log', { kind: 'event', text: `${next.name || 'The building'} is restructured to ${next.floors} floors.` });
+    return next;
+  }
+
   /**
    * Phase 8 — repaint the zoning of a brush of cells (REZONE and ANNEX_EDGE
    * both land here). Green space and the network keep their use, and the
@@ -1240,7 +1294,9 @@ export class Town {
     // The lake is terrain, not something the bulldozer can clear.
     if (g.isWater(x, y)) return false;
     if (this.buildingAt(x, y)) {
-      this.removeBuilding(this.buildingAt(x, y));
+      const building = this.buildingAt(x, y);
+      this.society?.noteDemolition(building);
+      this.removeBuilding(building);
       return 'building';
     }
     if (g.isRoad(x, y)) return this.demolishRoad(x, y) ? 'road' : false;
@@ -1331,6 +1387,9 @@ export class Town {
         skyscraperFloors: 10,
         populationCap: SIM.maxCitizens
       },
+      perimeter: this.perimeter ? this.perimeter.stats() : null,
+      transport: this.transport ? this.transport.stats() : null,
+      society: this.society ? this.society.stats() : null,
       governance: this.governance ? this.governance.stats() : null,
       mobility: this.traffic ? this.traffic.mobilityStats() : null,
       components: this.roadKit.stats.components || {},

@@ -109,3 +109,19 @@ Updated 2026-10-02 after the population-cap, factory-archetype, fuel-siting, fou
 - [ ] Add a 2,000-day soak that exercises developer-capital exhaustion and records the council's transition from PPP builds to public-only operating decisions.
 - [ ] Run a normal (non-forced) 1,200-day progression matrix after factory campus placement is tuned; require a recorded tier-up/wing and compare its first skyscraper day with the forced-request baseline above.
 
+## Current sprint (2026-10-02)
+
+- [x] Added a perimeter land ledger. The founding rectangle is acquired up front; frontier cells are surveyed, priced, and bought before a growth street is paved, so outward growth has a finite land cost and a visible audit trail.
+- [x] Added a public transport system with bus-stop routes, transit hubs/depot unlocks, government bus procurement, route agents, ridership, coverage, and UI stats.
+- [x] Added neighbourhood rows, granular resident mood dimensions, crime reports, police/court case resolution, policy-law synchronisation, approval rate, and deterministic elections.
+- [x] Added demolition notes and in-place restructuring plans that preserve the lot while adding a safe floor to an eligible building.
+- [x] Added parseable Council intents `BUILD_TRANSIT`, `ACQUIRE_LAND`, and `RESTRUCTURE_BUILDING`, with replay codes and feasibility explanations.
+- [x] Added real bus-agent spawning from registry slots; transit buses now use a dedicated route role and are counted in the public fleet instead of becoming unbound parked assets.
+- [x] Added a focused society/transport/perimeter regression probe and documented these APIs in SRS.
+
+### Follow-up checks
+
+- [ ] Add a player-facing transit-stop placement tool so bus routes can be authored as well as discovered from road markings.
+- [ ] Expand justice into staffed court throughput and neighbourhood-specific service budgets once the base ledger has enough observations.
+- [ ] Compare multiple Council providers on approval, fiscal runway, crime resolution, and land-use efficiency over the same seeded horizon.
+

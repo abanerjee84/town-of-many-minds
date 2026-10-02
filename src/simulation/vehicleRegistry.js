@@ -1008,6 +1008,8 @@ export function stateParty() {
 }
 
 function roleFor(type) {
+  const spec = SERVICE_VEHICLE_TYPES.find((v) => v.id === type);
+  if (spec?.role === 'transit') return 'transit';
   if (EMERGENCY_VEHICLE_TYPES.some((v) => v.id === type)) return 'emergency';
   if (SERVICE_VEHICLE_TYPES.some((v) => v.id === type)) return 'service';
   return 'civilian';
@@ -1031,7 +1033,7 @@ const COVERAGE = [
 ];
 
 function unitFor(type) {
-  return { police: 'Police', ambulance: 'Ambulance', fire: 'Fire', utility: 'Utility', refuse: 'Refuse' }[type] || null;
+  return { police: 'Police', ambulance: 'Ambulance', fire: 'Fire', utility: 'Utility', refuse: 'Refuse', bus: 'Bus' }[type] || null;
 }
 
 /** Attach the display unit name the fleet roster and incidents already use. */

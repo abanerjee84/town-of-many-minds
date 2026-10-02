@@ -6,7 +6,8 @@ const ROSTER = [
   { type: 'police', homes: ['police'], each: 2, max: 2 },
   { type: 'fire', homes: ['fire'], each: 1, max: 1 },
   { type: 'ambulance', homes: ['hospital', 'clinic'], each: 1, max: 2 },
-  { type: 'utility', homes: ['townhall', 'government'], each: 1, max: 2 }
+  { type: 'utility', homes: ['townhall', 'government'], each: 1, max: 2 },
+  { type: 'bus', homes: ['busdepot', 'transit'], each: 1, max: 4 }
 ];
 
 export function civicSites(town) {
@@ -57,7 +58,7 @@ export function fleetSummary(vehicles) {
   const out = { emergency: 0, service: 0, civilian: 0, units: {} };
   for (const v of vehicles) {
     if (v.role === 'emergency') out.emergency++;
-    else if (v.role === 'service') out.service++;
+    else if (v.role === 'service' || v.role === 'transit') out.service++;
     else out.civilian++;
     if (v.unit) out.units[v.unit] = (out.units[v.unit] || 0) + 1;
   }

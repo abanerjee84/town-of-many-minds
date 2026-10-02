@@ -656,8 +656,21 @@ export class VehicleAgent {
     return false;
   }
 
+  nextTransit(rng) {
+    const route = this.transitRoute;
+    if (!Array.isArray(route) || route.length < 2) return false;
+    const target = route[(this.transitStopIndex || 0) % route.length];
+    this.transitStopIndex = ((this.transitStopIndex || 0) + 1) % route.length;
+    if (!this.planRoute(rng, target)) return false;
+    this.errandKind = 'transit';
+    this.status = 'route';
+    this.transitRides = (this.transitRides || 0) + 1;
+    return true;
+  }
+
   nextLeg(rng) {
     if (this.role === 'emergency') return this.nextEmergency(rng);
+    if (this.role === 'transit') return this.nextTransit(rng);
     if (this.role === 'civilian' && this.driverCitizen && !this.recoveringBay) return false;
     return this.nextErrand(rng);
   }
@@ -1038,6 +1051,14 @@ export class VehicleAgent {
   }
 
   onArrive(rng) {
+    if (this.role === 'transit') {
+      this.points = [];
+      this.idx = 0;
+      this.speed = 0;
+      this.parkTimer = 2.5;
+      this.nextLeg(rng);
+      return;
+    }
     if (this.docking) {
       // A recovery leg names its own dwell (home and station bays hold); a
       // normal arrival rolls one.

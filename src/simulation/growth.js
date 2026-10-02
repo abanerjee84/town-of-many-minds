@@ -203,7 +203,7 @@ export function frontierDepth(x, y, b) {
 /** Plan types whose site is chosen up front — apply() never re-searches one. */
 const NO_SITE = new Set([
   'utility', 'upgrade', 'resource', 'renovate', 'tierup', 'wing', 'roadup',
-  'rezone', 'upzone', 'clear', 'annex', 'bridge'
+  'rezone', 'upzone', 'clear', 'annex', 'bridge', 'restructure', 'land'
 ]);
 
 /**
@@ -212,7 +212,7 @@ const NO_SITE = new Set([
  * them rather than a reason to expand the network.
  */
 const NO_EXPAND = new Set([
-  'road', 'footway', 'plaza', 'parking', 'rezone', 'upzone', 'clear', 'annex', 'bridge'
+  'road', 'footway', 'plaza', 'parking', 'rezone', 'upzone', 'clear', 'annex', 'bridge', 'land', 'restructure'
 ]);
 
 /**
@@ -900,6 +900,7 @@ export function planFor(town, type, opts = {}) {
         // Which facility the council ordered (BUILD_CIVIC facility=…);
         // absent the placer picks one from the catalogue as it always did.
         facility,
+        forceNeed: facility === 'transit',
         blockId: facilityBlock?.id || null,
         footprint: enforcedFootprint,
         footprintCandidates: enforcedFootprint ? [enforcedFootprint] : null,
@@ -1048,6 +1049,35 @@ export function planFor(town, type, opts = {}) {
         cost: COST.clear,
         // Idempotent: a lot that is already clear has answered the order.
         run: () => !town.buildings.includes(target) || town.clearLot(target)
+      };
+    }
+    case 'restructure': {
+      const target = town.buildings
+        .filter((b) => b.house && b.floors < MAX_FLOORS && b.facility !== 'townhall')
+        .sort((a, b) => (a.floors || 1) - (b.floors || 1))[0];
+      if (!target) return null;
+      return {
+        type: 'restructure',
+        target,
+        cells: target.footprint || [target.cell],
+        label: `${target.name || 'A building'} is restructured for another floor`,
+        cost: Math.round(COST.clear * 0.7),
+        run: () => !!town.restructureBuilding(target)
+      };
+    }
+    case 'land': {
+      const cells = town.perimeter?.frontierCells(6) || [];
+      if (!cells.length) return null;
+      const cost = town.perimeter.quote(cells).cost;
+      return {
+        type: 'land',
+        cells,
+        label: `The town acquires ${cells.length} frontier tiles`,
+        cost,
+        // Growth funds the quoted land bill through the normal project ledger;
+        // do not debit the perimeter a second time when the executor records
+        // the acquired cells.
+        run: () => !!town.perimeter.acquire(cells, { reason: 'council land acquisition', charge: false })
       };
     }
     case 'annex': {
@@ -2188,6 +2218,13 @@ export class GrowthSystem {
     // new design, no matter how fat the treasury is.
     const crewsFree = this.projects.length < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR;
     const filler = s.pressure > FILLER_PRESSURE_GATE && crewsFree;
+    // Frontier acquisition and in-place renewal are discretionary projects:
+    // expose them in Feasible now so a Council can choose them deliberately,
+    // while keeping them out of the demand fallback that drives essentials.
+    if (crewsFree && this.town.perimeter?.frontierCells(1).length) add('land', 0.18, undefined, true);
+    if (crewsFree && this.town.buildings.some((b) => b.house && b.floors < MAX_FLOORS && b.facility !== 'townhall')) {
+      add('restructure', 0.16, undefined, true);
+    }
     // A facility over its designed load gets horizontal capacity before a
     // floor when its own parcel has room. Real schools, colleges, and clinics
     // often add classrooms or wards sideways; the vertical upgrade remains the
@@ -2244,7 +2281,9 @@ export class GrowthSystem {
     // Phase 8 — surface works. A square is AMENITY and only offered while the
     // town has none; a bay is street-band DEMAND above its own pressure gate,
     // listed after road so an equal score still widens the network first.
-    // The land-use family is never ranked: it is council discretion.
+    // Zone brushes remain unranked council discretion. Perimeter acquisition
+    // and renewal are exposed separately as low-priority rows so the Council
+    // can see those mechanisms without making them the fallback.
     if (crewsFree && !this.hasPlaza()) add('plaza', 0.3, undefined, true);
     // Footways are an explicit pedestrian-access order. They do not belong in
     // the filler queue: a path is useful only when a named inland parcel is
@@ -2333,6 +2372,10 @@ export class GrowthSystem {
       case 'annex':
         // Land use is council discretion: always orderable, never invented.
         return true;
+      case 'land':
+        return !!this.town.perimeter?.frontierCells(1).length && this.projects.length < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR;
+      case 'restructure':
+        return this.projects.length < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR && !!this.town.buildings.some((b) => b.house && b.floors < MAX_FLOORS && b.facility !== 'townhall');
       case 'road':
         return !!(s.mobility && s.mobility.congestion > CONGESTION_GATE && this.selectRoadExtension());
       case 'bridge':
@@ -2464,6 +2507,10 @@ export class GrowthSystem {
       }
       case 'footway':
         return 'no landlocked parcel needs a path';
+      case 'land':
+        return 'the town has no unacquired frontier tiles or the reserve is too low';
+      case 'restructure':
+        return 'no occupied building has a safe higher floor to add';
       case 'factory': {
         const starter = this.town.industry?.missingConstructionProduct?.();
         const strained = this.town.industry && (starter || (this.town.industry.factories().length === 0
@@ -3876,9 +3923,9 @@ export class GrowthSystem {
       if (plan?.footprintCandidates || plan?.footprint) {
         const projected = this.projectExpansion(plan, cells);
         if (!projected) continue;
-        return { anchor: [c.x, c.y], cells, block: projected.block };
+        return { anchor: [c.x, c.y], cells, block: projected.block, land: this.town.perimeter?.quote(cells) || { cells: [], cost: 0 } };
       }
-      return { anchor: [c.x, c.y], cells };
+      return { anchor: [c.x, c.y], cells, land: this.town.perimeter?.quote(cells) || { cells: [], cost: 0 } };
     }
     return null;
   }
@@ -3896,13 +3943,13 @@ export class GrowthSystem {
     const zone = plan ? (plan.zone || plan.type) : zoneOrPlan;
     const preview = this.expandPreview(zoneOrPlan);
     if (preview) {
-      const paved = t.expandTown(preview.anchor[0], preview.anchor[1]);
+      const paved = t.expandTown(preview.anchor[0], preview.anchor[1], { reason: `${plan?.type || 'growth'} expansion`, chargeLand: false });
       if (paved) {
         const text = 'The town expands: a new street opens.';
         this.history.push(text);
         if (this.history.length > 8) this.history.shift();
         events.emit('log', { text });
-        return { anchor: preview.anchor, cells: paved, block: preview.block || null };
+        return { anchor: preview.anchor, cells: paved, block: preview.block || null, land: preview.land || { cells: [], cost: 0 } };
       }
     }
     // A stale preview can fail if the player or another project claimed a
@@ -3914,13 +3961,13 @@ export class GrowthSystem {
       if (!cells || !cells.length) continue;
       const projected = plan ? this.projectExpansion(plan, cells) : null;
       if (plan && !projected) continue;
-      const paved = t.expandTown(c.x, c.y);
+      const paved = t.expandTown(c.x, c.y, { reason: `${plan?.type || 'growth'} expansion`, chargeLand: false });
       if (!paved) continue;
       const text = 'The town expands: a new street opens.';
       this.history.push(text);
       if (this.history.length > 8) this.history.shift();
       events.emit('log', { text });
-      return { anchor: [c.x, c.y], cells: paved, block: projected?.block || null };
+      return { anchor: [c.x, c.y], cells: paved, block: projected?.block || null, land: this.town.perimeter?.quote(paved) || { cells: [], cost: 0 } };
     }
     return null;
   }
@@ -4045,6 +4092,7 @@ export class GrowthSystem {
         const preview = this.expandPreview(plan);
         if (!preview) return refuse();
         paved = preview.cells;
+        plan.landCost = preview.land?.cost || 0;
         if (preview.block) {
           block = preview.block;
           cell = block.cell;
@@ -4053,6 +4101,7 @@ export class GrowthSystem {
         const expanded = this.expandFor(plan);
         if (!expanded) return refuse();
         paved = expanded.cells;
+        plan.landCost = expanded.land?.cost || 0;
         if (expanded.block) {
           block = expanded.block;
           cell = block.cell;
@@ -4069,7 +4118,7 @@ export class GrowthSystem {
         if (!cell) return refuse();
       }
       plan.expansion = paved;
-      plan.cost = (plan.cost || 0) + COST.road * paved.length;
+      plan.cost = (plan.cost || 0) + COST.road * paved.length + (plan.landCost || 0);
     }
 
     // EXTEND_STREET prices the exact selected cells. The anchor touches the

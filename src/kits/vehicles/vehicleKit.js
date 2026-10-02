@@ -24,7 +24,7 @@ export const VEHICLE_TYPES = [
   { id: 'pickup', weight: 9, scale: 0.95, length: 3.6, width: 1.72, height: 1.6, speed: 0.94 },
   { id: 'sport', weight: 6, scale: 0.9, length: 3.4, width: 1.62, height: 1.15, speed: 1.35 },
   { id: 'truck', weight: 5, length: 4.4, width: 1.85, height: 2.3, speed: 0.78 },
-  { id: 'bus', weight: 3, length: 5.4, width: 1.95, height: 2.5, speed: 0.72 },
+  { id: 'bus', weight: 3, role: 'transit', unit: 'Bus', length: 5.4, width: 1.95, height: 2.5, speed: 0.72 },
   { id: 'police', weight: 0, role: 'emergency', unit: 'Police', length: 3.5, width: 1.7, height: 1.4, speed: 1.18 },
   { id: 'ambulance', weight: 0, role: 'emergency', unit: 'Ambulance', length: 4.3, width: 1.9, height: 2.05, speed: 1.1 },
   { id: 'fire', weight: 0, role: 'emergency', unit: 'Fire', length: 4.9, width: 2.0, height: 2.3, speed: 1.02 },
@@ -59,7 +59,8 @@ const FLEET_LIVERY = {
   ambulance: 0xf7f6f2,
   fire: 0xc0392b,
   utility: 0xe8b23a,
-  refuse: 0x4f7a3f
+  refuse: 0x4f7a3f,
+  bus: 0x2f8f7a
 };
 
 function paintList(geos, color, offset) {

@@ -471,6 +471,9 @@ export class Interaction {
     const gv = t.governance ? t.governance.stats() : null;
     const rs = t.resources ? t.resources.stats() : null;
     const ind = t.industry ? t.industry.stats() : null;
+    const society = t.society ? t.society.stats() : null;
+    const transit = t.transport ? t.transport.stats() : null;
+    const perimeter = t.perimeter ? t.perimeter.stats() : null;
     const unitStr = Object.entries(fleet.units)
       .map(([k, n]) => `${n} ${k}`)
       .join(' · ');
@@ -550,6 +553,25 @@ export class Interaction {
                  : ''
              }
              <div class="kv"><span>Tax rate</span><span>${ec ? ec.taxRate : 100}% · ${gv.cycles} sittings</span></div>`
+          : ''
+      }
+      ${
+        society
+          ? `<div class="kv grp"><span>⚖ Society</span><span>approval ${Math.round(society.approvalRate * 100)}%${society.mayor ? ` · mayor ${esc(society.mayor)}` : ''}</span></div>
+             <div class="kv"><span>Neighbourhoods</span><span>${society.neighbourhoods.length} · ${society.crimes.open} open crime${society.crimes.open === 1 ? '' : 's'} · ${society.crimes.backlog} court backlog</span></div>
+             <div class="kv"><span>Mood</span><span>${Math.round(society.mood * 100)}% average · ${society.laws.length} active law${society.laws.length === 1 ? '' : 's'}</span></div>`
+          : ''
+      }
+      ${
+        transit
+          ? `<div class="kv grp"><span>🚌 Public transport</span><span>${transit.ready ? `${transit.stops} stops · ${transit.fleet} bus${transit.fleet === 1 ? '' : 'es'}` : 'awaiting depot or hub'}</span></div>
+             <div class="kv"><span>Ridership</span><span>${transit.dailyRides}/day · coverage ${Math.round(transit.coverage * 100)}%</span></div>`
+          : ''
+      }
+      ${
+        perimeter
+          ? `<div class="kv grp"><span>🗺 Perimeter</span><span>${perimeter.acquired} acquired tiles · ${perimeter.expansions} expansions</span></div>
+             <div class="kv"><span>Frontier</span><span>${perimeter.available} tiles available · next tile $${Math.round(perimeter.nextTileCost).toLocaleString('en-US')}</span></div>`
           : ''
       }
       ${

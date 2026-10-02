@@ -643,10 +643,9 @@ export class CitizenAgent {
     // Phase 15 — `moodTarget` is a live bias on the mood a citizen settles
     // toward, read here where the mood is derived. The trait drifts
     // (moodDrift/patienceDrift) happen once a day in CitizenSystem.policyTick.
-    this.mood = Math.max(
-      0,
-      Math.min(1, moodFrom(this.p, this.state, system && system.stress ? system.stress.overall : 0) + (system?.moodTarget || 0))
-    );
+    const baseMood = moodFrom(this.p, this.state, system && system.stress ? system.stress.overall : 0) + (system?.moodTarget || 0);
+    const civicMood = this.p.mood?.overall;
+    this.mood = Math.max(0, Math.min(1, Number.isFinite(civicMood) ? baseMood * 0.45 + civicMood * 0.55 : baseMood));
     this.strollTimer -= dt * (1 + this.p.traits.openness);
     // Occupancy is the only thing that decides visibility: an indoor citizen
     // is hidden no matter what they want or how their trip is going.

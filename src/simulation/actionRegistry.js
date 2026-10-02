@@ -28,7 +28,8 @@ const project = {
   UPGRADE_RESOURCE: 'resource', PLANT_TREES: 'prop-tree', INSTALL_LAMP: 'prop-lamp',
   UPGRADE_BUILDING: 'upgrade', RENOVATE: 'renovate', WING: 'wing',
   IMAGINE_ARCHETYPE: 'archetype', BUILD_DISTRICT: 'district',
-  REZONE: 'rezone', UPZONE: 'upzone', CLEAR_LOT: 'clear', ANNEX_EDGE: 'annex'
+  REZONE: 'rezone', UPZONE: 'upzone', CLEAR_LOT: 'clear', ANNEX_EDGE: 'annex',
+  ACQUIRE_LAND: 'land', BUILD_TRANSIT: 'civic', RESTRUCTURE_BUILDING: 'restructure'
 };
 const direct = [
   'RAISE_TAX', 'CUT_TAX', 'KEEP_TAX', 'HIRE_WORKERS', 'ATTRACT_SETTLERS',
@@ -70,12 +71,14 @@ function familyOf(intent) {
   if (intent === 'DECLARE_EMERGENCY' || intent === 'DISPATCH_UNITS') return 'emergency';
   if (intent.startsWith('BUILD_') || intent === 'DEVELOP_HOUSING' || intent === 'OPEN_SHOP'
     || intent === 'TIERUP' || intent === 'EXPAND_LANDMARK' || intent === 'EXPAND_CLINIC'
-    || intent === 'UPGRADE_BUILDING' || intent === 'RENOVATE' || intent === 'WING') return 'build';
+    || intent === 'UPGRADE_BUILDING' || intent === 'RENOVATE' || intent === 'WING'
+    || intent === 'RESTRUCTURE_BUILDING') return 'build';
   if (intent.startsWith('EXTEND_') || intent.startsWith('EXPAND_') || intent === 'UPGRADE_ROAD'
     || intent === 'UPGRADE_RESOURCE' || intent === 'ADD_PARKING' || intent === 'BUILD_BRIDGE') return 'infrastructure';
   if (intent.startsWith('REZONE') || intent.startsWith('UPZONE') || intent.startsWith('CLEAR_')
     || intent.startsWith('ANNEX_') || intent === 'PARK_LAND' || intent === 'PAVE_PLAZA'
     || intent === 'PLANT_TREES' || intent === 'INSTALL_LAMP') return 'place';
+  if (intent === 'ACQUIRE_LAND') return 'infrastructure';
   if (intent.startsWith('RAISE_') || intent.startsWith('CUT_') || intent === 'KEEP_TAX'
     || intent === 'SET_ASIDE_RESERVE' || intent === 'BOND_ISSUE' || intent === 'SUBSIDY'
     || intent === 'SLASH_SPENDING' || intent.startsWith('TRADE_') || intent === 'FUND_INNOVATION') return 'money';
