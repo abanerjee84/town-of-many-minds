@@ -331,6 +331,12 @@ export class Town {
    * asking for it.
    */
   rebuildStatic({ roads = true, lots = true, validate = true } = {}) {
+    // A few specialist planners (notably resource-site access) write road
+    // cells directly instead of going through paintRoad. Remove any stale
+    // foliage before layoutLots can turn custom props into meshes. This is a
+    // cheap map over the prop cells and makes the no-tree-on-infrastructure
+    // invariant hold even after a savepoint restore or an older plan.
+    this.sanitizeInfrastructureProps();
     const oldSignalsTime = this.roadKit?.signals?.t || 0;
     if (roads) {
       this.grid.computeRoadMask();
@@ -398,6 +404,20 @@ export class Town {
   rebuildAll() {
     this.rebuildBuildings();
     this.rebuildStatic();
+  }
+
+  sanitizeInfrastructureProps() {
+    const g = this.grid;
+    const stale = [];
+    for (const idx of this.customProps.keys()) {
+      const y = Math.floor(idx / g.w);
+      const x = idx - y * g.w;
+      if (g.isRoad(x, y) || g.isPath(x, y) || g.isWater(x, y) ||
+          this.buildingAt(x, y) || this.resources?.ownsCell(x, y)) stale.push([x, y]);
+    }
+    let felled = 0;
+    for (const [x, y] of stale) felled += this.clearProps(x, y);
+    return felled;
   }
 
   /** Re-author one building from its recorded spec plus overrides. */

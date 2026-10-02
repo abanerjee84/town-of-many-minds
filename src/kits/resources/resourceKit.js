@@ -372,9 +372,13 @@ export function spurPath(g, sources, maxDepth = MAX_SPUR) {
   });
 }
 
-function carveRoad(g, cells) {
+function carveRoad(g, cells, town = null) {
   for (const [x, y] of cells) {
     if (!g.inBounds(x, y)) continue;
+    // Resource sites are planned after the founding forest exists. Their
+    // direct carve must use the same vegetation contract as Town.paintRoad;
+    // otherwise a tree prop survives on a newly paved access spur.
+    town?.clearProps?.(x, y);
     g.setKind(x, y, CELL_KIND.ROAD);
     const i = g.idx(x, y);
     g.zone[i] = null;
@@ -778,7 +782,7 @@ export class ResourceSystem {
           g.owner[g.idx(x, y)] = null;
         }
         this.claim(lake);
-        carveRoad(g, lakeSpur);
+        carveRoad(g, lakeSpur, this.townRef);
         this.sites.push({
           id: town.nextEntityId ? town.nextEntityId('resource') : `resource-lake-${this.sites.length + 1}`,
           kind: 'lake', cells: lake, spur: lakeSpur, work: null, face: faceToRoad(g, lake),
@@ -900,7 +904,7 @@ export class ResourceSystem {
       const spur = spurPath(g, cells);
       if (!spur) continue;
       this.claim(cells);
-      carveRoad(g, spur);
+      carveRoad(g, spur, this.townRef);
       for (const [cx, cy] of cells) {
         g.setKind(cx, cy, CELL_KIND.LOT);
         g.zone[g.idx(cx, cy)] = null;
