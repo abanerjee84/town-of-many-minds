@@ -102,6 +102,71 @@ function makeSkybox() {
   return { mesh, uniforms };
 }
 
+/**
+ * Lightweight, camera-local precipitation. The geometry is created once and
+ * moved with the orbit target, so weather remains visible over the town
+ * without allocating particles every frame or covering the whole 100x100
+ * build plate. Rain uses short line segments; snow uses soft points.
+ */
+function makeWeatherEffects() {
+  const group = new THREE.Group();
+  group.name = 'weather-effects';
+
+  const rainCount = 360;
+  const rainPositions = new Float32Array(rainCount * 6);
+  for (let i = 0; i < rainCount; i++) {
+    const a = i * 12.9898;
+    const x = ((Math.sin(a) * 0.5 + 0.5) * 2 - 1) * 78;
+    const z = ((Math.sin(a * 1.731) * 0.5 + 0.5) * 2 - 1) * 78;
+    const y = ((Math.sin(a * 2.177) * 0.5 + 0.5) * 48) + 5;
+    const j = i * 6;
+    rainPositions[j] = x;
+    rainPositions[j + 1] = y;
+    rainPositions[j + 2] = z;
+    rainPositions[j + 3] = x - 0.22;
+    rainPositions[j + 4] = y - 1.7;
+    rainPositions[j + 5] = z - 0.06;
+  }
+  const rainGeometry = new THREE.BufferGeometry();
+  rainGeometry.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
+  const rain = new THREE.LineSegments(rainGeometry, new THREE.LineBasicMaterial({
+    color: 0xa8d6ea,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    fog: true
+  }));
+  rain.name = 'rain';
+  rain.frustumCulled = false;
+  rain.visible = false;
+
+  const snowCount = 260;
+  const snowPositions = new Float32Array(snowCount * 3);
+  for (let i = 0; i < snowCount; i++) {
+    const a = (i + 17) * 19.193;
+    snowPositions[i * 3] = ((Math.sin(a) * 0.5 + 0.5) * 2 - 1) * 78;
+    snowPositions[i * 3 + 1] = ((Math.sin(a * 1.37) * 0.5 + 0.5) * 44) + 7;
+    snowPositions[i * 3 + 2] = ((Math.sin(a * 1.91) * 0.5 + 0.5) * 2 - 1) * 78;
+  }
+  const snowGeometry = new THREE.BufferGeometry();
+  snowGeometry.setAttribute('position', new THREE.BufferAttribute(snowPositions, 3));
+  const snow = new THREE.Points(snowGeometry, new THREE.PointsMaterial({
+    color: 0xf4fbff,
+    size: 0.65,
+    sizeAttenuation: true,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    fog: true
+  }));
+  snow.name = 'snow';
+  snow.frustumCulled = false;
+  snow.visible = false;
+
+  group.add(rain, snow);
+  return { group, rain, snow };
+}
+
 export class SceneManager {
   constructor(container) {
     this.container = container;
@@ -127,6 +192,8 @@ export class SceneManager {
     this.skybox = sky.mesh;
     this.skyUniforms = sky.uniforms;
     this.scene.add(this.skybox);
+    this.weatherFx = makeWeatherEffects();
+    this.scene.add(this.weatherFx.group);
 
     this.camera = new THREE.PerspectiveCamera(
       50,
@@ -312,6 +379,34 @@ export class SceneManager {
     this.scene.fog.near = 120 - cloud * 30;
     this.scene.fog.far = 460 - cloud * 100;
     this.renderer.toneMappingExposure = 0.72 + d * 0.45;
+    this.updateWeatherEffects(weather, clock);
+  }
+
+  /** Update camera-local precipitation and expose the current visual state. */
+  updateWeatherEffects(weather = null, clock = null) {
+    const fx = this.weatherFx;
+    if (!fx) return;
+    const state = weather?.weather || 'clear';
+    const precipitation = THREE.MathUtils.clamp(Number(weather?.precipitation) || 0, 0, 1);
+    const rainOn = (state === 'rain' || state === 'storm') && precipitation > 0.2;
+    const snowOn = state === 'snow' && precipitation > 0.2;
+    const target = this.controls?.target;
+    if (target) fx.group.position.set(target.x, 0, target.z);
+    const elapsed = Number(clock?.elapsed);
+    const time = Number.isFinite(elapsed) ? elapsed : performance.now() / 1000;
+    fx.rain.visible = rainOn;
+    fx.snow.visible = snowOn;
+    fx.rain.material.opacity = rainOn ? 0.2 + precipitation * 0.42 : 0;
+    fx.snow.material.opacity = snowOn ? 0.35 + precipitation * 0.5 : 0;
+    // The shared field scrolls through a short vertical loop. Its large local
+    // envelope keeps the effect stable while orbiting and avoids per-particle
+    // CPU work in long simulations.
+    fx.rain.position.y = rainOn ? ((time * 13) % 42) - 12 : 0;
+    fx.rain.position.x = rainOn ? Math.sin(time * 0.35) * 2 : 0;
+    fx.snow.position.y = snowOn ? Math.sin(time * 0.45) * 1.5 : 0;
+    fx.snow.position.x = snowOn ? Math.sin(time * 0.18) * 5 : 0;
+    fx.snow.position.z = snowOn ? Math.cos(time * 0.14) * 4 : 0;
+    fx.group.visible = rainOn || snowOn;
   }
 
   get nightFactor() {

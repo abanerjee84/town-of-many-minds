@@ -33,7 +33,8 @@
     "test:land-gate": "node scripts/_land_gate_check.mjs",
     "test:forest": "node scripts/_forest_check.mjs",
     "test:vegetation-clear": "node scripts/_vegetation_clear_check.mjs",
-    "test:weather": "node scripts/_weather_check.mjs"
+    "test:weather": "node scripts/_weather_check.mjs",
+    "test:campus": "node scripts/_campus_spacing_check.mjs"
   },
   "dependencies": {
     "three": "^0.169.0"

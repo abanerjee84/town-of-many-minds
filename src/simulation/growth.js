@@ -14,7 +14,7 @@ import { DIRS } from '../core/grid.js';
 import { chooseRoadExtension } from './roadExtensionPlanner.js';
 import { constructionBlock, constructionBlockQuote } from '../kits/constructionBlocks.js';
 import { civicVerticalCap } from '../kits/civic/civicKit.js';
-import { agriculturalSetbackConflict, resourceSetbackConflict } from '../placement/siteRules.js';
+import { agriculturalSetbackConflict, resourceSetbackConflict, educationCampusConflict } from '../placement/siteRules.js';
 const COST = {
   house: 9000, shop: 11000, civic: 30000, park: 3000, road: 2000, utility: 0,
   footway: 600,
@@ -3148,6 +3148,11 @@ export class GrowthSystem {
           zone: want,
           kind: plan.type
         })) continue;
+        // Colleges, universities and other institutional campuses are not
+        // ordinary civic frontage. Keep a real catchment between them so a
+        // later campus cannot land directly opposite an existing one across a
+        // single road or squeeze into its service yard.
+        if (educationCampusConflict(t, cells, plan.facility || plan.landmark || plan.subtype)) continue;
         // Parcels: the block must contain at least one parcel's street-facing
         // cell (so it sits on the street, like findCell's front-cell rule).
         // Vacancy is checked per footprint cell above. A parcel can contain

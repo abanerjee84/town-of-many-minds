@@ -26,7 +26,23 @@ const result = await page.evaluate(() => {
   const second = collect();
   const report = t.governance.report();
   const final = t.weather.stats();
-  return { first, second, final, reportHasWeather: report.includes('Weather:') };
+  // Force each precipitation mode through the renderer so the regression
+  // covers the visible effect, not only the economy modifiers.
+  const scene = window.sceneMgr;
+  scene.updateLighting(window.clock, { weather: 'rain', precipitation: 0.55 });
+  const rainFx = {
+    visible: !!scene.weatherFx?.rain?.visible,
+    opacity: scene.weatherFx?.rain?.material?.opacity || 0,
+    segments: scene.weatherFx?.rain?.geometry?.getAttribute('position')?.count || 0
+  };
+  scene.updateLighting(window.clock, { weather: 'snow', precipitation: 0.72 });
+  const snowFx = {
+    visible: !!scene.weatherFx?.snow?.visible,
+    opacity: scene.weatherFx?.snow?.material?.opacity || 0,
+    flakes: scene.weatherFx?.snow?.geometry?.getAttribute('position')?.count || 0
+  };
+  scene.updateLighting(window.clock, { weather: 'clear', precipitation: 0 });
+  return { first, second, final, reportHasWeather: report.includes('Weather:'), rainFx, snowFx };
 });
 
 const failures = [
@@ -34,6 +50,10 @@ const failures = [
   ...(result.first.map((x) => x.season).join(',') !== 'spring,spring,summer,summer,autumn,autumn,winter,winter' ? ['season boundaries are incorrect'] : []),
   ...(!result.first.some((x) => x.foodYield < 1) ? ['weather never changes food production modifiers'] : []),
   ...(!result.reportHasWeather ? ['council report does not include weather evidence'] : []),
+  ...(!result.rainFx.visible || result.rainFx.opacity <= 0 || result.rainFx.segments < 2
+    ? ['rain precipitation is not rendered visibly'] : []),
+  ...(!result.snowFx.visible || result.snowFx.opacity <= 0 || result.snowFx.flakes < 2
+    ? ['snow precipitation is not rendered visibly'] : []),
   ...pageErrors.map((message) => `page error: ${message}`)
 ];
 

@@ -39,9 +39,29 @@ export const RESOURCE_SITE_KINDS = Object.freeze(new Set([
 /** Tiles kept clear between a resource facility and ordinary development. */
 export const RESOURCE_BUILDING_SETBACK = 2;
 
+/**
+ * Education facilities with a real campus footprint. These are planned as
+ * districts rather than kerb-side amenities: two campuses need a walkable
+ * institutional catchment between them, even when a road separates their
+ * parcels. The rule deliberately covers schools and conservatories as well as
+ * tertiary campuses so a later catalogue addition cannot create a second
+ * school directly across the street from the first one.
+ */
+export const EDUCATION_CAMPUS_FACILITIES = Object.freeze(new Set([
+  'school',
+  'college',
+  'university',
+  'conservatory',
+  'campus'
+]));
+
+/** Chebyshev tiles kept clear around an education campus. */
+export const EDUCATION_CAMPUS_SETBACK = 3;
+
 function cellsOf(candidate) {
   if (Array.isArray(candidate)) return candidate;
   if (candidate?.cells?.length) return candidate.cells;
+  if (candidate?.footprint?.length) return candidate.footprint;
   if (candidate?.cell) return [candidate.cell];
   return [];
 }
@@ -126,4 +146,46 @@ export function resourceSiteBuildingConflict(
     }
   }
   return null;
+}
+
+/**
+ * Return the first education campus that is too close to a candidate campus.
+ * Chebyshev distance treats a diagonal corner and a road-facing opposite lot
+ * consistently: a one-tile road between two footprints is still a conflict,
+ * while a genuine institutional buffer is accepted. `candidateFacility` is
+ * required so ordinary civic buildings can continue using the frontage grid.
+ */
+export function educationCampusConflict(
+  town,
+  candidate,
+  candidateFacility,
+  buffer = EDUCATION_CAMPUS_SETBACK
+) {
+  if (!EDUCATION_CAMPUS_FACILITIES.has(candidateFacility)) return null;
+  const cells = cellsOf(candidate);
+  if (!cells.length || !town?.buildings?.length) return null;
+  const gap = Math.max(0, Math.round(buffer));
+  for (const building of town.buildings) {
+    const facility = building?.facility || building?.subtype;
+    if (!EDUCATION_CAMPUS_FACILITIES.has(facility)) continue;
+    const occupied = cellsOf(building);
+    for (const [x, y] of cells) {
+      for (const [bx, by] of occupied) {
+        const distance = Math.max(Math.abs(x - bx), Math.abs(y - by));
+        if (distance <= gap) {
+          return { building, cell: [x, y], campusCell: [bx, by], distance, buffer: gap };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+export function violatesEducationCampusSetback(
+  town,
+  candidate,
+  candidateFacility,
+  buffer = EDUCATION_CAMPUS_SETBACK
+) {
+  return !!educationCampusConflict(town, candidate, candidateFacility, buffer);
 }

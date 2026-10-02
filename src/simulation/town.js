@@ -24,7 +24,7 @@ import { ResearchSystem } from './innovation.js';
 import { PerimeterSystem } from './perimeter.js';
 import { PublicTransportSystem } from './publicTransport.js';
 import { SocietySystem } from './society.js';
-import { civicVerticalCap } from '../kits/civic/civicKit.js';
+import { civicVerticalCap, CIVIC_ORDER } from '../kits/civic/civicKit.js';
 import {
   placeInitialTown, layoutLots, rebuildZone, createBuilding, isAdjacentToRoad
 } from '../placement/startPlacement.js';
@@ -38,7 +38,7 @@ import { ForestSystem } from './forest.js';
 import { WeatherSystem } from './weather.js';
 import { validateTown } from '../placement/validator.js';
 import { planConnectedRoad, splitsNetwork, hasNetworkAccess, planFootway } from '../placement/placementController.js';
-import { agriculturalSetbackConflict, resourceSetbackConflict } from '../placement/siteRules.js';
+import { agriculturalSetbackConflict, resourceSetbackConflict, educationCampusConflict } from '../placement/siteRules.js';
 import { events } from '../core/events.js';
 import { exportIntegrityState, importIntegrityState } from './integrityState.js';
 
@@ -1145,6 +1145,18 @@ export class Town {
       zone,
       kind: opts.kind
     })) return null;
+    // A campus is a district-scale civic investment. Enforce its separation
+    // at the final mutation boundary as well as in GrowthSystem's survey so a
+    // player or an LLM cannot bypass the catchment buffer by pinning a cell.
+    let requestedFacility = opts.facility || opts.subtype || this.civicIndex?.get(g.idx(x, y)) || null;
+    if (!requestedFacility && zone === ZONE.CIVIC) {
+      // Generic civic orders use the same catalogue cursor as createBuilding.
+      // Predict its next facility here so a late college/university cannot
+      // bypass the campus buffer merely because the plan omitted `facility=`.
+      const built = new Set(this.civicIndex?.values?.() || []);
+      requestedFacility = CIVIC_ORDER.find((id) => !built.has(id)) || 'townhall';
+    }
+    if (!opts.allowCampusAdjacency && educationCampusConflict(this, cells, requestedFacility)) return null;
     // Construction replaces whatever decoration stood on its cell — timber
     // from felled trees goes to the storehouse.
     for (const [cx, cy] of cells) this.clearProps(cx, cy);
