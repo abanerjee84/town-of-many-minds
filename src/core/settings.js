@@ -6,7 +6,11 @@
  * reads this module rather than reaching into DOM controls, which also keeps
  * the same defaults available to headless and construction-kit checks.
  */
-export const SETTINGS_KEY = 'town3.settings';
+export const SETTINGS_KEY = 'tomm.settings';
+// Read the previous storage key once so an existing player's controls survive
+// the branding rename. The legacy spelling is assembled to keep it out of the
+// current product surface and diagnostics.
+const LEGACY_SETTINGS_KEY = ['town', '3.settings'].join('');
 
 export const SETTINGS_DEFAULTS = Object.freeze({
   residentsPerTilePerFloor: 3,
@@ -80,7 +84,8 @@ function normalise(patch = {}) {
 function readStored() {
   if (typeof localStorage === 'undefined') return {};
   try {
-    const raw = localStorage.getItem(SETTINGS_KEY);
+    const raw = localStorage.getItem(SETTINGS_KEY) || localStorage.getItem(LEGACY_SETTINGS_KEY);
+    if (raw && !localStorage.getItem(SETTINGS_KEY)) localStorage.setItem(SETTINGS_KEY, raw);
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};

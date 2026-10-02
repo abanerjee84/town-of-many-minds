@@ -1,4 +1,4 @@
-﻿# Town 3 construction and progression specification
+# TOMM construction and progression specification
 
 Updated 2026-10-03 after the tourism, hotel/resort, and hospitality-economy audit.
 

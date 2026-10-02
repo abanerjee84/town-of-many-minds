@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title TOWN3 launcher
+title TOMM launcher
 
 rem --- Dev server: start only if not already running ------------------------
 netstat -ano | findstr "LISTENING" | findstr ":5173" >nul
@@ -12,7 +12,7 @@ if %errorlevel%==0 (
 )
 
 echo Starting dev server in its own window...
-start "TOWN3 server - close this window to stop it" cmd /k npm run dev
+start "TOMM server - close this window to stop it" cmd /k npm run dev
 
 rem Wait until the port is up, then open the browser.
 for /l %%i in (1,1,30) do (
@@ -20,7 +20,7 @@ for /l %%i in (1,1,30) do (
   if not errorlevel 1 goto :opened
   ping -n 2 127.0.0.1 >nul
 )
-echo Server did not start - check the "TOWN3 server" window.
+echo Server did not start - check the "TOMM server" window.
 goto :llm
 
 :opened
@@ -34,6 +34,6 @@ echo.
 echo All set.
 echo   App:      http://localhost:5173
 echo   LLM:      works through the built-in /lm proxy (use THIS launcher, not Live Server)
-echo   Stop:     close the "TOWN3 server" window  (or press Ctrl+C there, then Y)
+echo   Stop:     close the "TOMM server" window  (or press Ctrl+C there, then Y)
 echo   Note:     closing the browser tab does NOT stop the server.
 ping -n 7 127.0.0.1 >nul

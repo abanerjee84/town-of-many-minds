@@ -2695,7 +2695,7 @@ export class GovernanceSystem {
    */
   askQuietly() {
     this.ask().catch((error) => {
-      console.warn('[town3] council sitting rejected:', error?.message || error);
+      console.warn('[tomm] council sitting rejected:', error?.message || error);
     });
   }
 

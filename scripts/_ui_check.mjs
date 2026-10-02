@@ -21,6 +21,11 @@ const result = await page.evaluate((required) => {
   const missing = required.filter((id) => !document.getElementById(id));
   const town = window.town;
   const stats = {
+    branding: {
+      title: document.title,
+      loading: document.querySelector('#loading .brand')?.textContent,
+      heading: document.querySelector('#hud h1')?.textContent
+    },
     population: town.pedestrians?.citizens?.length || 0,
     buildings: town.buildings?.length || 0,
     catalogue: window.auditConstructionBlocks?.() || null,
@@ -42,7 +47,7 @@ const result = await page.evaluate((required) => {
     fitTown: {
       pressed: document.getElementById('fit-town')?.getAttribute('aria-pressed'),
       active: document.getElementById('fit-town')?.classList.contains('active'),
-      stored: JSON.parse(localStorage.getItem('town3.settings') || '{}').fitTown,
+      stored: JSON.parse(localStorage.getItem('tomm.settings') || '{}').fitTown,
       target: window.sceneMgr.controls.target.toArray(),
       zoom: window.sceneMgr.camera.position.distanceTo(window.sceneMgr.controls.target),
       bounds: town.perimeter?.stats?.().bounds || null,
@@ -81,12 +86,12 @@ result.stats.cameraPresetMutation = await page.evaluate(() => ({
 await page.click('#fit-town');
 result.stats.fitTownOff = await page.evaluate(() => ({
   pressed: document.getElementById('fit-town')?.getAttribute('aria-pressed'),
-  stored: JSON.parse(localStorage.getItem('town3.settings') || '{}').fitTown
+  stored: JSON.parse(localStorage.getItem('tomm.settings') || '{}').fitTown
 }));
 await page.click('#fit-town');
 result.stats.fitTownOn = await page.evaluate(() => ({
   pressed: document.getElementById('fit-town')?.getAttribute('aria-pressed'),
-  stored: JSON.parse(localStorage.getItem('town3.settings') || '{}').fitTown
+  stored: JSON.parse(localStorage.getItem('tomm.settings') || '{}').fitTown
 }));
 await page.evaluate(() => {
   const cell = window.town.perimeter?.frontierCells?.(1)?.[0];
@@ -136,14 +141,14 @@ await page.locator('#setting-temperature').evaluate((el) => {
   el.dispatchEvent(new Event('input', { bubbles: true }));
 });
 result.stats.temperatureMutation = await page.evaluate(() => ({
-  stored: JSON.parse(localStorage.getItem('town3.settings') || '{}').councilTemperature,
+  stored: JSON.parse(localStorage.getItem('tomm.settings') || '{}').councilTemperature,
   runtime: window.town?.governance?.temperature,
   max: document.getElementById('setting-temperature')?.max
 }));
 await page.fill('#setting-council-sittings', '4');
 await page.locator('#setting-council-sittings').press('Tab');
 result.stats.councilCadenceMutation = await page.evaluate(() => ({
-  stored: JSON.parse(localStorage.getItem('town3.settings') || '{}').councilSittingsPerDay,
+  stored: JSON.parse(localStorage.getItem('tomm.settings') || '{}').councilSittingsPerDay,
   runtime: window.town?.governance?.sittingsPerDay,
   cadenceHours: window.town?.governance?.stats?.().cadenceHours
 }));
@@ -154,8 +159,8 @@ await page.locator('#setting-max-population').press('Tab');
 result.stats.settingsMutation = await page.evaluate(async () => {
   const { residentialCapacityPerFloor } = await import('/src/kits/houses/houseKit.js');
   return {
-    stored: JSON.parse(localStorage.getItem('town3.settings') || '{}').residentsPerTilePerFloor,
-    maxPopulation: JSON.parse(localStorage.getItem('town3.settings') || '{}').maxPopulation,
+    stored: JSON.parse(localStorage.getItem('tomm.settings') || '{}').residentsPerTilePerFloor,
+    maxPopulation: JSON.parse(localStorage.getItem('tomm.settings') || '{}').maxPopulation,
     runtimeCap: window.town?.pedestrians?.citizens?.length <= (window.town?.stats?.()?.progression?.populationCap || 0),
     capacity: residentialCapacityPerFloor({ footprintTiles: 1 })
   };
@@ -163,7 +168,7 @@ result.stats.settingsMutation = await page.evaluate(async () => {
 await page.fill('#setting-camera-target-x', '-10');
 await page.locator('#setting-camera-target-x').press('Tab');
 result.stats.cameraMutation = await page.evaluate(() => ({
-  stored: JSON.parse(localStorage.getItem('town3.settings') || '{}').cameraTargetX,
+  stored: JSON.parse(localStorage.getItem('tomm.settings') || '{}').cameraTargetX,
   target: window.sceneMgr.controls.target.x,
   readout: document.getElementById('camera-pan')?.textContent
 }));
@@ -172,11 +177,11 @@ result.stats.settingsReset = await page.evaluate(() => ({
   residents: document.getElementById('setting-residents')?.value,
   maxPopulation: document.getElementById('setting-max-population')?.value,
   councilSittings: document.getElementById('setting-council-sittings')?.value,
-  stored: JSON.parse(localStorage.getItem('town3.settings') || '{}').residentsPerTilePerFloor,
+  stored: JSON.parse(localStorage.getItem('tomm.settings') || '{}').residentsPerTilePerFloor,
   targetX: window.sceneMgr.controls.target.x,
   targetZ: window.sceneMgr.controls.target.z,
   zoom: window.sceneMgr.camera.position.distanceTo(window.sceneMgr.controls.target),
-  fitTown: JSON.parse(localStorage.getItem('town3.settings') || '{}').fitTown
+  fitTown: JSON.parse(localStorage.getItem('tomm.settings') || '{}').fitTown
 }));
 await page.click('#modal-close');
 await page.setViewportSize({ width: 1024, height: 768 });
@@ -189,6 +194,7 @@ result.stats.ribbon1024 = await page.evaluate(() => {
 });
 
 const failures = [
+  ...(result.stats.branding?.title !== 'TOMM — three.js town simulator' || (result.stats.branding?.loading != null && result.stats.branding?.loading !== 'TOMM') || result.stats.branding?.heading !== 'TOMM Simulator' ? ['branding still exposes a legacy town name'] : []),
   ...(result.missing.length ? [`missing DOM nodes: ${result.missing.join(', ')}`] : []),
   ...(result.stats.population <= 0 ? ['town did not initialise citizens'] : []),
   ...(result.stats.buildings <= 0 ? ['town did not initialise buildings'] : []),

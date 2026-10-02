@@ -107,7 +107,7 @@ export class Grid {
     // should never fire — which is exactly why it must be loud rather than
     // silent when it does.
     if (k < 0 || k >= KIND_SLOTS) {
-      console.error(`[town3] setKind got out-of-range kind ${k}; grid tally left untouched`);
+      console.error(`[tomm] setKind got out-of-range kind ${k}; grid tally left untouched`);
       return;
     }
     const i = this.idx(x, y);

@@ -429,7 +429,7 @@ function step(name, fn) {
   } catch (error) {
     if (!faulted.has(name)) {
       faulted.add(name);
-      console.error(`[town3] "${name}" failed and will be skipped until it recovers:`, error);
+      console.error(`[tomm] "${name}" failed and will be skipped until it recovers:`, error);
       events.emit('log', { kind: 'event', text: `Simulation fault in ${name} — skipped, the town keeps running.` });
     }
   }
