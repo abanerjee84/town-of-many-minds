@@ -121,6 +121,9 @@ result.stats.settings = await page.evaluate(() => ({
   speedOptions: [...(document.getElementById('setting-speed')?.options || [])].map((option) => option.value),
   autoCouncil: document.getElementById('setting-auto-council')?.checked,
   councilSittings: document.getElementById('setting-council-sittings')?.value,
+  congestionThreshold: document.getElementById('setting-congestion-threshold')?.value,
+  congestionThresholdMin: document.getElementById('setting-congestion-threshold')?.min,
+  congestionThresholdMax: document.getElementById('setting-congestion-threshold')?.max,
   cameraYaw: document.getElementById('setting-camera-yaw')?.value,
   cameraPitch: document.getElementById('setting-camera-pitch')?.value,
   cameraZoom: document.getElementById('setting-camera-zoom')?.value,
@@ -144,6 +147,15 @@ result.stats.temperatureMutation = await page.evaluate(() => ({
   stored: JSON.parse(localStorage.getItem('tomm.settings') || '{}').councilTemperature,
   runtime: window.town?.governance?.temperature,
   max: document.getElementById('setting-temperature')?.max
+}));
+await page.locator('#setting-congestion-threshold').evaluate((el) => {
+  el.value = '0.6';
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+});
+result.stats.congestionMutation = await page.evaluate(() => ({
+  stored: JSON.parse(localStorage.getItem('tomm.settings') || '{}').averageCongestionThreshold,
+  value: document.getElementById('setting-congestion-threshold')?.value,
+  runtimeGate: window.getSettings?.().averageCongestionThreshold
 }));
 await page.fill('#setting-council-sittings', '4');
 await page.locator('#setting-council-sittings').press('Tab');
@@ -177,6 +189,7 @@ result.stats.settingsReset = await page.evaluate(() => ({
   residents: document.getElementById('setting-residents')?.value,
   maxPopulation: document.getElementById('setting-max-population')?.value,
   councilSittings: document.getElementById('setting-council-sittings')?.value,
+  congestionThreshold: document.getElementById('setting-congestion-threshold')?.value,
   stored: JSON.parse(localStorage.getItem('tomm.settings') || '{}').residentsPerTilePerFloor,
   targetX: window.sceneMgr.controls.target.x,
   targetZ: window.sceneMgr.controls.target.z,
@@ -218,6 +231,7 @@ const failures = [
   ...(result.stats.settings?.temperatureMax !== '1' ? ['settings modal temperature does not allow 1.0'] : []),
   ...(result.stats.settings?.speed !== '100' ? ['settings modal has the wrong speed default'] : []),
   ...(result.stats.settings?.councilSittings !== '2' ? ['settings modal has the wrong Council cadence default'] : []),
+  ...(result.stats.settings?.congestionThreshold !== '0.5' || result.stats.settings?.congestionThresholdMin !== '0.1' || result.stats.settings?.congestionThresholdMax !== '0.9' ? ['settings modal has the wrong average congestion gate slider'] : []),
   ...(!result.stats.settings?.speedOptions?.includes('100') ? ['settings modal is missing the 100x speed option'] : []),
   ...(result.stats.settings?.cameraYaw !== '34.5' || result.stats.settings?.cameraPitch !== '64' || result.stats.settings?.cameraZoom !== '228' || result.stats.settings?.cameraTargetX !== '-20' || result.stats.settings?.cameraTargetZ !== '-40' ? ['settings modal has the wrong camera defaults'] : []),
   ...(result.stats.settings?.sectionCount !== 4 || !result.stats.settings?.searchable ? ['settings modal is missing search or sections'] : []),
@@ -226,9 +240,10 @@ const failures = [
   ...(!result.stats.cameraOrbit?.includes('yaw') || !result.stats.cameraZoom?.endsWith('m') || !result.stats.cameraPan?.includes('x') ? ['camera readout is missing orbit, zoom, or pan values'] : []),
   ...(result.stats.settingsMutation?.stored !== 4 || result.stats.settingsMutation?.capacity !== 4 ? ['residential density setting did not apply to kit capacity'] : []),
   ...(result.stats.settingsMutation?.maxPopulation !== 900 ? ['maximum population setting did not persist'] : []),
+  ...(result.stats.congestionMutation?.stored !== 0.6 || result.stats.congestionMutation?.runtimeGate !== 0.6 ? ['average congestion gate setting did not persist'] : []),
   ...(result.stats.temperatureMutation?.stored !== 1 || result.stats.temperatureMutation?.runtime !== 1 ? ['temperature 1.0 did not persist or reach the live Council'] : []),
   ...(result.stats.councilCadenceMutation?.stored !== 4 || result.stats.councilCadenceMutation?.runtime !== 4 || result.stats.councilCadenceMutation?.cadenceHours !== 6 ? ['Council cadence setting did not reach the live Council'] : []),
-  ...(result.stats.settingsReset?.residents !== '3' || result.stats.settingsReset?.maxPopulation !== '1000' || result.stats.settingsReset?.councilSittings !== '2' || result.stats.settingsReset?.stored !== 3 ? ['settings restore defaults did not persist'] : []),
+  ...(result.stats.settingsReset?.residents !== '3' || result.stats.settingsReset?.maxPopulation !== '1000' || result.stats.settingsReset?.councilSittings !== '2' || result.stats.settingsReset?.congestionThreshold !== '0.5' || result.stats.settingsReset?.stored !== 3 ? ['settings restore defaults did not persist'] : []),
   ...(result.stats.settingsReset?.fitTown !== true || Math.abs((result.stats.settingsReset?.targetX ?? 0) - (((result.stats.resetFitTown?.acquiredBounds?.minX + result.stats.resetFitTown?.acquiredBounds?.maxX) / 2 - 49.5) * 4)) > 8 || Math.abs((result.stats.settingsReset?.targetZ ?? 0) - (((result.stats.resetFitTown?.acquiredBounds?.minY + result.stats.resetFitTown?.acquiredBounds?.maxY) / 2 - 49.5) * 4)) > 8 ? ['settings restore defaults did not restore acquired-land framing'] : []),
   ...(result.stats.ribbon1024?.overflow ? ['bottom ribbon controls overflow at 1024px'] : []),
   ...pageErrors.map((message) => `page error: ${message}`)

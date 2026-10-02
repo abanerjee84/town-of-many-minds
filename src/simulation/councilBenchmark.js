@@ -1,3 +1,5 @@
+import { getSettings } from '../core/settings.js';
+
 const clamp01 = (n) => Math.max(0, Math.min(1, Number.isFinite(n) ? n : 0));
 const lowerIsBetter = (before, after, scale = 1) => clamp01((before - after) / Math.max(scale, Math.abs(before), 1));
 const higherIsBetter = (before, after, scale = 1) => clamp01((after - before) / Math.max(scale, Math.abs(before), 1));
@@ -40,11 +42,12 @@ export function councilSnapshot(town) {
 }
 
 function outstanding(snapshot) {
+  const congestionGate = Number(getSettings().averageCongestionThreshold) || 0.5;
   return (
     (snapshot.utilityStrain > 0 ? 1 : 0) +
     (snapshot.resourceStrain > 0 ? 1 : 0) +
     (snapshot.unemployment > 0.1 ? 1 : 0) +
-    (snapshot.congestion > 0.34 ? 1 : 0) +
+    (snapshot.congestion > congestionGate ? 1 : 0) +
     (snapshot.openIncidents > 0 ? 1 : 0) +
     (snapshot.spareBeds < 14 ? 1 : 0)
   );

@@ -153,6 +153,10 @@ function renderSettings() {
           <span><b>Council sittings per day</b><small>How many scheduled decision windows the Council gets</small></span>
           <input id="setting-council-sittings" type="number" min="1" max="12" step="1" value="${settings.councilSittingsPerDay}" />
         </label>
+        <label class="settings-row settings-item" data-setting-search="average congestion road planning street extension traffic gate threshold">
+          <span><b>Average congestion gate</b><small>Average congestion required before road planning responds</small></span>
+          <span class="settings-inline"><input id="setting-congestion-threshold" type="range" min="0.1" max="0.9" step="0.05" value="${settings.averageCongestionThreshold}" /><output id="setting-congestion-threshold-value">${Math.round(settings.averageCongestionThreshold * 100)}%</output></span>
+        </label>
         <label class="settings-check settings-item" data-setting-search="automatic llm council decisions governance">
           <input id="setting-auto-council" type="checkbox"${settings.autoCouncil ? ' checked' : ''} /> <span><b>Automatic LLM Council</b><small>Let the council make scheduled decisions</small></span>
         </label>
@@ -258,6 +262,12 @@ function renderSettings() {
     const next = updateSettings({ councilSittingsPerDay: councilSittings.value });
     councilSittings.value = String(next.councilSittingsPerDay);
     applySettingsToRuntime();
+  });
+  const congestionThreshold = document.getElementById('setting-congestion-threshold');
+  const congestionThresholdValue = document.getElementById('setting-congestion-threshold-value');
+  congestionThreshold.addEventListener('input', () => {
+    const next = updateSettings({ averageCongestionThreshold: congestionThreshold.value });
+    congestionThresholdValue.textContent = `${Math.round(next.averageCongestionThreshold * 100)}%`;
   });
   const bindCameraRange = (id, key, outputId, format) => {
     const input = document.getElementById(id);
@@ -526,6 +536,7 @@ window.listLLMProviders = listLLMProviders;
 window.councilSnapshot = councilSnapshot;
 window.scoreCouncilRun = scoreCouncilRun;
 window.runCouncilBenchmark = runCouncilBenchmark;
+window.getSettings = getSettings;
 window.CONSTRUCTION_BLOCKS = CONSTRUCTION_BLOCKS;
 window.listConstructionBlocks = listConstructionBlocks;
 window.constructionBlockStats = constructionBlockStats;

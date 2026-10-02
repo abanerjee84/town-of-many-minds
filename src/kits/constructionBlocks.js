@@ -7,6 +7,8 @@
  * every block occupies one grid cell: footprints and requirements make that
  * distinction explicit.
  */
+import { getSettings } from '../core/settings.js';
+
 const BLOCKS = [
   // Housing and mixed-use shells.
   { id: 'house.core', kit: 'houses', family: 'housing', label: 'Family house', footprint: [1, 1], modules: ['entrance', 'unit', 'roof'] },
@@ -165,9 +167,14 @@ export function constructionBlockQuote(id, context = {}) {
  * not pave amenities on a hunch. */
 export function constructionBlockDemand(id, town) {
   const mobility = town?.traffic?.mobilityStats?.() || {};
+  const evidence = town?.governance?.congestionEvidence?.();
+  const averageCongestion = Number.isFinite(Number(evidence?.average))
+    ? Number(evidence.average)
+    : Number(mobility.congestion) || 0;
+  const congestionGate = Number(getSettings().averageCongestionThreshold) || 0.5;
   const pop = town?.pedestrians?.citizens?.length || 0;
   const gate = {
-    'road.complete': mobility.congestion > 0.34,
+    'road.complete': averageCongestion > congestionGate,
     'road.cycle': (mobility.trips || 0) > 40 || pop > 70,
     'road.transit': pop > 60,
     'prop.mobility': (mobility.parkingPressure || 0) > 1 || pop > 80

@@ -18,6 +18,7 @@ export const SETTINGS_DEFAULTS = Object.freeze({
   glowIntensity: 1,
   councilTemperature: 0.15,
   councilSittingsPerDay: 2,
+  averageCongestionThreshold: 0.5,
   autoCouncil: true,
   fitTown: true,
   defaultSpeed: 100,
@@ -36,6 +37,7 @@ function normalise(patch = {}) {
   const glow = Number(patch.glowIntensity);
   const temperature = Number(patch.councilTemperature);
   const sittingsPerDay = Number(patch.councilSittingsPerDay);
+  const averageCongestionThreshold = Number(patch.averageCongestionThreshold);
   const speed = Number(patch.defaultSpeed);
   const cameraYaw = Number(patch.cameraYaw);
   const cameraPitch = Number(patch.cameraPitch);
@@ -58,6 +60,9 @@ function normalise(patch = {}) {
     councilSittingsPerDay: Number.isFinite(sittingsPerDay)
       ? Math.round(clamp(sittingsPerDay, 1, 12))
       : SETTINGS_DEFAULTS.councilSittingsPerDay,
+    averageCongestionThreshold: Number.isFinite(averageCongestionThreshold)
+      ? Math.round(clamp(averageCongestionThreshold, 0.1, 0.9) * 20) / 20
+      : SETTINGS_DEFAULTS.averageCongestionThreshold,
     autoCouncil: patch.autoCouncil !== false,
     fitTown: patch.fitTown !== false,
     defaultSpeed: [0, 1, 2, 4, 10, 20, 50, 100].includes(speed)

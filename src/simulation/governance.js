@@ -4,7 +4,7 @@ import { MAX_FLOORS, CELL_KIND } from '../core/config.js';
 import { planFor, LANDMARKS, UTILITY_RESERVE, MAX_ACTIVE, BUILD_FLOOR, BUILD_HOURS,
   MAX_BRIDGE_GAP,
   civicLoads, civicExpansionNeed, HOUSE_PRESSURE_GATE, HOUSE_SPARE_BEDS, housingNeedsBuild, FILLER_PRESSURE_GATE,
-  UNEMPLOYMENT_GATE, UNEMPLOYMENT_PCT, unemploymentRate, CIVIC_PER_POP, PARKS_PER_POP, CONGESTION_GATE, ROAD_EMERGENCY_GATE, CIVIC_LOAD_GATE } from './growth.js';
+  UNEMPLOYMENT_GATE, UNEMPLOYMENT_PCT, unemploymentRate, CIVIC_PER_POP, PARKS_PER_POP, roadCongestionGate, ROAD_EMERGENCY_GATE, CIVIC_LOAD_GATE } from './growth.js';
 import { FACTORY_TYPES, COMMODITIES, MATERIAL_KEYS } from './industry.js';
 import { SHOP_TIERS } from './economy.js';
 import { CIVIC_CATALOGUE } from '../kits/civic/civicKit.js';
@@ -1379,7 +1379,7 @@ export class GovernanceSystem {
     // instantaneous context value.
     const councilMobility = mb ? { ...mb, congestion: congestion.average } : mb;
     const roadDemand = t.traffic?.roadDemandSnapshot?.() || null;
-    const roadPlan = councilMobility && councilMobility.congestion > CONGESTION_GATE ? t.growth?.selectRoadExtension?.() : null;
+    const roadPlan = councilMobility && councilMobility.congestion > roadCongestionGate() ? t.growth?.selectRoadExtension?.() : null;
     const gr = t.growth ? t.growth.stats() : null;
     const ut = t.utilities ? t.utilities.stats() : null;
     const ind = t.industry ? t.industry.stats() : null;
@@ -1528,7 +1528,7 @@ export class GovernanceSystem {
       mb
         ? `Congestion average ${Math.round(congestion.average * 100)}% over ${congestion.intervalHours}h (${congestion.samples} samples) · current ${Math.round(congestion.instantaneous * 100)}% · range ${Math.round(congestion.min * 100)}–${Math.round(congestion.max * 100)}% · parking demand ${mb.parkingDemand}/${mb.parkingSupply} (forecast) · ${mb.parkingTaken} taken · trips ${mb.trips}`
         : '',
-      councilMobility && councilMobility.congestion > CONGESTION_GATE
+      councilMobility && councilMobility.congestion > roadCongestionGate()
         ? `Road planning: ${roadPlan ? `${roadPlan.cells.length} tiles, ${roadPlan.reason}${roadPlan.benefit != null ? `, benefit ${Math.round(roadPlan.benefit)}` : ''}` : 'no legal measured extension'}${councilMobility.congestion >= ROAD_EMERGENCY_GATE ? ' · EMERGENCY priority' : ' · congestion priority'} · completed observations ${roadDemand?.trips?.length || 0}`
         : '',
       inc
@@ -2622,7 +2622,7 @@ export class GovernanceSystem {
       unemploymentRate(t) > UNEMPLOYMENT_GATE ? 'j' : '',
       (s.pop > s.civicCount * CIVIC_PER_POP || civicExpansionNeed(t) ? 'c' : ''),
       s.parks < s.pop * PARKS_PER_POP ? 'p' : '',
-      s.mobility && s.mobility.congestion > CONGESTION_GATE ? 'r' : '',
+      s.mobility && s.mobility.congestion > roadCongestionGate() ? 'r' : '',
       Math.min(8, roadDemand?.trips?.length || 0),
       (t.industry && t.industry.deficitProduct()) || '',
       t.resources?.stats?.().strained?.join(',') || '',

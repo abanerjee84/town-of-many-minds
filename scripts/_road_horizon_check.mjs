@@ -22,6 +22,7 @@ for (const seed of SEEDS) {
   const result = await page.evaluate(({ seed, days, snapshotEvery, forceRequests, requestEvery }) => {
     const t = window.town;
     const c = window.clock;
+    const roadGate = Number(window.getSettings?.().averageCongestionThreshold) || 0.5;
     t.generate(seed);
     c.speed = 50;
     t.governance.auto = false;
@@ -124,7 +125,7 @@ for (const seed of SEEDS) {
       }
       // The planner evaluates every legal four-cell run and, once four trips
       // exist, virtual Dijkstra detours. Do not pay that cost on calm days.
-      const plan = congestion > 0.34 && (day % snapshotEvery === 0 || day === days - 1)
+      const plan = congestion > roadGate && (day % snapshotEvery === 0 || day === days - 1)
         ? t.growth.selectRoadExtension()
         : null;
       const roads = t.grid.roadCells().length;
@@ -137,7 +138,7 @@ for (const seed of SEEDS) {
       maxUnacquiredRoads = Math.max(maxUnacquiredRoads, unacquiredRoads);
       maxVehicles = Math.max(maxVehicles, t.traffic.vehicles.length);
       maxTrips = Math.max(maxTrips, Number(mobility.vehicleTripsCompleted) || 0);
-      if (congestion > 0.34) {
+      if (congestion > roadGate) {
         daysWithRoadNeed++;
         totalRoadPlanChecks++;
         if (plan) daysWithRoadPlan++;
@@ -185,7 +186,7 @@ for (const seed of SEEDS) {
         // day while still exercising the real request path.
         const before = t.grid.roadCells().length;
         const mobility = t.traffic.mobilityStats();
-        const roadPlan = mobility.congestion > 0.34 ? t.growth.selectRoadExtension() : null;
+        const roadPlan = mobility.congestion > roadGate ? t.growth.selectRoadExtension() : null;
         const plan = roadPlan ? null : t.growth.evaluate({ amenities: false });
         const code = roadPlan ? 'EXTEND_STREET' : window.planCode(plan);
         d = t.governance.forceRequest(`INTENT: ${code}`);

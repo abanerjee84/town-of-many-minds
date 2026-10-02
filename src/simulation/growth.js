@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { events } from '../core/events.js';
 import { ZONE, CELL_KIND, CELL, SIM, MAX_FLOORS } from '../core/config.js';
+import { getSettings } from '../core/settings.js';
 import { MATERIALS, FACTORY_TYPES, FACTORY_SIZES } from './industry.js';
 import { ASSESS, SHOP_TIERS } from './economy.js';
 import { ECON } from './economicConfig.js';
@@ -411,7 +412,13 @@ export const OFFICE_MIN_POP = 55;
 export const DISTRICT_FLOOR = 60000;
 export const CIVIC_PER_POP = 12;
 export const PARKS_PER_POP = 0.6;
-export const CONGESTION_GATE = 0.34;
+// Default road-planning trigger. The live threshold is user-configurable in
+// Settings, while this export preserves a stable benchmark/API default.
+export const CONGESTION_GATE = 0.5;
+export function roadCongestionGate() {
+  const configured = Number(getSettings().averageCongestionThreshold);
+  return Number.isFinite(configured) ? configured : CONGESTION_GATE;
+}
 // At this level congestion is an immediate network-capacity problem. A legal
 // street run or corridor widening outranks lower-band infill so the council
 // does not spend a sitting on a shop while vehicles remain queued.
@@ -2256,8 +2263,8 @@ export class GrowthSystem {
         // congestion average above the gate. Give it a dedicated priority
         // band so utilities, housing, and other gates cannot consume the
         // sitting while a measured road remedy is available.
-        const congestionPriority = type === 'road' && congestion > CONGESTION_GATE
-          ? 100 + Math.min(40, Math.max(0, (congestion - CONGESTION_GATE) * 100))
+        const congestionPriority = type === 'road' && congestion > roadCongestionGate()
+          ? 100 + Math.min(40, Math.max(0, (congestion - roadCongestionGate()) * 100))
           : 0;
         out.push({
           type,
@@ -2359,16 +2366,17 @@ export class GrowthSystem {
     // settled town holds rather than inventing turf (see isAmenity).
     if (s.parks < s.pop * PARKS_PER_POP && this.findCell('park'))
       add('park', (s.pop * PARKS_PER_POP - s.parks) / Math.max(1, s.pop * PARKS_PER_POP), undefined, true);
-    if (s.mobility && s.mobility.congestion > CONGESTION_GATE) {
+    const roadGate = roadCongestionGate();
+    if (s.mobility && s.mobility.congestion > roadGate) {
       // Congestion alone is not a site plan. A street is ranked only when the
       // road planner has a measured trip benefit or a disconnected component
       // to repair; otherwise the council must study or wait for evidence.
       const roadPlan = this.selectRoadExtension();
-      if (roadPlan) add('road', (s.mobility.congestion - CONGESTION_GATE) / 0.3);
+      if (roadPlan) add('road', (s.mobility.congestion - roadGate) / Math.max(0.1, 1 - roadGate));
       // Phase 7 — widening an existing corridor answers the same congestion.
       // Listed after road so equal scores keep the extension first; when the
       // town has no room left to extend, this is what Feasible now offers.
-      if (this.roadUpgradeTarget()) add('roadup', (s.mobility.congestion - CONGESTION_GATE) / 0.3);
+      if (this.roadUpgradeTarget()) add('roadup', (s.mobility.congestion - roadGate) / Math.max(0.1, 1 - roadGate));
     }
     // Phase 9 — a bridge is street-band DEMAND, but only the kind that would
     // RECONNECT two road ends the water keeps apart: a redundant crossing of
@@ -2566,7 +2574,7 @@ export class GrowthSystem {
       case 'restructure':
         return this.projects.length < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR && !!this.town.buildings.some((b) => b.house && b.facility !== 'townhall' && (b.kind === 'civic' ? civicHasVerticalHeadroom(b) : b.floors < MAX_FLOORS));
       case 'road':
-        return !!(s.mobility && s.mobility.congestion > CONGESTION_GATE && this.selectRoadExtension());
+        return !!(s.mobility && s.mobility.congestion > roadCongestionGate() && this.selectRoadExtension());
       case 'bridge':
         // Orderable whenever a bank-to-bank gap of up to MAX_BRIDGE_GAP
         // exists — ranked() only OFFERS one when it would reconnect the road
@@ -2577,7 +2585,7 @@ export class GrowthSystem {
         // and there has to be a run of straight corridor left to raise.
         return !!(
           s.mobility &&
-          s.mobility.congestion > CONGESTION_GATE &&
+          s.mobility.congestion > roadCongestionGate() &&
           this.roadUpgradeTarget()
         );
       case 'footway':
@@ -2684,14 +2692,16 @@ export class GrowthSystem {
         return 'no parking pressure — bays are meeting demand';
       case 'road': {
         const c = s.mobility ? s.mobility.congestion : 0;
-        if (!(c > CONGESTION_GATE)) return `congestion ${pct(c)} is below the ${pct(CONGESTION_GATE)} gate`;
+        const gate = roadCongestionGate();
+        if (!(c > gate)) return `congestion ${pct(c)} is below the ${pct(gate)} gate`;
         return 'no measured trip benefit or disconnected road component needs an extension yet';
       }
       case 'bridge':
         return 'no bank-to-bank river gap left to span';
       case 'roadup': {
         const c = s.mobility ? s.mobility.congestion : 0;
-        if (!(s.mobility && c > CONGESTION_GATE)) return `congestion ${pct(c)} is below the ${pct(CONGESTION_GATE)} gate — nothing to widen for`;
+        const gate = roadCongestionGate();
+        if (!(s.mobility && c > gate)) return `congestion ${pct(c)} is below the ${pct(gate)} gate — nothing to widen for`;
         return 'no straight corridor left to raise';
       }
       case 'footway':
