@@ -121,8 +121,8 @@ export function planCode(plan) {
     return plan.factory ? `BUILD_FACTORY type=${plan.factory}` : 'BUILD_FACTORY';
   // A civic build replays as BUILD_CIVIC, carrying the facility when one was
   // ordered (planner-chosen builds carry none and let the model pick).
-  if (plan.type === 'civic') return plan.facility === 'transit'
-    ? 'BUILD_TRANSIT'
+  if (plan.type === 'civic') return ['transit', 'busdepot'].includes(plan.facility)
+    ? `BUILD_TRANSIT facility=${plan.facility}`
     : plan.facility ? `BUILD_CIVIC facility=${plan.facility}` : 'BUILD_CIVIC';
   if (plan.type === 'land') return 'ACQUIRE_LAND';
   if (plan.type === 'restructure') return 'RESTRUCTURE_BUILDING';
@@ -502,7 +502,7 @@ const PROMPT_BODY = [
     '. The next programme is always the town\u2019s own weakest number, printed on the Research line,',
   'EXTEND_STREET (also EXPAND_STREET) chooses a legal run only when congestion is above the road gate and observed trips or a disconnected component justify it; the council chooses whether to order it, not its coordinates,',
   'ACQUIRE_LAND buys the surveyed frontier tiles when the town needs room; it is priced per fresh tile and must leave the public reserve intact,',
-  'BUILD_TRANSIT commissions a bus depot or transit hub, after which registered buses can serve marked stops; read coverage and ridership before expanding the fleet,',
+  'BUILD_TRANSIT (optional spec: facility=busdepot|transit) commissions a bus depot or transit hub, after which registered buses can serve marked stops; read coverage and ridership before expanding the fleet,',
   'RESTRUCTURE_BUILDING clears and rebuilds one eligible occupied lot with a safe additional floor; it preserves the footprint and facility and records the demolition,',
   'UPGRADE_ROAD widens the longest eligible straight corridor one rung up the ladder ' +
     XS_CLASS_ORDER.join('>') +
@@ -917,7 +917,11 @@ export function parseIntent(text) {
   else if (r.intent === 'TRADE_BUY' || r.intent === 'TRADE_SELL') r.params = parseTradeSpec(text);
   else if (r.intent === 'UPGRADE_RESOURCE') r.params = parseResourceSpec(text);
   else if (r.intent === 'BUILD_CIVIC' || r.intent === 'EXPAND_CLINIC') r.params = parseCivicSpec(text);
-  else if (r.intent === 'BUILD_TRANSIT') r.params = { facility: 'transit' };
+  else if (r.intent === 'BUILD_TRANSIT') {
+    const norm = normalize(text);
+    const pinned = norm.match(/\bFACILITY\s*=\s*(BUSDEPOT|TRANSIT)\b/);
+    r.params = { facility: pinned ? pinned[1].toLowerCase() : norm.includes('BUS DEPOT') ? 'busdepot' : 'transit' };
+  }
   else if (r.intent === 'RENOVATE') r.params = parseRenovateSpec(text);
   else if (r.intent === 'TIERUP') r.params = parseTierupSpec(text);
   else if (r.intent === 'UPGRADE_ROAD') r.params = parseRoadClassSpec(text);

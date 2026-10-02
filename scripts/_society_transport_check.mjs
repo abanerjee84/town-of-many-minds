@@ -50,6 +50,7 @@ const result = await page.evaluate(() => {
     perimeter,
     parser: {
       transit: transitParsed.intent,
+      transitFacility: transitParsed.params?.facility,
       land: landParsed.intent,
       restructure: restructureParsed.intent
     },
@@ -74,6 +75,7 @@ const failures = [];
 if (!result.frontierCount || !result.quotedTiles) failures.push('frontier survey/quote');
 if (!result.acquired) failures.push('land acquisition');
 if (result.parser.transit !== 'BUILD_TRANSIT') failures.push('BUILD_TRANSIT parser');
+if (result.parser.transitFacility !== 'busdepot') failures.push('BUILD_TRANSIT facility parser');
 if (result.parser.land !== 'ACQUIRE_LAND') failures.push('ACQUIRE_LAND parser');
 if (result.parser.restructure !== 'RESTRUCTURE_BUILDING') failures.push('RESTRUCTURE_BUILDING parser');
 if (!result.landPlan || !result.landQuoteOk) failures.push('land plan quote');
