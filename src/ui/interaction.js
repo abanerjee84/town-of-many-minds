@@ -473,6 +473,7 @@ export class Interaction {
     const ind = t.industry ? t.industry.stats() : null;
     const society = t.society ? t.society.stats() : null;
     const transit = t.transport ? t.transport.stats() : null;
+    const forest = t.forest ? t.forest.stats() : null;
     const perimeter = t.perimeter ? t.perimeter.stats() : null;
     const unitStr = Object.entries(fleet.units)
       .map(([k, n]) => `${n} ${k}`)
@@ -572,6 +573,13 @@ export class Interaction {
         perimeter
           ? `<div class="kv grp"><span>🗺 Perimeter</span><span>${perimeter.acquired} acquired tiles · ${perimeter.expansions} expansions</span></div>
              <div class="kv"><span>Frontier</span><span>${perimeter.available} tiles available · next tile $${Math.round(perimeter.nextTileCost).toLocaleString('en-US')}</span></div>`
+          : ''
+      }
+      ${
+        forest
+          ? `<div class="kv grp"><span>Forest</span><span>${forest.trees} trees / ${forest.coverage}% plate cover</span></div>
+             <div class="kv"><span>Stewardship</span><span>${forest.planted} planted / ${forest.felled} felled / ${forest.naturalFalls} natural falls</span></div>
+             <div class="kv"><span>Timber recovered</span><span>${forest.lumberYield} lumber returned to storehouse</span></div>`
           : ''
       }
       ${

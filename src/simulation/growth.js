@@ -3882,6 +3882,7 @@ export class GrowthSystem {
       if (!allowUnacquired && t.perimeter && !t.perimeter.isAcquired(x, y)) return;
       if (t.buildingAt(x, y) || claimed(x, y)) return;
       if (t.resources?.ownsCell(x, y)) return;
+      if (type === 'prop-tree' && t.forest?.hasTreeAt?.(x, y)) return;
       // Keep every new building type away from agricultural yards. Props and
       // public-space branches returned above do not pass through this path.
       if (!isProp && !allowAgriculturalAdjacency && agriculturalSetbackConflict(t.resources, [[x, y]])) return;

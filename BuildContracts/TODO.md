@@ -104,6 +104,10 @@ Updated 2026-10-02 after the population-cap, factory-archetype, fuel-siting, fou
 - [x] Added shared agricultural setbacks: farm, husbandry, and poultry yards reserve a two-tile buffer; Council footprint/cell surveys and final player/Council placement reject residential, commercial, civic, and industrial buildings inside it. Added `npm run test:agriculture` for the exact boundary and seed-1337 placement audit.
 - [x] Hardened `EXTEND_STREET` against checkerboard corridors: runs that touch a busy junction at either endpoint or create more than one new junction are rejected before demand scoring, while straight open-end continuations remain eligible. Added a regression for a two-sided busy-junction closure.
 - [x] Tightened the founding perimeter envelope: seed 1337 now reports the 32×29 bounding rectangle of actual founding roads, buildings, public cells, and resource installations, with no empty apron acquired. Added `npm run test:perimeter`.
+- [x] Added a deterministic ForestSystem over the full 48×40 build plate. Seed 1337 now starts with dense woodland (including an irregular polygonal edge stand), while roads, paths, water, resources, and buildings remain clear.
+- [x] Linked plantation, road/building/bulldozer deforestation, and natural tree fall to one timber ledger. Every felled tree returns four lumber units, natural fall is day based and bounded, and `Town.stats().forest` exposes coverage, planted, felled, natural falls, and timber recovered.
+- [x] Added `npm run test:forest`; it verifies seed-1337 coverage, deforestation lumber credit, player/council plantation accounting, natural fall, and no page errors.
+- [x] Ran a deterministic 800-day seed-1337 forest horizon: 453 natural falls, 1,812 lumber recovered (storehouse capped at 900), no renderer errors, and the town validator remained valid; weekly forestry batching kept the pass bounded.
 
 ## Optional operator experiments (require external provider credentials)
 

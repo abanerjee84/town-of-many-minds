@@ -34,6 +34,7 @@ import { rebuildHouse, expandHouse, changedRoles } from '../kits/houses/houseKit
 import { UtilitySystem } from '../kits/utilities/utilityKit.js';
 import { ResourceSystem, resourceStress } from '../kits/resources/resourceKit.js';
 import { publicSpaceStats, publicSpaceUse } from '../kits/publicspace/publicKit.js';
+import { ForestSystem } from './forest.js';
 import { validateTown } from '../placement/validator.js';
 import { planConnectedRoad, splitsNetwork, hasNetworkAccess, planFootway } from '../placement/placementController.js';
 import { agriculturalSetbackConflict } from '../placement/siteRules.js';
@@ -94,6 +95,7 @@ export class Town {
     this.streetGlow = new StreetGlow(this);
     this.utilities = new UtilitySystem();
     this.resources = new ResourceSystem();
+    this.forest = new ForestSystem(this);
     this.publicPlan = null;
     this.pipeline = null;
     this.pipelineSummary = null;
@@ -143,6 +145,7 @@ export class Town {
     this.seed = normalizedSeed;
     this.entityIds = { building: 1, household: 1 };
     this.rng = makeRng(normalizedSeed);
+    this.forest.reset(normalizedSeed);
     this.swapGrid();
     this.roadKit = new RoadKit(this.grid, this.rng);
     this.parcels = new ParcelKit();
@@ -181,6 +184,9 @@ export class Town {
     this.research.reset();
     placeInitialTown(this, this.rng);
     this.perimeter.seed();
+    // Seed after the serviced envelope is known so the dense woodland hugs the
+    // founding edge and the rest of the build plate reads as wooded frontier.
+    this.forest.seedInitial();
     this.society.rebuild();
     this.transport.rebuild();
     this.economy.rebuild();
@@ -199,6 +205,7 @@ export class Town {
 
   fullReset(seed) {
     this.customProps.clear();
+    this.forest?.reset(this.seed || 1);
     this.civicNames = new Map();
     this.parkFeature = false;
     this.playCount = 0;
@@ -713,6 +720,7 @@ export class Town {
     this.streetGlow?.update(dt);
     this.transport?.update(dt, clock);
     this.society?.update(dt, clock);
+    this.forest?.update(clock);
   }
 
   randomRoadCell(rng = this.rng) {
@@ -1266,7 +1274,12 @@ export class Town {
     return { cells: marked, raised: 0 };
   }
 
-  addProp(x, y, type = 'tree') {
+  addProp(x, y, type = 'tree', { rebuild = true, source = 'plantation' } = {}) {
+    if (type === 'tree' || type === 'pine') {
+      return this.forest
+        ? this.forest.plant(x, y, { rebuild, source, type })
+        : false;
+    }
     const g = this.grid;
     if (!g.inBounds(x, y) || g.isRoad(x, y) || g.isWater(x, y)) return false;
     const idx = g.idx(x, y);
@@ -1278,7 +1291,7 @@ export class Town {
     // a road, a zone boundary, a utility run or a resource site, so it must not
     // pay to rebuild them — planting one tree measured 112.7 ms, almost all of it
     // work this call cannot invalidate.
-    this.rebuildStatic(PROP_ONLY);
+    if (rebuild) this.rebuildStatic(PROP_ONLY);
     return true;
   }
 
@@ -1294,8 +1307,11 @@ export class Town {
     const list = this.customProps.get(idx);
     if (!list) return 0;
     this.customProps.delete(idx);
-    const felled = list.filter((p) => p === 'tree').length;
-    if (felled && this.industry) this.industry.refund({ lumber: felled * TIMBER_PER_TREE });
+    const felled = list.filter((p) => this.forest?.isTreeProp(p) || p === 'tree').length;
+    if (felled) {
+      if (this.forest) this.forest.recordCleared(felled);
+      else if (this.industry) this.industry.refund({ lumber: felled * TIMBER_PER_TREE });
+    }
     return felled;
   }
 
@@ -1400,6 +1416,7 @@ export class Town {
       lifecycle: this.lifecycle ? this.lifecycle.stats() : null,
       economy: this.economy ? this.economy.stats() : null,
       industry: this.industry ? this.industry.stats() : null,
+      forest: this.forest ? this.forest.stats() : null,
       growth: this.growth ? this.growth.stats() : null,
       progression: {
         ...height,

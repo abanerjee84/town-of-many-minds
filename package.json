@@ -27,7 +27,8 @@
     "test:society": "node scripts/_society_transport_check.mjs",
     "test:agriculture": "node scripts/_agricultural_setback_check.mjs",
     "test:perimeter": "node scripts/_perimeter_tight_check.mjs",
-    "test:land-gate": "node scripts/_land_gate_check.mjs"
+    "test:land-gate": "node scripts/_land_gate_check.mjs",
+    "test:forest": "node scripts/_forest_check.mjs"
   },
   "dependencies": {
     "three": "^0.169.0"

@@ -30,6 +30,7 @@ export function snapshotProjectWorld(town) {
     households: town.pedestrians?.households?.slice() || [],
     householdStates: new Map((town.pedestrians?.households || []).map((household) => [household, own(household)])),
     customProps: new Map([...town.customProps].map(([key, props]) => [key, props.slice()])),
+    forest: town.forest?.snapshot?.() || null,
     parkingPlanned: copySet(town.parkingPlanned),
     civicIndex: copyMap(town.civicIndex), civicNames: copyMap(town.civicNames),
     parkFeature: town.parkFeature, playCount: town.playCount,
@@ -72,6 +73,7 @@ export function restoreProjectWorld(town, state) {
     else town.grid[key].splice(0, town.grid[key].length, ...value);
   }
   town.customProps = new Map([...state.customProps].map(([key, props]) => [key, props.slice()]));
+  town.forest?.restore?.(state.forest);
   town.parkingPlanned = copySet(state.parkingPlanned);
   town.civicIndex = copyMap(state.civicIndex);
   town.civicNames = copyMap(state.civicNames);

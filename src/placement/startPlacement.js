@@ -807,7 +807,7 @@ function layoutParkCell(batch, g, x, y, rng, town) {
     batch.add(s);
     return;
   }
-  const trees = rng.chance(0.72) ? 1 : 0;
+  const trees = town.forest ? 0 : (rng.chance(0.72) ? 1 : 0);
   for (let i = 0; i < trees; i++) {
     const t = rng.chance(0.35)
       ? buildPine(rng, rng.float(0.8, 1.1))
@@ -1091,7 +1091,7 @@ export function layoutLots(town, rng) {
       }
 
       if (!building) {
-        if (cr.chance(0.38)) {
+        if (!town.forest && cr.chance(0.38)) {
           const t = buildTree(cr, cr.float(0.7, 1.0));
           t.position.set(p.x + cr.float(-0.9, 0.9), 0.14, p.z + cr.float(-0.9, 0.9));
           batch.add(t);
@@ -1134,9 +1134,11 @@ export function layoutLots(town, rng) {
     ) {
       batch.pads.push(padGeo(CELL - 0.3, CELL - 0.3, 0xb2ac9e, p.x, p.z, 0.07, 0.13));
       batch.pads.push(padGeo(2.6, 2.6, 0x9d978b, p.x, p.z, 0.13, 0.06));
-      const t = buildTree(cr, cr.float(0.6, 0.9));
-      t.position.set(p.x + cr.float(-0.7, 0.7), 0.14, p.z + cr.float(-0.7, 0.7));
-      batch.add(t);
+      if (!town.forest) {
+        const t = buildTree(cr, cr.float(0.6, 0.9));
+        t.position.set(p.x + cr.float(-0.7, 0.7), 0.14, p.z + cr.float(-0.7, 0.7));
+        batch.add(t);
+      }
       const bench = buildBench();
       bench.position.set(p.x + cr.float(-0.9, 0.9), 0.14, p.z + cr.float(-0.9, 0.9));
       bench.rotation.y = cr.float(0, Math.PI * 2);
@@ -1152,7 +1154,7 @@ export function layoutLots(town, rng) {
 
     if (zone || isAdjacentToRoad(g, x, y)) {
       batch.pads.push(padGeo(CELL - 0.14, CELL - 0.14, jitterColor(0x5c8f4a, cr, 0.06), p.x, p.z, 0.05, 0.1));
-      if (cr.chance(0.4)) {
+      if (!town.forest && cr.chance(0.4)) {
         const t = buildTree(cr, cr.float(0.7, 1.1));
         t.position.set(p.x + cr.float(-1.1, 1.1), 0.1, p.z + cr.float(-1.1, 1.1));
         batch.add(t);
@@ -1160,7 +1162,7 @@ export function layoutLots(town, rng) {
       return;
     }
 
-    if (cr.chance(0.17)) {
+    if (!town.forest && cr.chance(0.17)) {
       const n = cr.int(1, 2);
       for (let i = 0; i < n; i++) {
         const t = cr.chance(0.3)
@@ -1461,7 +1463,7 @@ function dressFoundingStreets(town, rng) {
     if (town.buildingAt(x, y) || town.resources?.ownsCell(x, y)) return;
     seen++;
     if (seen % 3 !== 0) return;
-    if (town.addProp(x, y, 'tree')) trees++;
+    if (town.addProp(x, y, 'tree', { source: 'seed' })) trees++;
   });
 }
 
