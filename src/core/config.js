@@ -11,14 +11,17 @@ export const CELL = 4;
  * core — the road network is the only limit — so the only thing that decides
  * how big the town can ever get is these two numbers.
  */
-export const EXTENT = Object.freeze({ w: 48, h: 40 });
+// 10,000 tiles at four metres per tile: a 400m x 400m build plate. The
+// founding core stays compact; this larger plate is the woodland frontier the
+// council can acquire over a long run.
+export const EXTENT = Object.freeze({ w: 100, h: 100 });
 
 /**
  * The founding core, in absolute cells, NOT a fraction of EXTENT. Sizing the
  * hamlet as a fraction meant it grew in lockstep with the map, which is exactly
  * backwards: a bigger map should mean more room to grow INTO, not a bigger
- * town on day one. Roughly 19x17 against a 48x40 extent, so the town is founded
- * on ~21% of the land and has to earn the rest.
+ * town on day one. Roughly 22x19 against a 100x100 extent, so the town is
+ * founded on under 5% of the land and has to earn the rest.
  */
 // The hamlet is deliberately compact inside a wider map. It gives the first
 // 30 residents a readable neighbourhood while keeping a broad ring of land on

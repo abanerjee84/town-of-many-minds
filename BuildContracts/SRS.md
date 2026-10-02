@@ -136,6 +136,10 @@ The council system prompt is an epistemic contract for provider comparison: it d
 
 46d. The rendered light ground plane shall follow the acquired perimeter bounds. Unacquired cells remain on a darker finite world skirt and become part of the light playable plane only after a successful, charged land acquisition; the ground must expand when the perimeter ledger expands.
 
+46e. The finite build plate shall be 100×100 cells (10,000 tiles, 400×400 metres at the four-metre cell scale). The founding town remains a compact acquired envelope inside that plate. Seeded foliage shall be sparse inside the visible town, dense in an irregular polygonal woodland band at the founding edge, and light but continuous across the remaining frontier so the plate never reads as an empty green void.
+
+46f. The foliage kit shall expose tree, pine, and low-shrub variants through one renderer vocabulary and the `prop.foliage` construction block. The founding envelope shall receive approximately 50 deliberate canopy specimens plus a small decorative understory layer; this landscaping is separate from natural frontier seeding and remains removable without timber credit for shrubs.
+
 47. The top strip shall show a Societal summary panel immediately to the right of Council evidence. It shall update from `Town.stats().society` and display approval, aggregate mood, neighbourhood count, open crimes, court backlog, active-law count, and the current mayor/election. The panel is descriptive telemetry and shall not prescribe Council traits or hide the detailed society inspector.
 
 48. When measured congestion reaches 65%, a legal `EXTEND_STREET` or `ROADUP` candidate shall receive an emergency priority score above lower-band infill in the rules fallback and Council feasibility ordering. The candidate must still pass the road planner's measured-demand, connected-component, legal-run, finance, and material checks; severe congestion never authorizes arbitrary paving.
@@ -172,7 +176,7 @@ The next social-system acceptance pass shall add a player-facing stop-placement 
 - `npm run test:metropolis-fast` and `npm run test:road-horizon-fast` shall exercise forced requests with no provider/network dependency; their output shall report the number of injected requests and preserve ledger/economy audit validity.
 - Junction-adjacent curve cells shall not emit a second diagonal lane-marking pass over the junction zebra markings.
 - The road-extension regression shall reject a four-tile closure between two busy junctions while retaining a measured straight continuation and a measured network join.
-- The perimeter regression shall verify seed 1337’s tight 32×29 asset envelope, retain ownership of every non-water founding asset, return frontier candidates adjacent to that envelope, and verify that the rendered playable plane expands after acquisition.
+- The perimeter regression shall verify seed 1337’s tight 33×27 asset envelope, retain ownership of every non-water founding asset, return frontier candidates adjacent to that envelope, and verify that the rendered playable plane expands after acquisition.
 - The land-gate regression shall verify that the first exhausted-ledger acquisition can proceed, then a second `ACQUIRE_LAND` is rejected while acquired serviced plots remain.
 - The forest regression shall verify seed-1337 full-plate tree coverage with an irregular edge stand, four-lumber deforestation credit, plantation accounting, bounded natural fall, and clean rendering with no page errors.
 

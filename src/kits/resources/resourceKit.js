@@ -338,7 +338,7 @@ function depthOf(x, y, b) {
  *
  * Scoring sites by raw `depthOf` quietly assumes a small map. On the old 34x28
  * grid the founding core filled most of it, so "as far out as possible" was
- * always still within spur range. On a 48x40 extent the founding core is a
+ * always still within spur range. On a 100x100 extent the founding core is a
  * small rectangle in the middle, the corners sit ~14 cells outside the road
  * bounds, and an uncapped score puts every candidate there — where the spur
  * test then fails and the site is silently discarded. The town ends up with no

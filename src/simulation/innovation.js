@@ -292,7 +292,8 @@ export class ResearchSystem {
     // so walk the ring instead of the whole grid. This is called from `stats()`,
     // which the render loop invokes every frame, and a full-grid scan here was
     // three quarters of the entire per-frame HUD cost. Same predicate, same
-    // result, an eighth of the cells: on a 48x40 extent the ring is ~160 cells
+    // result, a compact local search: on a 100x100 extent the ring stays near
+    // the active neighbourhood rather than scanning the full plate.
     // out of 1920.
     const ring = Math.max(1, EDGE_RING);
     const test = (x, y) => {

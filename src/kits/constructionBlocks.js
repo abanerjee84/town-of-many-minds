@@ -82,6 +82,7 @@ const BLOCKS = [
   { id: 'public.playground', kit: 'publicspace', family: 'public', label: 'Playground', footprint: [2, 2], modules: ['play-structure', 'swing', 'soft-ground'] },
   { id: 'public.plaza', kit: 'publicspace', family: 'public', label: 'Civic plaza', footprint: [2, 2], modules: ['fountain', 'bench', 'lamp'] },
   { id: 'prop.tree', kit: 'props', family: 'public', label: 'Street tree', footprint: [1, 1], modules: ['tree'] },
+  { id: 'prop.foliage', kit: 'props', family: 'public', label: 'Foliage cluster', footprint: [1, 1], modules: ['tree', 'pine', 'shrub', 'understory'] },
   { id: 'prop.lamp', kit: 'props', family: 'mobility', label: 'Lamp post', footprint: [1, 1], modules: ['lamp', 'glow'] },
   { id: 'prop.bench', kit: 'props', family: 'public', label: 'Bench', footprint: [1, 1], modules: ['bench'] },
   { id: 'prop.fountain', kit: 'props', family: 'public', label: 'Fountain', footprint: [1, 1], modules: ['fountain', 'water'] },

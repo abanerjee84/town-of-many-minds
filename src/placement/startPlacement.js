@@ -11,6 +11,7 @@ import {
   buildBench, buildHydrant, buildTrashBin, buildFountain, buildSwingSet,
   buildPlayStructure
 } from '../kits/props/propKit.js';
+import { buildFoliage } from '../kits/props/foliageKit.js';
 import { CIVIC_ORDER, civicParams, civicFacility, CIVIC_CAPACITY_KIND, CIVIC_CATALOGUE } from '../kits/civic/civicKit.js';
 import { constructionBlock } from '../kits/constructionBlocks.js';
 import { planPublicSpaces, renderPublicSpaces } from '../kits/publicspace/publicKit.js';
@@ -830,8 +831,10 @@ function layoutParkCell(batch, g, x, y, rng, town) {
 
 function addCustomProp(batch, p, type, rng) {
   let obj = null;
-  if (type === 'pine') obj = buildPine(rng, rng.float(0.7, 1.2));
-  else if (type === 'bush') obj = buildBush(rng, rng.float(0.7, 1.1));
+  if (type === 'tree' || type === 'pine' || type === 'bush') {
+    const scale = type === 'bush' ? rng.float(0.7, 1.1) : rng.float(0.7, 1.2);
+    obj = buildFoliage(type, rng, scale);
+  }
   else if (type === 'bench') obj = buildBench();
   else if (type === 'lamp') obj = buildLamp();
   else obj = buildTree(rng, rng.float(0.7, 1.2));

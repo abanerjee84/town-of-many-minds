@@ -328,8 +328,10 @@ const cameraActions = {
   'camera-centre': () => document.getElementById('view-centre').click()
 };
 const cameraPresets = {
-  iso: { yaw: 45, pitch: 55, zoom: 260 },
-  top: { yaw: 0, pitch: 0, zoom: 300 },
+  iso: { yaw: 45, pitch: 55, zoom: 360 },
+  // A 500m top-down view fits the entire 400m build plate while retaining a
+  // readable margin for the HUD panels.
+  top: { yaw: 0, pitch: 0, zoom: 500 },
   north: { yaw: 0, pitch: 64, zoom: 228 },
   east: { yaw: 90, pitch: 64, zoom: 228 }
 };

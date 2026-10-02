@@ -577,7 +577,7 @@ export class Interaction {
       }
       ${
         forest
-          ? `<div class="kv grp"><span>Forest</span><span>${forest.trees} trees / ${forest.coverage}% plate cover</span></div>
+          ? `<div class="kv grp"><span>Forest</span><span>${forest.trees} trees · ${forest.foliage ?? forest.trees} foliage / ${forest.coverage}% plate cover</span></div>
              <div class="kv"><span>Stewardship</span><span>${forest.planted} planted / ${forest.felled} felled / ${forest.naturalFalls} natural falls</span></div>
              <div class="kv"><span>Timber recovered</span><span>${forest.lumberYield} lumber returned to storehouse</span></div>`
           : ''

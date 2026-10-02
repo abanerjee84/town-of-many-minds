@@ -19,6 +19,7 @@ export class ForestSystem {
   reset(seed = 1) {
     this.rng = makeRng(`${seed}:forest`);
     this.seeded = 0;
+    this.decorativeSeeded = 0;
     this.planted = 0;
     this.felled = 0;
     this.naturalFalls = 0;
@@ -35,6 +36,14 @@ export class ForestSystem {
     let count = 0;
     for (const list of this.town.customProps.values()) {
       for (const type of list) if (this.isTreeProp(type)) count++;
+    }
+    return count;
+  }
+
+  foliageCount() {
+    let count = 0;
+    for (const list of this.town.customProps.values()) {
+      for (const type of list) if (this.isTreeProp(type) || type === 'bush') count++;
     }
     return count;
   }
@@ -78,6 +87,17 @@ export class ForestSystem {
     const idx = g.idx(x, y);
     const list = t.customProps.get(idx) || [];
     if (list.some((item) => this.isTreeProp(item))) return false;
+    list.push(type);
+    t.customProps.set(idx, list);
+    return true;
+  }
+
+  addFoliageRaw(x, y, type = 'bush') {
+    const t = this.town;
+    const g = t.grid;
+    if (!this.canGrow(x, y)) return false;
+    const idx = g.idx(x, y);
+    const list = t.customProps.get(idx) || [];
     list.push(type);
     t.customProps.set(idx, list);
     return true;
@@ -133,10 +153,10 @@ export class ForestSystem {
   }
 
   /**
-   * Seed the complete build plate once after founding assets and the initial
-   * perimeter exist. The irregular polygon is intentionally outside the
-   * serviced envelope: it reads as a dense woodland at the town edge while
-   * leaving a meaningful, tree covered frontier for future acquisition.
+   * Seed the complete 100x100 build plate once after founding assets and the
+   * initial perimeter exist. The irregular polygon wraps the serviced envelope
+   * without becoming a straight hedge: it reads as a dense woodland at the
+   * town edge while the interior remains clear enough to plan new lots.
    */
   seedInitial() {
     const t = this.town;
@@ -147,40 +167,71 @@ export class ForestSystem {
     };
     const minX = bounds.minX; const minY = bounds.minY;
     const maxX = bounds.maxX; const maxY = bounds.maxY;
-    // Eight uneven corners make a distinct polygonal woodland at the southern
-    // edge of the founding envelope; it is never the rectangle used by the
-    // perimeter ledger and does not turn the whole frontier into one uniform
-    // wall of trees.
-    const edgeX = Math.floor((minX + maxX) / 2);
+    // Uneven corners make a distinct polygonal woodland ring around the
+    // founding envelope. The perimeter ledger remains rectangular; this shape
+    // is only a visual/ecological band and never grants land ownership.
     const polygon = [
-      [edgeX - 11, maxY - 2],
-      [edgeX - 7, maxY + 3],
-      [edgeX - 1, maxY + 6],
-      [edgeX + 9, maxY + 5],
-      [edgeX + 13, maxY + 1],
-      [edgeX + 7, maxY - 4],
-      [edgeX - 3, maxY - 5],
-      [edgeX - 8, maxY - 3]
+      [minX - 7, minY - 2],
+      [minX + 2, minY - 7],
+      [maxX - 4, minY - 6],
+      [maxX + 6, minY - 1],
+      [maxX + 9, minY + 8],
+      [maxX + 6, maxY - 5],
+      [maxX + 2, maxY + 8],
+      [maxX - 8, maxY + 10],
+      [minX + 3, maxY + 7],
+      [minX - 7, maxY + 3],
+      [minX - 10, maxY - 6],
+      [minX - 8, minY + 6]
     ];
     const rng = this.rng.fork(9917);
+    const interiorCandidates = [];
     let added = 0;
     g.forEach((x, y) => {
       if (!this.canGrow(x, y)) return;
+      // Treat the tight founding envelope as town land for visual density even
+      // where a cell is still an unacquired gap between two assets. Otherwise
+      // the open gaps inside the rectangle would get frontier density and the
+      // centre would look like a meadow rather than a neighbourhood.
+      const insideEnvelope = x >= minX && x <= maxX && y >= minY && y <= maxY;
+      if (insideEnvelope) {
+        interiorCandidates.push([x, y]);
+        return;
+      }
       const outside = t.perimeter ? !t.perimeter.isAcquired(x, y) : true;
-      const denseEdge = outside && this.pointInPolygon(x + 0.5, y + 0.5, polygon);
-      // The outer plate is wooded rather than an empty green void. The edge
-      // polygon is a dense stand; serviced land is lighter so future lots are
-      // still readable and construction clears it into usable timber.
-      const chance = denseEdge ? 0.98 : outside ? 0.84 : 0.28;
+      const denseEdge = !insideEnvelope && outside && this.pointInPolygon(x + 0.5, y + 0.5, polygon);
+      // The edge band is dense, while the owned town is deliberately sparse so
+      // roads, buildings and future construction remain legible. The wider
+      // frontier still gets light woodland coverage instead of an empty green
+      // void; clearing any of it returns timber to the lumber stock.
+      const chance = denseEdge ? 0.92 : insideEnvelope ? 0.015 : 0.12;
       if (!rng.chance(chance)) return;
       const type = rng.chance(denseEdge ? 0.27 : 0.14) ? 'pine' : 'tree';
       if (this.addTreeRaw(x, y, type)) { this.seeded++; added++; }
     });
+    // The envelope gets intentional landscaping rather than the same random
+    // ecology as the frontier: about fifty canopy specimens make the town
+    // feel inhabited, with a small understory layer for parks and courtyards.
+    for (let i = interiorCandidates.length - 1; i > 0; i--) {
+      const j = Math.floor(rng.next() * (i + 1));
+      [interiorCandidates[i], interiorCandidates[j]] = [interiorCandidates[j], interiorCandidates[i]];
+    }
+    const interiorTrees = Math.min(50, interiorCandidates.length);
+    for (let i = 0; i < interiorTrees; i++) {
+      const [x, y] = interiorCandidates[i];
+      const type = rng.chance(0.24) ? 'pine' : 'tree';
+      if (this.addTreeRaw(x, y, type)) { this.seeded++; added++; }
+    }
+    const interiorBushes = Math.min(12, Math.max(0, interiorCandidates.length - interiorTrees));
+    for (let i = 0; i < interiorBushes; i++) {
+      const [x, y] = interiorCandidates[interiorTrees + i];
+      if (this.addFoliageRaw(x, y, 'bush')) { this.decorativeSeeded++; added++; }
+    }
     if (added) {
       t.rebuildStatic({ roads: false, lots: true, validate: false });
       events.emit('log', {
         kind: 'event',
-        text: `Founding woodland planted · ${added} trees across the build plate, with a dense irregular edge stand.`
+        text: `Founding woodland planted - ${this.treeCount()} trees and ${this.decorativeSeeded} decorative foliage across the build plate, with a dense irregular edge stand.`,
       });
     }
     return added;
@@ -219,7 +270,8 @@ export class ForestSystem {
 
   snapshot() {
     return {
-      seeded: this.seeded, planted: this.planted, felled: this.felled,
+      seeded: this.seeded, decorativeSeeded: this.decorativeSeeded,
+      planted: this.planted, felled: this.felled,
       naturalFalls: this.naturalFalls, lumberYield: this.lumberYield,
       lastDay: this.lastDay, fallDebt: this.fallDebt, rng: this.rng.getState()
     };
@@ -235,6 +287,8 @@ export class ForestSystem {
   stats() {
     return {
       trees: this.treeCount(),
+      foliage: this.foliageCount(),
+      decorative: this.decorativeSeeded || 0,
       seeded: this.seeded,
       planted: this.planted,
       felled: this.felled,

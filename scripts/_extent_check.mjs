@@ -84,10 +84,10 @@ for (const seed of SEEDS) {
   const r = await page.evaluate(PROBE);
   const grow = await page.evaluate(GROW);
   const ok =
-    r.grid.w === 48 && r.grid.h === 40 &&
+    r.grid.w === 100 && r.grid.h === 100 && r.grid.cells === 10000 &&
     r.hasLake && r.lakeCells >= 4 &&
     r.buildings > 0 && r.population > 0 &&
-    r.core.w >= 19 && r.core.w <= 21 && r.core.h >= 16 && r.core.h <= 18 &&
+    r.core.w >= 22 && r.core.w <= 24 && r.core.h >= 19 && r.core.h <= 21 &&
     r.validation.ok && grow.expansions > 0;
   if (!ok) fail++;
   console.log(

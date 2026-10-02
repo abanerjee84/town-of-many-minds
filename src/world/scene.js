@@ -51,7 +51,9 @@ export class SceneManager {
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x9fd3ef);
-    this.scene.fog = new THREE.Fog(0x9fd3ef, 260, 900);
+    // The full plate is 400m across. Keep the woodland visible in the top and
+    // isometric overview while still fading the far skirt into the horizon.
+    this.scene.fog = new THREE.Fog(0x9fd3ef, 420, 1250);
 
     this.camera = new THREE.PerspectiveCamera(
       50,
@@ -102,14 +104,12 @@ export class SceneManager {
     this.sun.position.set(90, 130, 60);
     this.sun.castShadow = true;
     // The shadow frustum is fixed on the world origin (sun.target is never
-    // moved), so it has to cover the whole extent from day one. The extent's
-    // corner radius is hypot(96, 80) = 125 m, which a +/-165 ortho box covers
-    // with room to spare — that box used to be mostly wasted on unbuildable
-    // apron, and now every one of its texels lands on land the town can use.
+    // moved), so it has to cover the whole 400m plate from day one. A 260m
+    // half-width covers the 200m corner radius with room for the sun angle.
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.camera.near = 20;
-    this.sun.shadow.camera.far = 420;
-    const s = 165;
+    this.sun.shadow.camera.far = 700;
+    const s = 260;
     this.sun.shadow.camera.left = -s;
     this.sun.shadow.camera.right = s;
     this.sun.shadow.camera.top = s;

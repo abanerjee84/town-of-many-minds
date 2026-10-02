@@ -20,7 +20,8 @@ await page.screenshot({ path: `shots/extent-${SEED}-home.png` });
 // 2. Top-down over the whole extent, so the ground plane == buildable grid
 //    claim is visible: the town should sit small in the middle of open land.
 await page.evaluate(() => {
-  window.sceneMgr.camera.position.set(0.01, 260, 0.01);
+  // 500m altitude frames the full 400m plate with a little margin.
+  window.sceneMgr.camera.position.set(0.01, 500, 0.01);
   window.sceneMgr.controls.target.set(0, 0, 0);
   window.sceneMgr.camera.up.set(0, 0, -1);
   window.sceneMgr.controls.update();
