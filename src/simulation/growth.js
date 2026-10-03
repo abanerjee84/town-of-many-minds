@@ -14,23 +14,36 @@ import { snapshotProjectWorld, restoreProjectWorld } from './projectSnapshot.js'
 import { DIRS } from '../core/grid.js';
 import { chooseRoadExtension, sameComponentClosure, roadCellPressure, MIN_HOTSPOT_PRESSURE } from './roadExtensionPlanner.js';
 import { constructionBlock, constructionBlockQuote } from '../kits/constructionBlocks.js';
-import { civicVerticalCap } from '../kits/civic/civicKit.js';
+import { civicVerticalCap, CIVIC_UPGRADE_PATHS } from '../kits/civic/civicKit.js';
+import { basePrice, quotePrice } from './priceChart.js';
+import { BASE_BUILD_HOURS, buildHoursFor } from './buildTime.js';
 import { agriculturalSetbackConflict, resourceSetbackConflict, educationCampusConflict } from '../placement/siteRules.js';
 const COST = {
-  house: 9000, shop: 11000, civic: 30000, park: 3000, road: 2000, utility: 0,
-  footway: 600,
-  'prop-tree': 100, 'prop-lamp': 350, upgrade: 6000, archetype: 12000, factory: 26000,
-  renovate: 4500, tierup: 9000, wing: 7000,
+  house: basePrice('construction.house', 9000), shop: basePrice('construction.shop', 11000),
+  civic: basePrice('construction.civic', 30000), park: basePrice('construction.park', 3000),
+  road: basePrice('construction.road', 2000), utility: 0,
+  footway: basePrice('construction.footway', 600),
+  'prop-tree': basePrice('construction.prop-tree', 100), 'prop-lamp': basePrice('construction.prop-lamp', 350), upgrade: basePrice('construction.upgrade', 6000),
+  archetype: basePrice('construction.archetype', 12000), factory: basePrice('construction.factory', 26000),
+  renovate: basePrice('construction.renovate', 4500), tierup: basePrice('construction.tierup', 9000),
+  wing: basePrice('construction.wing', 7000),
   // Phase 8 — surface works are flat, the land-use family is priced PER CELL
   // of the brush it repaints (clear is one building, so it is flat).
-  plaza: 4000, parking: 1200, rezone: 250, upzone: 900, clear: 1500, annex: 400,
+  plaza: basePrice('construction.plaza', 4000), parking: basePrice('construction.parking', 1200),
+  rezone: basePrice('construction.rezone', 250), upzone: basePrice('construction.upzone', 900),
+  clear: basePrice('construction.clear', 1500), annex: basePrice('construction.annex', 400),
   // Phase 9 — a bridge is priced PER WATER CELL it spans (steel rides along
   // as materials, see MATERIALS.bridge).
-  bridge: 3500,
+  bridge: basePrice('construction.bridge', 3500),
   // Phase 20 (C3b) — an office block is a shell plus its storeys, so the
   // extra height is priced separately from the plot.
-  office: 2400
+  office: basePrice('construction.office', 2400)
 };
+
+function dynamicCost(town, key, quantity = 1, options = {}) {
+  const fallback = COST[key] ?? basePrice(`construction.${key}`, 0);
+  return quotePrice(`construction.${key}`, town, { ...options, quantity, fallback });
+}
 
 /**
  * Phase 18 (A5) — the district blueprint, DERIVED from the town's own gaps.
@@ -55,7 +68,7 @@ export function districtQueue(town, opts = {}) {
 
   // 1. Reach. Every district starts with the network, because nothing else can
   //    be sited without it — and the access spur is priced per step.
-  q.push({ what: 'road', kind: 'road', count: scale, cost: COST.road * scale, need });
+  q.push({ what: 'road', kind: 'road', count: scale, cost: dynamicCost(town, 'road', scale), need });
 
   // 2. House. Sized by housing pressure, the thing the prompt already calls
   //    the first priority: at full pressure a district carries the
@@ -66,20 +79,20 @@ export function districtQueue(town, opts = {}) {
     what: `${houses} homes`,
     kind: 'house',
     count: houses,
-    cost: COST.house * houses,
+    cost: dynamicCost(town, 'house', houses),
     need
   });
 
   // 3. Serve. One shop and one civic building per stretch of housing, more if
   //    the worst facility is already over its design load.
   const shops = Math.max(1, Math.round(houses / 3));
-  q.push({ what: `${shops} shops`, kind: 'shop', count: shops, cost: COST.shop * shops, need });
+  q.push({ what: `${shops} shops`, kind: 'shop', count: shops, cost: dynamicCost(town, 'shop', shops), need });
   const civic = worstLoad > 0.85 ? 2 : 1;
   q.push({
     what: civic > 1 ? `${civic} civic buildings` : 'a civic building',
     kind: 'civic',
     count: civic,
-    cost: COST.civic * civic,
+    cost: dynamicCost(town, 'civic', civic),
     need
   });
 
@@ -93,12 +106,12 @@ export function districtQueue(town, opts = {}) {
       what: `${siteCount} ${r} works`,
       kind: 'factory',
       count: siteCount,
-      cost: COST.factory * siteCount,
+      cost: dynamicCost(town, 'factory', siteCount),
       need,
       resource: r
     });
   } else if (staff && staff.biz && staff.biz.need > staff.biz.have) {
-    q.push({ what: 'a works', kind: 'factory', count: 1, cost: COST.factory, need });
+      q.push({ what: 'a works', kind: 'factory', count: 1, cost: dynamicCost(town, 'factory'), need });
   }
 
   return q;
@@ -206,7 +219,7 @@ export function frontierDepth(x, y, b) {
 /** Plan types whose site is chosen up front — apply() never re-searches one. */
 const NO_SITE = new Set([
   'utility', 'upgrade', 'resource', 'renovate', 'tierup', 'wing', 'roadup',
-  'rezone', 'upzone', 'clear', 'annex', 'bridge', 'restructure', 'land'
+  'rezone', 'upzone', 'clear', 'annex', 'bridge', 'restructure', 'land', 'bond'
 ]);
 
 /**
@@ -438,7 +451,7 @@ export const HOUSING_BOOTSTRAP_PRESSURE = 0.95;
 // Near full occupancy, ranked() temporarily raises housing to a bootstrap
 // band so a persistent resource strain cannot starve the town of spare beds.
 const BAND = {
-  power: 10, water: 10, sewage: 10, resource: 10, land: 9.5, house: 9, shop: 8, civic: 7,
+  power: 10, water: 10, sewage: 10, resource: 10, bond: 10.5, land: 9.5, house: 9, shop: 8, civic: 7,
   // Phase 20 — an office shares the civic band: it is the same sort of answer
   // (a building the town needs people to work in), ranked just after a shop.
   office: 7,
@@ -576,24 +589,7 @@ function makeBarTexture(kind) {
 
 /** Game-hours each construction type takes. 0 lays down instantly.
  *  Exported: the council prompt lists build times from this table. */
-export const BUILD_HOURS = {
-  house: 16, shop: 20, civic: 32, park: 8, road: 0, roadup: 0, utility: 12, footway: 0,
-  // Phase 20 — an office block is a shell plus storeys, so it takes longer than
-  // a shop and not as long as a civic hall.
-  office: 26,
-  hotel: 56, resort: 84,
-  'prop-tree': 3, 'prop-lamp': 4, upgrade: 12, archetype: 24, factory: 18,
-  resource: 12, renovate: 6, tierup: 10, wing: 14,
-  // Phase 8 — a square and a bay are crew work; the land-use family is a
-  // stroke of the pen (0h, so it never queues behind a construction).
-  plaza: 6, parking: 2, rezone: 0, upzone: 0, clear: 0, annex: 0,
-  // Phase 9 — steel and deck take the crews a day and a half.
-  bridge: 12,
-  // Phase 18 — commissioning a district IS instant; the queue it leaves behind
-  // is the work, and each step carries its own build time. 0h so it never
-  // queues behind a construction, and so it stays out of the hours table.
-  district: 0
-};
+export const BUILD_HOURS = Object.freeze({ ...BASE_BUILD_HOURS });
 
 /** Materials scale with footprint area (single-cell plans stay identical). */
 const scaleMats = (mats, n) =>
@@ -727,6 +723,7 @@ export const LANDMARKS = {
 function landmarkPlan(town, lm, opts = {}) {
   const minSize = lm.sizes.reduce((a, b) => (a[0] * a[1] <= b[0] * b[1] ? a : b));
   const minArea = minSize[0] * minSize[1];
+  const cellCost = quotePrice(`landmark.${lm.id}`, town, { fallback: lm.cellCost });
   // An industrial landmark has to name its works. Without this the runner
   // passed no `factory`, and createBuilding's `|| FACTORY_TYPES[0]` fallback
   // made EVERY industrial estate a sawmill — an estate of eleven lots came out
@@ -743,14 +740,14 @@ function landmarkPlan(town, lm, opts = {}) {
     wantZone: lm.zone,
     footprintCandidates: lm.sizes,
     acquire: true,
-    cellCost: lm.cellCost,
+    cellCost,
     matPerCell: lm.matPerCell,
     need: opts.need ?? 0.5,
-    hours: lm.hours,
+    hours: buildHoursFor(lm.id, town, { base: lm.hours, area: minArea, floors: lm.floors }),
     label: lm.label,
     owner: opts.owner || lm.owner || 'private',
     factory: factory ? factory.id : null,
-    cost: lm.cellCost * minArea,
+    cost: cellCost * minArea,
     materials: scaleMats(lm.matPerCell, minArea)
   };
   plan.run = (c) =>
@@ -786,7 +783,7 @@ export function planFor(town, type, opts = {}) {
       const plan = {
         type: 'house',
         label: 'A new family needs a home',
-        cost: COST.house,
+        cost: dynamicCost(town, 'house'),
         materials: MATERIALS.house,
         run: (c) => !!c && !town.buildingAt(c[0], c[1]) && town.placeBuilding(c[0], c[1], ZONE.RESIDENTIAL)
       };
@@ -806,7 +803,7 @@ export function planFor(town, type, opts = {}) {
         name: opts.name || null,
         floors,
         label: opts.name ? `An office block opens — "${opts.name}"` : 'An office block opens for the town’s business',
-        cost: Math.round(COST.shop * cells + COST.office * floors),
+        cost: dynamicCost(town, 'shop', cells) + dynamicCost(town, 'office', floors),
         materials: scaleMats(MATERIALS.shop, cells),
         run: (c) =>
           !!c &&
@@ -830,7 +827,7 @@ export function planFor(town, type, opts = {}) {
           footprint: fp,
           acquire: !!opts.acquire,
           label: 'A shop opens to serve the town',
-          cost: Math.round(COST.shop * cells),
+          cost: dynamicCost(town, 'shop', cells),
           materials: scaleMats(MATERIALS.shop, cells),
           run: (c) =>
             !!c &&
@@ -866,7 +863,7 @@ export function planFor(town, type, opts = {}) {
             cols,
             rows,
             tier: rg.id,
-            cellCost: rg.cellCost,
+            cellCost: quotePrice(`commerce.${rg.id}`, town, { fallback: rg.cellCost }),
             capacity: Math.max(1, Math.round(rg.capacity * area / Math.max(1, baseArea)))
           });
         }
@@ -934,10 +931,10 @@ export function planFor(town, type, opts = {}) {
       // public reserve. That keeps the PPP a backstop rather than allowing the
       // council to spend the developer's whole wallet on routine facilities.
       const publicReserve = town.economy?.requiredPublicReserve?.(47000) || 0;
-      const governmentAffordable = !town.economy || town.economy.treasury >= publicReserve + COST.civic * cells;
+      const governmentAffordable = !town.economy || town.economy.treasury >= publicReserve + dynamicCost(town, 'civic', cells);
       const financingSector = facility || !governmentAffordable ? 'developer' : undefined;
       const bill = facilityBlock
-        ? constructionBlockQuote(facilityBlock.id, { area: cells })
+        ? constructionBlockQuote(facilityBlock.id, { area: cells, town })
         : null;
       const plan = {
         type: 'civic',
@@ -952,7 +949,8 @@ export function planFor(town, type, opts = {}) {
         footprintCandidates: enforcedFootprint ? [enforcedFootprint] : null,
         acquire: !!opts.acquire,
         label: 'The council funds a new civic building',
-        cost: bill?.cost || Math.round(COST.civic * cells),
+        hours: buildHoursFor(facility || 'civic', town, { base: BUILD_HOURS.civic, area: cells, floors: opts.floors || 1 }),
+        cost: bill?.cost || dynamicCost(town, 'civic', cells),
         materials: bill?.materials || scaleMats(MATERIALS.civic, cells),
         financingSector,
         // Named progression facilities (college, university, recycling, and
@@ -1000,13 +998,13 @@ export function planFor(town, type, opts = {}) {
         footprintCandidates: candidates,
         acquire: !!opts.acquire,
         label: `A new ${def.label.toLowerCase()} breaks ground`,
-        cellCost: COST.factory,
+        cellCost: dynamicCost(town, 'factory'),
         // matPerCell, not a fixed bag: apply() re-prices BOTH from the chosen
         // area once siteForFootprint has picked a lot, so a 3x3 works is
         // charged for nine cells' worth of steel instead of the floor rung's
         // four — the `materials` below is only the upfront affordability check.
         matPerCell: MATERIALS.factory,
-        cost: Math.round(COST.factory * cells),
+        cost: dynamicCost(town, 'factory', cells),
         materials: scaleMats(MATERIALS.factory, cells),
         // The first works may seed its construction bill through the
         // contractor account. This is a one-time industrial bootstrap; after
@@ -1034,7 +1032,7 @@ export function planFor(town, type, opts = {}) {
       return {
         type: 'park',
         label: 'A patch of green is set aside for the town',
-        cost: COST.park,
+        cost: dynamicCost(town, 'park'),
         run: (c) => !!c && !town.buildingAt(c[0], c[1]) && town.setPark(c[0], c[1])
       };
     // Phase 8 — surface works: single-cell site searches, like park/road.
@@ -1042,14 +1040,14 @@ export function planFor(town, type, opts = {}) {
       return {
         type: 'plaza',
         label: 'A civic square is paved for the town',
-        cost: COST.plaza,
+        cost: dynamicCost(town, 'plaza'),
         run: (c) => !!c && town.paintPlaza(c[0], c[1])
       };
     case 'parking':
       return {
         type: 'parking',
         label: 'A kerbside parking bay is reserved',
-        cost: COST.parking,
+        cost: dynamicCost(town, 'parking'),
         run: (c) => !!c && town.paintParking(c[0], c[1])
       };
     // Phase 8 — land use: each order carries its OWN brush (found in planFor,
@@ -1066,7 +1064,7 @@ export function planFor(town, type, opts = {}) {
         zone,
         cells,
         label: `The land is rezoned ${zone}`,
-        cost: Math.round(COST.rezone * cells.length),
+        cost: dynamicCost(town, 'rezone', cells.length),
         run: () => town.rezone(cells, zone) > 0
       };
     }
@@ -1079,7 +1077,7 @@ export function planFor(town, type, opts = {}) {
         type: 'upzone',
         cells,
         label: `Density is raised on ${cells.length} cell${cells.length === 1 ? '' : 's'}`,
-        cost: Math.round(COST.upzone * cells.length),
+        cost: dynamicCost(town, 'upzone', cells.length),
         run: () => town.upzone(cells).cells > 0
       };
     }
@@ -1094,7 +1092,7 @@ export function planFor(town, type, opts = {}) {
         target,
         cells,
         label: `${target.name || 'A building'} is cleared from its lot`,
-        cost: COST.clear,
+        cost: dynamicCost(town, 'clear'),
         // Idempotent: a lot that is already clear has answered the order.
         run: () => !town.buildings.includes(target) || town.clearLot(target)
       };
@@ -1109,7 +1107,7 @@ export function planFor(town, type, opts = {}) {
         target,
         cells: target.footprint || [target.cell],
         label: `${target.name || 'A building'} is restructured for another floor`,
-        cost: Math.round(COST.clear * 0.7),
+        cost: Math.round(dynamicCost(town, 'clear') * 0.7),
         run: () => !!town.restructureBuilding(target)
       };
     }
@@ -1168,7 +1166,7 @@ export function planFor(town, type, opts = {}) {
         for (const [x, y] of cells) if (res.isSurveyed(x, y)) discounted++;
       }
       const full = cells.length - discounted;
-      const price = Math.round(COST.annex * (full + discounted * (1 - ANNEX_SURVEY_DISCOUNT)));
+      const price = Math.round(dynamicCost(town, 'annex', full + discounted * (1 - ANNEX_SURVEY_DISCOUNT)));
       return {
         type: 'annex',
         zone,
@@ -1184,7 +1182,7 @@ export function planFor(town, type, opts = {}) {
       return {
         type: 'road',
         label: 'Road crews extend a street',
-        cost: COST.road,
+        cost: dynamicCost(town, 'road'),
         // The anchor is laid first (it is what makes the order legal), then the
         // rest of the selected run. `self.cells` is attached by
         // apply(), which also re-prices the order against those cells.
@@ -1234,7 +1232,7 @@ export function planFor(town, type, opts = {}) {
         type: 'bridge',
         cells: target.cells,
         label: 'A bridge is thrown across the river',
-        cost: Math.round(COST.bridge * n),
+        cost: dynamicCost(town, 'bridge', n),
         materials: scaleMats(MATERIALS.bridge, n),
         run: () => town.buildBridge(target.cells)
       };
@@ -1247,21 +1245,21 @@ export function planFor(town, type, opts = {}) {
       return {
         type: 'footway',
         label: 'Volunteers lay a footway to the back lots',
-        cost: COST.footway,
+        cost: dynamicCost(town, 'footway'),
         run: (c) => !!c && town.paintFootway(c[0], c[1])
       };
     case 'prop-tree':
       return {
         type: 'prop-tree',
         label: 'Volunteers plant trees along the verges',
-        cost: COST['prop-tree'],
+        cost: dynamicCost(town, 'prop-tree'),
         run: (c) => !!c && !town.buildingAt(c[0], c[1]) && town.addProp(c[0], c[1], 'tree')
       };
     case 'prop-lamp':
       return {
         type: 'prop-lamp',
         label: 'Crews install a street lamp',
-        cost: COST['prop-lamp'],
+        cost: dynamicCost(town, 'prop-lamp'),
         run: (c) => !!c && !town.buildingAt(c[0], c[1]) && town.addProp(c[0], c[1], 'lamp')
       };
     case 'upgrade': {
@@ -1269,6 +1267,23 @@ export function planFor(town, type, opts = {}) {
       // most strained one with headroom), else the shortest building with
       // headroom — never a target another pending project is raising.
       const g = town.growth;
+      const evolution = g?.civicEvolutionTarget?.();
+      if (evolution) {
+        const target = evolution.building;
+        return {
+          type: 'upgrade',
+          target,
+          civicUpgrade: true,
+          civicFrom: target.facility,
+          civicTo: evolution.path.to,
+          label: `${target.name || 'The civic building'} evolves into a ${evolution.path.to}`,
+          cost: dynamicCost(town, 'upgrade', 3),
+          materials: scaleMats(MATERIALS.upgrade, 2),
+          financingSector: 'developer',
+          allowMaterialImports: true,
+          run: (_c, rec) => !!town.upgradeCivicBuilding(rec, { facility: evolution.path.to })
+        };
+      }
       const head = (b) => b.house && (b.kind === 'civic' ? civicHasVerticalHeadroom(b) : (b.floors || 1) < MAX_FLOORS) && (!g || !g.pendingTargets.has(b));
       const strained = town.buildings
         .filter((b) => b.kind === 'civic' && head(b) && buildingLoad(town, b) > 0.85)
@@ -1284,7 +1299,7 @@ export function planFor(town, type, opts = {}) {
         type: 'upgrade',
         target,
         label: `${target.name || 'A building'} gains a floor`,
-        cost: kindCost,
+        cost: dynamicCost(town, target.kind === 'civic' ? 'upgrade' : 'upgrade', 1, { fallback: kindCost }),
         materials: MATERIALS.upgrade,
         run: (_c, rec) => {
           const r = town.expandBuilding(rec, { floors: 1 });
@@ -1325,7 +1340,7 @@ export function planFor(town, type, opts = {}) {
         target,
         budget: want,
         label: `${target.name || 'A building'} is renovated to budget tier ${want}`,
-        cost: COST.renovate * steps,
+        cost: dynamicCost(town, 'renovate', steps),
         materials: scaleMats(MATERIALS.renovate, steps),
         run: (_c, rec) => {
           const r = town.renovateBuilding(rec, { budget: want });
@@ -1351,7 +1366,7 @@ export function planFor(town, type, opts = {}) {
         target,
         tier: next.id,
         label: `${target.name || 'A shop'} moves up to the ${next.label}`,
-        cost: COST.tierup,
+        cost: dynamicCost(town, 'tierup'),
         materials: MATERIALS.tierup,
         financingSector: 'developer',
         // Commerce progression is a capacity investment.  A young town may
@@ -1392,7 +1407,7 @@ export function planFor(town, type, opts = {}) {
         label: lm
           ? `${lm.label} gains an annex wing`
           : `${target.name || 'A building'} gains a wing`,
-        cost: COST.wing + acq,
+        cost: dynamicCost(town, 'wing') + acq,
         materials: MATERIALS.wing,
         financingSector: 'developer',
         // A wing is the horizontal counterpart to a floor and must not be
@@ -1452,7 +1467,9 @@ export function planFor(town, type, opts = {}) {
       if (overrides.budget) bits.push(`tier ${overrides.budget}`);
       const extras = ['porch', 'garage', 'chimney', 'accessible', 'balcony', 'solar', 'greenRoof'].filter((k) => overrides[k]);
       if (extras.length) bits.push(extras.join('+'));
-      const cellCost = COST[zone] ?? COST.house;
+      const cellCost = zone === 'commercial' ? dynamicCost(town, 'shop') :
+        zone === 'civic' ? dynamicCost(town, 'civic') :
+          zone === 'industrial' ? dynamicCost(town, 'factory') : dynamicCost(town, 'house');
       const sizes = opts.size
         ? [[opts.size.cols, opts.size.rows]]
         : block
@@ -1462,7 +1479,7 @@ export function planFor(town, type, opts = {}) {
           : [[1, 1], [2, 1], [2, 2], [3, 2]];
       if (opts.size) bits.push(`${opts.size.cols}x${opts.size.rows}`);
       const area = sizes[0][0] * sizes[0][1];
-      const bill = block ? constructionBlockQuote(block.id, { area }) : null;
+      const bill = block ? constructionBlockQuote(block.id, { area, town }) : null;
       const plan = {
         type: 'archetype',
         blockId: block?.id || null,
@@ -1585,6 +1602,20 @@ export function planFor(town, type, opts = {}) {
         materials: MATERIALS.upgrade,
         run: () => town.utilities.expand(type)
       };
+    case 'bond': {
+      const eco = town.economy;
+      if (!eco || !eco.issueBond) return null;
+      const stats = eco.stats?.() || {};
+      const amount = Math.round(Math.max(25000, Math.min((stats.gdp || 0) * 0.1, 500000)));
+      return {
+        type: 'bond',
+        charge: false,
+        amount,
+        label: `The town issues a $${amount.toLocaleString('en-US')} bond to protect its operating runway`,
+        cost: 0,
+        run: () => !!eco.issueBond(0.1).ok
+      };
+    }
     default:
       return null;
   }
@@ -2162,6 +2193,31 @@ export class GrowthSystem {
   }
 
   /**
+   * Fiscal runway gate for the Council's automatic finance option. A bond is
+   * offered only when the treasury is below the protected operating reserve
+   * plus two weeks of measured government burn, and only while debt remains
+   * below a conservative share of annualised GDP. This makes borrowing a
+   * bounded bridge for a growing town rather than a perpetual money fountain.
+   */
+  loanNeed() {
+    const eco = this.town.economy;
+    if (!eco?.stats || !eco.issueBond) return null;
+    const stats = eco.stats();
+    const floor = Math.max(
+      Number(stats.operatingReserve) || 0,
+      Number(ECON.government.reserveOperatingFloor) || 0
+    );
+    const burn = Math.max(0, Number(stats.projectedDailyBurn) || 0);
+    const runway = floor + burn * 14;
+    const debtCap = Math.max(250000, (Number(stats.gdp) || 0) * 0.75);
+    const activeBonds = (eco.bonds || []).filter((bond) => bond.status !== 'repaid').length;
+    if (Number(stats.treasury) >= runway) return null;
+    if ((Number(stats.debt) || 0) >= debtCap) return null;
+    if (activeBonds >= 4) return null;
+    return { treasury: Number(stats.treasury) || 0, runway, debt: Number(stats.debt) || 0, debtCap };
+  }
+
+  /**
    * The land order must carry the same target that made it necessary. A
    * factory is a campus, so a single vacant frontage cell is not enough to
    * make BUILD_FACTORY feasible; the survey needs to find the complete
@@ -2516,18 +2572,27 @@ export class GrowthSystem {
           (type === 'resource' && resourceEmergency?.kind === 'upgrade')
             ? 20
             : 0;
+        const servicePriority = opts?.serviceNeed ? 7 : 0;
         out.push({
           type,
           need,
           // Once the first town cohort exists, earned progression competes
           // with ordinary civic infill. This keeps long runs from repeatedly
           // selecting new one-storey shells while floors/wings wait forever.
-          score: band + Math.min(1, need) + (earnedProgression ? 4 : 0) + (heightPriority ? 6 : 0) + (roadEmergency ? 20 : 0) + congestionPriority + primaryResourcePriority + designPriority,
+          score: band + Math.min(1, need) + (earnedProgression ? 4 : 0) + (heightPriority ? 6 : 0) + (roadEmergency ? 20 : 0) + congestionPriority + primaryResourcePriority + designPriority + servicePriority,
           opts,
           amenity
         });
       }
     };
+
+    // Finance is a Council decision too. Surface a bounded loan before the
+    // treasury hits its operating floor, so essential construction is not
+    // silently starved by the reserve rule. The plan remains subject to the
+    // debt-headroom gate in loanNeed() and appears only while the measured
+    // runway is short.
+    const loan = this.loanNeed();
+    if (loan) add('bond', 1, { runway: loan.runway, debtCap: loan.debtCap });
 
     const strained = (s.utilities && s.utilities.strained) || [];
     for (const kind of strained) {
@@ -2578,6 +2643,22 @@ export class GrowthSystem {
       add('civic', Math.max(countNeed, loadNeed), civicOverload
         ? { facility: CIVIC_FACILITY_FOR_KIND[civicOverload.kind] }
         : undefined);
+    }
+    // Emergency coverage has two coupled pieces: vehicles and the civic
+    // stations that house them. Before this demand row existed, the fleet
+    // registry could see a population shortfall but growth had no way to offer
+    // a second police/fire/clinic site, so the vehicle problem stayed latent.
+    const stationNeeds = this.town.vehicles?.stationShortfall?.() || [];
+    for (const station of stationNeeds) {
+      if (this.findCell('civic')) add('civic', 1, { facility: station.facility, serviceNeed: station.reason });
+    }
+    // A transit depot is a real civic prerequisite. Marked bus stops are a
+    // road-detail concern, so a town with no road marking must still be able
+    // to grow a network once population and trip demand justify it.
+    const hasTransit = this.town.buildings.some((b) => ['busdepot', 'transit'].includes(b.facility));
+    const transitNeed = !hasTransit && (s.pop >= 60 || (s.mobility?.congestion || 0) > roadCongestionGate() * 0.8);
+    if (transitNeed && this.findCell('civic')) {
+      add('civic', 1, { facility: 'busdepot', serviceNeed: `${s.pop} residents need a public transport depot` });
     }
     // Higher education is a progression gate, so it is demand work rather
     // than an ornamental landmark. A college opens once a town has enough
@@ -2687,6 +2768,8 @@ export class GrowthSystem {
     // often add classrooms or wards sideways; the vertical upgrade remains the
     // fallback when no same-parcel strip is available.
     const overload = crewsFree ? worstCivicLoad(this.town) : 0;
+    const civicEvolution = crewsFree ? this.civicEvolutionTarget() : null;
+    if (civicEvolution) add('upgrade', 0.8, { civicUpgrade: true });
     const civicWing = overload > CIVIC_LOAD_GATE ? this.wingTarget({ civicOnly: true }) : null;
     const civicWingPlan = civicWing ? planFor(this.town, 'wing', { civicOnly: true }) : null;
     if (civicWingPlan) add('wing', Math.min(1, overload), { civicOnly: true });
@@ -2694,7 +2777,7 @@ export class GrowthSystem {
     // upgrade row keeps population-earned height moving.  Previously the wing
     // branch suppressed the floor row entirely, so a valid wing candidate
     // could starve vertical progression for hundreds of days.
-    if (overload > CIVIC_LOAD_GATE && this.civicUpgradeTarget()) add('upgrade', Math.min(1, overload));
+    if (!civicEvolution && overload > CIVIC_LOAD_GATE && this.civicUpgradeTarget()) add('upgrade', Math.min(1, overload));
     else if (this.progressionTarget()) {
       // Height is earned by population, so it remains offered even when beds
       // are comfortable. This is what turns a long run into visible tier-ups
@@ -2835,6 +2918,8 @@ export class GrowthSystem {
         // ACQUIRE_LAND is instantaneous and does not reserve a construction
         // crew. The exhaustion/frontier checks remain the actual gate.
         return this.landNeeded() && eco.treasury >= BUILD_FLOOR;
+      case 'bond':
+        return !!this.loanNeed();
       case 'restructure':
         return this.projects.length < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR && !!this.town.buildings.some((b) => b.house && b.facility !== 'townhall' && (b.kind === 'civic' ? civicHasVerticalHeadroom(b) : b.floors < MAX_FLOORS));
       case 'road':
@@ -2886,7 +2971,7 @@ export class GrowthSystem {
         // running over its designed load — the need gate, not the housing one.
         const crews = this.projects.length < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR;
         if (!crews) return false;
-        return !!this.progressionTarget() || !!this.civicUpgradeTarget() || s.pressure > FILLER_PRESSURE_GATE;
+        return !!this.civicEvolutionTarget() || !!this.progressionTarget() || !!this.civicUpgradeTarget() || s.pressure > FILLER_PRESSURE_GATE;
       }
       case 'renovate': {
         // Quality work: wanted whenever a spare crew and savings exist and
@@ -2981,6 +3066,11 @@ export class GrowthSystem {
         if (this.vacantAcquiredPlots(1) >= 1) return 'acquired land still has usable serviced plots';
         if ((s.pressure || 0) < 0.9 && !this.town.industry?.missingConstructionProduct?.()) return 'housing and material pressure are below the land-shortage gate';
         return 'the town has no unacquired frontier tiles or the reserve is too low';
+      case 'bond': {
+        const loan = this.loanNeed();
+        if (!loan) return 'treasury runway is healthy or debt headroom is exhausted';
+        return `treasury $${Math.round(loan.treasury).toLocaleString('en-US')} is below the $${Math.round(loan.runway).toLocaleString('en-US')} runway target`;
+      }
       case 'restructure':
         return 'no occupied building has a safe higher floor to add';
       case 'factory': {
@@ -2996,6 +3086,7 @@ export class GrowthSystem {
         return 'no strained resource left to upgrade';
       case 'upgrade':
         if (!crewsFree) return 'no spare crew or savings for filler work';
+        if (this.civicEvolutionTarget()) return 'a civic facility has reached its population-earned evolution threshold';
         if (this.progressionTarget()) return `height rung is ${desiredFloorsForPopulation(s.pop)} floors for this population`;
         if (worstCivicLoad(this.town) > CIVIC_LOAD_GATE && !this.civicUpgradeTarget()) return 'civic load is high but its facilities have reached their authored vertical caps; add a wing or a new facility';
         return `no facility over ${pct(CIVIC_LOAD_GATE)} load and pressure ${s.pressure.toFixed(2)} is comfortable`;
@@ -3061,6 +3152,30 @@ export class GrowthSystem {
 
   civicUpgradeTarget() {
     return civicUpgradeTarget(this.town, CIVIC_LOAD_GATE, this.pendingTargets);
+  }
+
+  /**
+   * A same-parcel civic evolution (community centre → library, library →
+   * museum, bus depot → transit hub). Larger campuses deliberately stay a
+   * BUILD_CIVIC/WING decision so the land trade-off remains visible.
+   */
+  civicEvolutionTarget() {
+    const pop = this.inputs()?.pop || 0;
+    const pending = this.pendingTargets;
+    return (this.town.buildings || [])
+      .filter((building) => building.kind === 'civic' && !pending.has(building))
+      .map((building) => ({ building, path: CIVIC_UPGRADE_PATHS[building.facility] }))
+      .filter(({ building, path }) => path && pop >= path.minPopulation)
+      .filter(({ building, path }) => !this.town.buildings.some((other) => other !== building && other.facility === path.to))
+      .map((row) => ({ ...row, block: constructionBlock(`civic.${row.path.to}`) }))
+      .filter(({ building, block }) => {
+        if (!block) return false;
+        const area = building.footprint?.length || 1;
+        return block.footprint[0] * block.footprint[1] <= area;
+      })
+      .sort((a, b) => (a.path.minPopulation - b.path.minPopulation) ||
+        ((a.building.cell?.[1] || 0) - (b.building.cell?.[1] || 0)))
+      .at(0) || null;
   }
 
   /**
@@ -3792,7 +3907,7 @@ export class GrowthSystem {
     }
     const spur = spurPath(g, cells, MAX_SPUR_LENGTH);
     if (!spur || !spur.length) return { spur: null, cost: 0, needed: true };
-    return { spur, cost: spur.length * COST.road, needed: true };
+    return { spur, cost: dynamicCost(this.town, 'road', spur.length), needed: true };
   }
 
   /**
@@ -4654,7 +4769,7 @@ export class GrowthSystem {
     // A quoted road carries its selected cells and policy-adjusted price.
     // Rebuild the base price before check()/policy so it is adjusted once.
     if (plan?.type === 'road' && plan.roadSelection) {
-      plan.cost = COST.road * plan.roadSelection.cells.length;
+      plan.cost = dynamicCost(this.town, 'road', plan.roadSelection.cells.length);
     }
     // Nothing gets built from an empty storehouse: construction waits on the
     // industry that produces its materials (same for an empty treasury).
@@ -4790,7 +4905,7 @@ export class GrowthSystem {
         if (!cell) return refuse();
       }
       plan.expansion = paved;
-      plan.cost = (plan.cost || 0) + COST.road * paved.length + (plan.landCost || 0);
+      plan.cost = (plan.cost || 0) + dynamicCost(this.town, 'road', paved.length) + (plan.landCost || 0);
     }
 
     // EXTEND_STREET prices the exact selected cells. The anchor touches the
@@ -4801,7 +4916,7 @@ export class GrowthSystem {
       plan.roadTiles = run.cells.length;
       plan.roadJoins = !!run.joins;
       plan.roadReason = run.reason;
-      plan.cost = COST.road * run.cells.length;
+      plan.cost = dynamicCost(this.town, 'road', run.cells.length);
     }
 
     // Phase 18 (A5) — a district is commissioned here and BUILT by the crews
@@ -4941,26 +5056,29 @@ export class GrowthSystem {
       plan.cost = Math.round(plan.cost * costLift);
     }
     if (hourLift !== 1) {
-      const raw = plan.hours ?? BUILD_HOURS[plan.type] ?? 0;
+      const raw = plan.hours ?? buildHoursFor(plan.type, this.town, { plan });
       plan.hours = Math.max(0, Math.round(raw * hourLift * 10) / 10);
     }
+    // Freeze the chart quote on the project record. Once a project is funded,
+    // later pressure or congestion changes affect only new quotes.
+    if (plan.hours == null) plan.hours = buildHoursFor(plan.type, this.town, { plan });
 
     const finalFinance = this.town.economy?.resolveProjectFinance(plan, plan.type === 'utility' ? 5000 : UTILITY_RESERVE);
     if (finalFinance && !finalFinance.affordable) {
       this.lastBlock = `over budget — ${finalFinance.financierSector} needs ${finalFinance.requiredCash} on hand`;
       return false;
     }
-    plan.quote = { baseConstruction: prePolicyCost - (plan.acquisitionQuote?.total || 0) - (plan.accessSpur?.length || 0) * COST.road,
+    plan.quote = { baseConstruction: prePolicyCost - (plan.acquisitionQuote?.total || 0) - dynamicCost(this.town, 'road', plan.accessSpur?.length || 0),
       footprintCost: block?.cellCost ? block.cellCost * block.footprint.cols * block.footprint.rows : 0,
-      acquisitionCost: plan.acquisitionQuote?.total || 0, accessCost: (plan.accessSpur?.length || 0) * COST.road,
+      acquisitionCost: plan.acquisitionQuote?.total || 0, accessCost: dynamicCost(this.town, 'road', plan.accessSpur?.length || 0),
       demolitionCost: (plan.acquisitionQuote?.items || []).reduce((n, item) => n + (item.demolitionCost || 0), 0),
       relocationCost: (plan.acquisitionQuote?.items || []).reduce((n, item) => n + (item.relocationCost || 0), 0),
       policyAdjustment: (plan.cost || 0) - prePolicyCost,
-      materials: plan.materials || {}, buildHours: plan.hours ?? BUILD_HOURS[plan.type] ?? 0, finalCost: plan.cost || 0 };
+      materials: plan.materials || {}, buildHours: plan.hours ?? buildHoursFor(plan.type, this.town, { plan }), finalCost: plan.cost || 0 };
     plan.finance = finalFinance;
     if (dryRun) return { status: 'quoted', quote: plan.quote, finance: finalFinance, cell };
 
-    const hours = plan.hours ?? BUILD_HOURS[plan.type] ?? 0;
+    const hours = plan.hours ?? buildHoursFor(plan.type, this.town, { plan });
     if (hours > 0) return this.startProject(plan, cell);
 
     plan.projectId ||= this.town.economy?.nextId('project');
@@ -5042,7 +5160,7 @@ export class GrowthSystem {
 
   /** Charge for and queue a construction; it completes in tickProjects. */
   startProject(plan, cell) {
-    const hours = plan.hours ?? BUILD_HOURS[plan.type] ?? 0;
+    const hours = plan.hours ?? buildHoursFor(plan.type, this.town, { plan });
     // Claim every cell of a footprint block so nothing else takes a plot
     // mid-build (single-cell plans claim their one cell, as before).
     const claimCells = [...(plan.cells || (cell ? [cell] : [])), ...(plan.accessSpur || [])];

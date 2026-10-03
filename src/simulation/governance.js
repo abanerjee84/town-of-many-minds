@@ -19,6 +19,8 @@ import { XS_CLASS_ORDER, XS_CLASS_LABEL } from '../kits/roads/crossSection.js';
 import { resolveLLMProvider, registerLLMProvider, listLLMProviders } from './llmProviders.js';
 import { constructionBlockStats, constructionBlock, listConstructionBlocks } from '../kits/constructionBlocks.js';
 import { CouncilLearning, measureCouncilState } from './councilLearning.js';
+import { priceIndex } from './priceChart.js';
+import { BUILD_TIME_CHART } from './buildTime.js';
 
 export { resolveLLMProvider, registerLLMProvider, listLLMProviders } from './llmProviders.js';
 
@@ -169,6 +171,7 @@ export function planCode(plan) {
   if (plan.type === 'civic') return ['transit', 'busdepot'].includes(plan.facility)
     ? `BUILD_TRANSIT facility=${plan.facility}`
     : plan.facility ? `BUILD_CIVIC facility=${plan.facility}` : 'BUILD_CIVIC';
+  if (plan.type === 'bond') return 'BOND_ISSUE';
   if (plan.type === 'land') return 'ACQUIRE_LAND';
   if (plan.type === 'restructure') return 'RESTRUCTURE_BUILDING';
   // In-place work replays with the rung it was climbing to (Phase 5).
@@ -503,16 +506,18 @@ const COUNCIL_ETHOS = [
   'No personality trait is preassigned. Any quality observers later infer must emerge from reading measurements, noticing trade-offs, and learning from what actually happened.',
   'Treat the report as evidence: identify the binding constraint, distinguish a symptom from a cause, consider second-order effects, and choose one feasible action. State affected residents or places only when the report supports that inference.',
   'The Learning record is fallible empirical memory from prior enacted choices. Use repeated before/after results as clues, do not confuse correlation with causation, and do not let one surprising result override the current report.',
-  'The action registry, parser, construction catalogue, placement planner, progression gates, accounting, and reserve rules are fixed interfaces. You may select among them; you may not invent an action, coordinate, budget, or rule.',
-  'Provider comparisons must be fair: use the same report, constraints, learning record, and one-line output contract. Do not optimize for benchmark prose or conceal uncertainty in confident language.'
+  'The action registry, catalogue, placement, progression, accounting, and reserve rules are fixed interfaces. Select among them; never invent an action, coordinate, budget, or rule.',
+  'Provider comparisons use the same report, constraints, learning record, and one-line output contract; do not optimize for prose.',
+  'A good decision is a short causal bet: name the measured constraint, choose the legal action that changes it, and leave a falsifiable trace for the next sitting.'
 ].join(' ');
 
 /** The stage-free half of the prompt: everything after the identity line. */
 const PROMPT_BODY = [
   'Valid actions: ' + INTENTS.join(', '),
   'Reply on the first line as: INTENT: <ACTION>, then at most one short sentence of reasoning.',
-  'Council method: locate the most binding measured constraint, note who or what it touches when the report supports it, compare second-order effects, then select one action from Priority and Feasible now; preserve solvency and future options before spending.',
-  'If the report contains MANDATORY COUNCIL REMEDY, that is a sequencing directive from the measured emergency: choose that exact remedy in this sitting unless TRADE_BUY or HIRE_WORKERS is the evidence-backed direct fix. Do not repeat the blocked construction action.',
+  'Protocol: resolve measured emergencies/dependencies first (food, water, power, sewage, staffing, runway), then average congestion, housing, civic/transport capacity, jobs, progression, and optional work. Preserve solvency.',
+  'Choose one Priority/Feasible action. If it is Blocked, choose its named prerequisite or NO_ACTION; do not repeat it until evidence changes. Compare the strongest feasible alternative and state the number and horizon it should change.',
+  'If the report contains MANDATORY COUNCIL REMEDY, that is a sequencing directive from the measured emergency: choose that exact remedy in this sitting unless TRADE_BUY or HIRE_WORKERS is the evidence-backed direct fix.',
   'Prefer DEVELOP_HOUSING when homes are scarce, EXPAND_* when a utility is over capacity,',
   'UPGRADE_BUILDING to raise an existing building a floor (especially one whose Load shows over capacity), IMAGINE_ARCHETYPE to commission a new design.',
   CREATIVE_ARCHETYPE_GUIDANCE,
@@ -549,7 +554,8 @@ const PROMPT_BODY = [
     '. The next programme is always the town\u2019s own weakest number, printed on the Research line,',
   'EXTEND_STREET (also EXPAND_STREET) chooses a legal run only when the congestion average since the previous sitting is above the road gate and observed trips or a disconnected component justify it; the report also shows the instantaneous value, range, duration, and sample count for context; graph planning uses connected components, weighted shortest paths, measured OD relief, and a deterministic frontage/continuation foresight tie-break; the council chooses whether to order it, not its coordinates,',
   'ACQUIRE_LAND buys surveyed frontier tiles only after the current acquired land has no usable serviced plot left; it is priced per fresh tile and must leave the public reserve intact,',
-  'BUILD_TRANSIT (optional spec: facility=busdepot|transit) commissions a bus depot or transit hub, after which registered buses can serve marked stops; read coverage and ridership before expanding the fleet,',
+  'BUILD_TRANSIT (optional spec: facility=busdepot|transit) commissions a bus depot or transit hub; the network then selects separated road stops, registers buses in proportion to population, and reports coverage and ridership,',
+  'BUILD_CIVIC facility=police|fire|clinic|hospital adds response stations as population grows; state vehicles require a real station and are procured only when coverage or open calls justify them,',
   'RESTRUCTURE_BUILDING clears and rebuilds one eligible occupied lot with a safe additional floor; it preserves the footprint and facility and records the demolition,',
   'UPGRADE_ROAD widens the longest eligible straight corridor one rung up the ladder ' +
     XS_CLASS_ORDER.join('>') +
@@ -575,9 +581,8 @@ const PROMPT_BODY = [
     COMMODITIES.join('|') +
     ' qty=1..200 — a bare order takes the default buy/sell printed on the report\u2019s Stocks line),',
   'RAISE_TAX/CUT_TAX only when the treasury is clearly unhealthy,',
-  'SET_ASIDE_RESERVE banks a quarter of the treasury, SLASH_SPENDING trims outgoings, BOND_ISSUE borrows 10% of GDP at 5% a year,',
+  'SET_ASIDE_RESERVE banks a quarter of the treasury, SLASH_SPENDING trims outgoings, and BOND_ISSUE borrows 10% of GDP at 5% a year only when the report shows a short operating runway and debt headroom,',
   'SUBSIDY grants cash to the weakest shop for 20 days,',
-  'BUILD_CIVIC (optional spec: facility=' + Object.keys(CIVIC_CATALOGUE).join('|') + ') funds a civic building — EXPAND_CLINIC is the older spelling of the same build,',
   'HOST_EVENT runs a festival at a venue (once a week), DECLARE_EMERGENCY holds open calls, DISPATCH_UNITS sends the fleet out now,',
   'and STUDY_ROAD/STUDY_ECONOMY/STUDY_DEMOGRAPHICS/STUDY_TRAFFIC/STUDY_INCIDENTS are read-outs of one subsystem — advisory, never a build.',
   // Phase 15 — policy. The scheme and statute tables are quoted from the data,
@@ -585,7 +590,7 @@ const PROMPT_BODY = [
   // prompt can never drift from what the systems actually do.
   'ENACT_SCHEME starts a timed programme and END_SCHEME winds one up early (optional spec: scheme=' + SCHEME_IDS.join('|') + ' — bare takes the first affordable one):',
   'PASS_LAW puts a statute in force and REPEAL_LAW takes it out again (optional spec: law=' + LAW_IDS.join('|') + ' — bare takes the first one not yet law).',
-  'Programmes and statutes work by these effects only: ' +
+  'Programmes and statutes use only these effects: ' +
     EFFECT_KEYS.map((k) => `${k} (${MODIFIERS[k].hint})`).join(' · ') +
     '. A scheme costs its entry fee then a daily amount for its run; a law costs once and holds until repealed.',
   'and NO_ACTION when the town is fine — when the report says "Priority: none outstanding", reply NO_ACTION.',
@@ -597,7 +602,7 @@ const PROMPT_BODY = [
   // than from an authored layout.
   'BUILD_DISTRICT commissions a whole district as one order — the crews then work through a queue of roads, homes, shops, civic buildings and works, sized from the town\u2019s own housing pressure, strained resources and worst-loaded facility,',
   'and every build that lands off the network lays its own access road and pays for it, so nothing is ever stranded — read the Connectivity line for how many components the town has,',
-  'The report lines "Feasible now (builds)", "Blocked" and "Priority" are ground truth: build only from Feasible now —',
+  '"Feasible now (builds)", "Blocked" and "Priority" are ground truth: build only from Feasible now —',
   'a Blocked public pick cannot start; the Council must choose a later remedy from the next report. Private developers remain independent and may commission private commerce from their own accounts, but they do not substitute the Council\'s blocked public motion. Non-build actions (tax, trade, hire, finance, festival, emergency, study, ATTRACT_SETTLERS, FUND_INNOVATION, ENACT_SCHEME, END_SCHEME, PASS_LAW, REPEAL_LAW, EXTEND_FOOTWAY, NO_ACTION) are always available,',
   // The land-use family is never ranked (see ranked()), so — like EXTEND_
   // FOOTWAY — it must be declared always available or the "build only from
@@ -1428,6 +1433,7 @@ export class GovernanceSystem {
     const ind = t.industry ? t.industry.stats() : null;
     const inc = t.incidents && t.incidents.stats ? t.incidents.stats() : null;
     const fleet = t.traffic && t.traffic.fleetStats ? t.traffic.fleetStats() : null;
+    const prices = priceIndex(t);
     const homes = t.buildings.filter((b) => b.kind === 'house');
     const capacity = homes.reduce((s, b) => s + (b.capacity || 2), 0);
     const utilLine = ut
@@ -1546,10 +1552,70 @@ export class GovernanceSystem {
             .join(' · ')} · default buy ${defBuy} · default sell ${fullest ? fullest[0] : 'goods'}`;
         })()
       : '';
+    // The short HUD summary is not enough for an LLM to plan a town. These
+    // compact inventories expose the spatial, capacity, service, and fiscal
+    // state that otherwise remained implicit in Feasible/Blocked.
+    const buildingLine = (() => {
+      const rows = new Map();
+      for (const b of t.buildings || []) {
+        const key = b.facility || b.kind || 'building';
+        const row = rows.get(key) || { count: 0, floors: 0, capacity: 0, area: 0 };
+        row.count++;
+        row.floors = Math.max(row.floors, Number(b.floors || b.house?.spec?.floors || 1));
+        row.capacity += Number(b.capacity || 0);
+        row.area += Array.isArray(b.footprintCells) ? b.footprintCells.length : 1;
+        rows.set(key, row);
+      }
+      return `Buildings: ${[...rows.entries()].map(([key, row]) => `${key} ${row.count}×${row.floors}f/${row.area}t${row.capacity ? ` cap${Math.round(row.capacity)}` : ''}`).join(' · ')}`;
+    })();
+    const landStats = t.perimeter?.stats?.() || null;
+    const landLine = landStats
+      ? `Land: acquired ${landStats.acquired} tiles · frontier ${t.perimeter?.frontierCells?.(1)?.length || 0} adjacent · vacant serviced ${t.growth?.vacantAcquiredPlots?.(1) ?? '?'} · expansions ${landStats.expansions} · next tile $${Math.round(landStats.nextTileCost || 0)}${t.growth?.landNeeded?.() ? ' · ACQUIRE_LAND is needed' : ''}`
+      : '';
+    const resourceSites = t.resources?.sites || [];
+    const siteLine = resourceSites.length
+      ? `Resource sites: ${resourceSites.map((site) => `${site.kind} L${site.level || 1}${site.work ? ` ${site.work}` : ''}`).join(' · ')}`
+      : '';
+    const vehicleStats = t.vehicles?.stats?.() || null;
+    const stationNeeds = t.vehicles?.stationShortfall?.() || [];
+    const stateUnits = t.vehicles?.slots
+      ? Object.entries(t.vehicles.slots.filter((slot) => !slot.scrapped && slot.owner?.sector === 'government').reduce((out, slot) => {
+          const key = slot.unit || slot.type;
+          out[key] = (out[key] || 0) + 1;
+          return out;
+        }, {})).map(([key, value]) => `${key} ${value}`).join(', ')
+      : '';
+    const stationLine = vehicleStats
+      ? (() => {
+          const transit = t.transport?.stats?.();
+          return `Services: state vehicles ${vehicleStats.stateStock} (${stateUnits || 'registered'}) · stations ${stationNeeds.length ? stationNeeds.map((n) => `${n.facility} ${n.count}/${n.required}`).join(', ') : 'covered'}${transit ? ` · transit stops ${transit.stops}, route ${transit.routeTiles}t, buses ${transit.fleet}, coverage ${Math.round(transit.coverage * 100)}%, rides/day ${transit.dailyRides}, ${transit.ready ? 'ready' : 'not ready'}` : ''}`;
+        })()
+      : '';
+    const head = (value) => String(value || '').trim().split(/\s+/)[0];
+    const feasibleHeads = new Set((board?.feasible || []).map(head));
+    const priorityHeads = new Set((board?.priority || []).map(head));
+    const blockedHeads = new Set((board?.blocked || []).map((value) => head(value)));
+    const conditionalIntents = INTENTS.filter((intent) => !feasibleHeads.has(intent) && !priorityHeads.has(intent) && !blockedHeads.has(intent));
+    const intentMapLine = board
+      ? `Intent map: priority [${[...priorityHeads].join(', ') || 'none'}] · feasible [${[...feasibleHeads].join(', ') || 'none'}] · blocked [${[...blockedHeads].join(', ') || 'none'}] · conditional/manual [${conditionalIntents.join(', ')}]`
+      : `Intent map: ${INTENTS.join(', ')}`;
+    const directLine = [
+      `HIRE_WORKERS ${staff?.gap ? `needed ${staff.gap}` : 'no measured gap'}`,
+      `ATTRACT_SETTLERS ${st?.spareBeds > 0 && st?.openings > 0 ? 'available' : 'wait for beds/posts'}`,
+      `TRADE_BUY ${rs?.strained?.length ? `consider ${rs.strained.join('/')}` : 'no primary deficit'}`,
+      `TRADE_SELL ${ind?.commodities ? 'surplus shown in Stocks' : 'unavailable'}`,
+      `BOND_ISSUE ${t.growth?.loanNeed?.() ? 'runway short' : 'runway/debt gate not met'}`,
+      `DISPATCH_UNITS ${inc?.open ? `${inc.open} open calls` : 'no open calls'}`,
+      `DECLARE_EMERGENCY ${inc?.open ? 'available for open calls' : 'no open calls'}`,
+      `FUND_INNOVATION ${rsh ? `next ${rs2?.next?.label || 'bucket'}` : 'unavailable'}`,
+      `POLICY schemes ${SCHEME_IDS.join('|')} · laws ${LAW_IDS.join('|')}`
+    ].join(' · ');
     return [
       `TOWN REPORT day ${t.clockDay || 0} · ${stage.label}`,
       (() => { const blocks = constructionBlockStats(); return `Construction kits: ${blocks.total} blocks · ${Object.entries(blocks.kits).map(([k, n]) => `${k} ${n}`).join(' · ')}`; })(),
       `Population ${pop} · target ${lc ? lc.target : '?'} · homes ${homes.length} · capacity ${Math.round(capacity)} · spare beds ${Math.max(0, Math.round(capacity) - pop)} · mood ${Math.round(mood * 100)}%${gr ? ` · pressure ${gr.pressure}` : ''}`,
+      buildingLine,
+      landLine,
       societyLine,
       weather
         ? `Weather: year ${weather.year}, day ${weather.dayOfYear} · ${weather.seasonLabel} · ${weather.weatherLabel} · ${weather.temperature}°C · precipitation ${Math.round(weather.precipitation * 100)}% · food ×${weather.modifiers.foodYield.toFixed(2)} · traffic ×${weather.modifiers.trafficFactor.toFixed(2)}`
@@ -1582,6 +1648,7 @@ export class GovernanceSystem {
       inc
         ? `Emergency: ${inc.open} open${Object.keys(inc.byKind).length ? ` (${Object.entries(inc.byKind).map(([k, n]) => `${n} ${k}`).join(' · ')})` : ''} · ${inc.taken} claimed${Object.keys(inc.byState || {}).length ? ` [${Object.entries(inc.byState).map(([k, n]) => `${n} ${k}`).join(' · ')}]` : ''} · fleet ${fleet.emergency} emergency · ${fleet.service} service · ${fleet.civilian} civilian${inc.emergency ? ' · DECLARED' : ''}`
         : '',
+      stationLine,
       ind
         ? `Industry: ${ind.factories} works · materials ${MATERIAL_KEYS.map((k) => `${k} ${ind.commodities[k].stock}`).join(', ')} · goods ${ind.goods.stock} (factor ×${ind.goods.factor})`
         : '',
@@ -1592,6 +1659,9 @@ export class GovernanceSystem {
         ? `Trade: exports $${ind.exported.toLocaleString('en-US')} · imports $${ind.imported.toLocaleString('en-US')} · net ${ind.net >= 0 ? '+' : '−'}$${Math.abs(ind.net).toLocaleString('en-US')}`
         : '',
       stockLine,
+      `Price chart v${prices.version}: construction ×${prices.construction.toFixed(2)} · land ×${prices.land.toFixed(2)} · commodities ×${prices.commodities.toFixed(2)} (scarcity/demand/fiscal pressure)`,
+      `Build-time chart v${BUILD_TIME_CHART.version}: live hours include footprint, floors, pressure, congestion, and fiscal capacity`,
+      siteLine,
       `Utilities: ${utilLine}`,
       t.utilities?.electricityState ? `Electricity: generation / distribution / coverage service ${Math.round(t.utilities.electricityState().serviceFactor * 100)}%, limited by ${t.utilities.electricityState().limiting}` : '',
       rs ? `Primary resources: ${resLine}` : '',
@@ -1640,6 +1710,8 @@ export class GovernanceSystem {
       gr ? `Construction: ${gr.active} active${gr.next ? `, next finishes ~${gr.next}h` : ''} · ${gr.total} built${gr.active >= MAX_ACTIVE ? ' · crews busy — new work paused' : ''}` : '',      board ? `Feasible now (builds): ${board.feasible.length ? board.feasible.join(', ') : 'none'}` : '',
       board && board.blocked.length ? `Blocked: ${board.blocked.join(' · ')}` : '',
       board ? `Priority: ${board.priority.length ? board.priority.join(' → ') : 'none outstanding'}` : '',
+      intentMapLine,
+      directLine,
       `Build times: ${buildTimesLine()}`,
       `Warnings: ${eco && eco.warnings.length ? eco.warnings.join(', ') : 'none'}`,
       last ? `Last decision: ${last.intent} (${last.status}) ${last.detail || ''}` : 'Last decision: none yet',
@@ -2790,6 +2862,9 @@ export class GovernanceSystem {
       Math.min(8, roadDemand?.trips?.length || 0),
       (t.industry && t.industry.deficitProduct()) || '',
       t.resources?.stats?.().strained?.join(',') || '',
+      t.vehicles?.stationShortfall?.().map((row) => `${row.facility}:${row.required - row.count}`).join(',') || '',
+      t.transport?.stats?.().ready ? 'transit-ready' : (s.pop >= 60 ? 'transit-needed' : ''),
+      g.loanNeed?.() ? 'loan-needed' : '',
       Math.floor((t.economy?.treasury || 0) / 50000),
       t.policy?.laws?.length || 0,
       t.research?.level || 0,

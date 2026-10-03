@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "description": "Base prices and bounded market response coefficients. Values are dollars unless noted.",
+  "defaults": { "minFactor": 0.72, "maxFactor": 1.85, "elasticity": 0.28 },
+  "construction": {
+    "house": { "base": 9000, "elasticity": 0.18, "pressure": 0.18 },
+    "shop": { "base": 11000, "elasticity": 0.22, "pressure": 0.16 },
+    "civic": { "base": 30000, "elasticity": 0.16, "pressure": 0.10 },
+    "factory": { "base": 26000, "elasticity": 0.28, "pressure": 0.12 },
+    "prop-tree": { "base": 100, "elasticity": 0.08 },
+    "prop-lamp": { "base": 350, "elasticity": 0.10 },
+    "road": { "base": 2000, "elasticity": 0.20, "congestion": 0.32 },
+    "footway": { "base": 600, "elasticity": 0.10 },
+    "upgrade": { "base": 6000, "elasticity": 0.18, "pressure": 0.12 },
+    "archetype": { "base": 12000, "elasticity": 0.22, "pressure": 0.12 },
+    "renovate": { "base": 4500, "elasticity": 0.16 },
+    "tierup": { "base": 9000, "elasticity": 0.20, "pressure": 0.12 },
+    "wing": { "base": 7000, "elasticity": 0.18, "pressure": 0.10 },
+    "park": { "base": 3000, "elasticity": 0.12 },
+    "plaza": { "base": 4000, "elasticity": 0.14 },
+    "parking": { "base": 1200, "elasticity": 0.12 },
+    "bridge": { "base": 3500, "elasticity": 0.20, "congestion": 0.16 },
+    "office": { "base": 2400, "elasticity": 0.22, "pressure": 0.12 },
+    "annex": { "base": 400, "elasticity": 0.08 },
+    "rezone": { "base": 250, "elasticity": 0.08 },
+    "upzone": { "base": 900, "elasticity": 0.12 },
+    "clear": { "base": 1500, "elasticity": 0.10 },
+    "utility": { "base": 18000, "elasticity": 0.18 }
+  },
+  "land": { "base": 650, "elasticity": 0.30, "frontier": 0.18 },
+  "utility": {
+    "power": { "base": 42000, "elasticity": 0.18 },
+    "water": { "base": 26000, "elasticity": 0.18 },
+    "sewage": { "base": 31000, "elasticity": 0.20 }
+  },
+  "resourceUpgrade": {
+    "water": { "base": 90000, "elasticity": 0.22 },
+    "energy": { "base": 70000, "elasticity": 0.22 },
+    "food": { "base": 60000, "elasticity": 0.24 },
+    "fuel": { "base": 50000, "elasticity": 0.24 }
+  },
+  "resourceImport": {
+    "water": { "base": 10, "elasticity": 0.34 },
+    "fuel": { "base": 12, "elasticity": 0.38 }
+  },
+  "module": {
+    "ramp": { "base": 450, "elasticity": 0.10 },
+    "balcony": { "base": 650, "elasticity": 0.12 },
+    "solar-roof": { "base": 1800, "elasticity": 0.14 },
+    "green-roof": { "base": 1100, "elasticity": 0.12 },
+    "battery": { "base": 2200, "elasticity": 0.16 },
+    "ev-charger": { "base": 900, "elasticity": 0.14 },
+    "play-structure": { "base": 700, "elasticity": 0.10 }
+  },
+  "vehicle": {
+    "sedan": { "base": 18000, "elasticity": 0.18 },
+    "hatchback": { "base": 15500, "elasticity": 0.18 },
+    "taxi": { "base": 22000, "elasticity": 0.18 },
+    "car": { "base": 18000, "elasticity": 0.18 },
+    "van": { "base": 26000, "elasticity": 0.18 },
+    "pickup": { "base": 28000, "elasticity": 0.18 },
+    "sport": { "base": 36000, "elasticity": 0.20 },
+    "truck": { "base": 42000, "elasticity": 0.20 },
+    "bus": { "base": 72000, "elasticity": 0.22 },
+    "police": { "base": 38000, "elasticity": 0.18 },
+    "fire": { "base": 52000, "elasticity": 0.18 },
+    "ambulance": { "base": 46000, "elasticity": 0.18 },
+    "utility": { "base": 40000, "elasticity": 0.18 },
+    "refuse": { "base": 44000, "elasticity": 0.18 }
+  },
+  "commodity": {
+    "lumber": { "base": 48, "capacity": 900, "elasticity": 0.58 },
+    "steel": { "base": 64, "capacity": 850, "elasticity": 0.62 },
+    "cement": { "base": 40, "capacity": 850, "elasticity": 0.55 },
+    "goods": { "base": 36, "capacity": 900, "elasticity": 0.42 },
+    "cloth": { "base": 44, "capacity": 800, "elasticity": 0.40 },
+    "software": { "base": 78, "capacity": 600, "elasticity": 0.34 },
+    "furniture": { "base": 52, "capacity": 800, "elasticity": 0.42 },
+    "aggregate": { "base": 22, "capacity": 1000, "elasticity": 0.50 },
+    "packaged_food": { "base": 58, "capacity": 850, "elasticity": 0.48 },
+    "glass": { "base": 72, "capacity": 750, "elasticity": 0.50 },
+    "chemicals": { "base": 84, "capacity": 700, "elasticity": 0.46 },
+    "paper": { "base": 46, "capacity": 800, "elasticity": 0.40 },
+    "electronics": { "base": 128, "capacity": 600, "elasticity": 0.44 },
+    "machinery": { "base": 150, "capacity": 500, "elasticity": 0.42 },
+    "refined_fuel": { "base": 92, "capacity": 850, "elasticity": 0.52 },
+    "polymers": { "base": 96, "capacity": 700, "elasticity": 0.46 },
+    "medicine": { "base": 210, "capacity": 450, "elasticity": 0.36 },
+    "batteries": { "base": 180, "capacity": 500, "elasticity": 0.40 },
+    "crude_oil": { "base": 68, "capacity": 1000, "elasticity": 0.50 }
+  },
+  "commerce": {
+    "stall": { "base": 4500, "elasticity": 0.16 },
+    "kiosk": { "base": 6500, "elasticity": 0.18 },
+    "shop": { "base": 8500, "elasticity": 0.20 },
+    "store": { "base": 11000, "elasticity": 0.22 }
+  },
+  "landmark": {
+    "mall": { "base": 25000, "elasticity": 0.22 },
+    "multiplex": { "base": 26000, "elasticity": 0.22 },
+    "market": { "base": 18000, "elasticity": 0.18 },
+    "stadium": { "base": 28000, "elasticity": 0.16 },
+    "hospital": { "base": 32000, "elasticity": 0.18 },
+    "campus": { "base": 30000, "elasticity": 0.16 },
+    "estate": { "base": 22000, "elasticity": 0.20 },
+    "tower": { "base": 34000, "elasticity": 0.24 },
+    "hotel": { "base": 26000, "elasticity": 0.22 },
+    "resort": { "base": 30000, "elasticity": 0.20 },
+    "station": { "base": 30000, "elasticity": 0.18 },
+    "zoo": { "base": 24000, "elasticity": 0.16 },
+    "amphitheatre": { "base": 22000, "elasticity": 0.16 }
+  }
+}

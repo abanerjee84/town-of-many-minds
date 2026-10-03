@@ -4,6 +4,7 @@ import { findLinkPath } from '../../core/pathfinding.js';
 import { box, boxEuler, cyl, cone, merge, buildMesh } from '../geometry.js';
 import { events } from '../../core/events.js';
 import { resourceSiteBuildingConflict } from '../../placement/siteRules.js';
+import { basePrice, quotePrice } from '../../simulation/priceChart.js';
 
 /**
  * Resource Kit: the town's three primary resources — water, energy and food —
@@ -225,7 +226,12 @@ const MAX_FUEL_SITES = 3;
 const MAX_GROWTH_SITES = { energy: 12, food: 12, fuel: 8 };
 const MAX_SITE_LEVEL = 3;
 /** Treasury cost to raise a resource's site level — level × this. */
-const UPGRADE_COST = { water: 90000, energy: 70000, food: 60000, fuel: 50000 };
+const UPGRADE_COST = Object.freeze({
+  water: basePrice('resourceUpgrade.water', 90000),
+  energy: basePrice('resourceUpgrade.energy', 70000),
+  food: basePrice('resourceUpgrade.food', 60000),
+  fuel: basePrice('resourceUpgrade.fuel', 50000)
+});
 /** Litres a single vehicle burns a day. Fuel is the one resource the fleet eats. */
 const FUEL_PER_VEHICLE = 7;
 /**
@@ -235,11 +241,11 @@ const FUEL_PER_VEHICLE = 7;
  * fuel: it is paid for out of the treasury, capped by storage, and never
  * attempted while local stations can already hold the day.
  */
-const FUEL_IMPORT_PRICE = 12;
+const FUEL_IMPORT_PRICE = basePrice('resourceImport.fuel', 12);
 /** Never buy more than this in one day, whatever the deficit. */
 const FUEL_IMPORT_MAX = 400;
 /** A lake is finite, so the public water service can buy a capped shipment. */
-const WATER_IMPORT_PRICE = 10;
+const WATER_IMPORT_PRICE = basePrice('resourceImport.water', 10);
 const WATER_IMPORT_MAX = 600;
 
 const DIRS = [
@@ -1124,7 +1130,7 @@ export class ResourceSystem {
     const site = this.upgradeTarget(resource, kind);
     if (!site) return 0;
     const lvl = site.level || 1;
-    return lvl >= MAX_SITE_LEVEL ? 0 : UPGRADE_COST[resource] * lvl;
+    return lvl >= MAX_SITE_LEVEL ? 0 : quotePrice(`resourceUpgrade.${resource}`, this.townRef, { fallback: UPGRADE_COST[resource] }) * lvl;
   }
 
   /**
@@ -1659,7 +1665,7 @@ export class ResourceSystem {
     if (need <= local || have >= need) return 0;
     const qty = Math.min(Math.ceil(need - have), Math.max(0, cap - have), WATER_IMPORT_MAX);
     if (qty <= 0) return 0;
-    const cost = Math.round(qty * WATER_IMPORT_PRICE);
+    const cost = quotePrice('resourceImport.water', this.townRef, { fallback: WATER_IMPORT_PRICE, quantity: qty });
     const paid = economy.transfer({
       from: 'developer', to: 'external', amount: cost, category: 'import',
       metadata: { physicalTrade: true, commodity: 'water', quantity: qty, source: 'water-market' }
@@ -1696,7 +1702,7 @@ export class ResourceSystem {
     if (have >= burn) return 0; // a day's reserve is already in the tanks
     const qty = Math.min(Math.ceil(burn - have), cap - have, FUEL_IMPORT_MAX);
     if (qty <= 0) return 0;
-    const cost = Math.round(qty * FUEL_IMPORT_PRICE);
+    const cost = quotePrice('resourceImport.fuel', this.townRef, { fallback: FUEL_IMPORT_PRICE, quantity: qty });
     const paid = economy.transfer({
       from: 'government',
       to: 'external',

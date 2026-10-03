@@ -2,8 +2,13 @@ import * as THREE from 'three';
 import { CELL_KIND } from '../../core/config.js';
 import { box, cyl, cone, buildMesh } from '../geometry.js';
 import { events } from '../../core/events.js';
+import { basePrice, quotePrice } from '../../simulation/priceChart.js';
 
-const EXPANSION_COST = { power: 42000, water: 26000, sewage: 31000 };
+const EXPANSION_COST = Object.freeze({
+  power: basePrice('utility.power', 42000),
+  water: basePrice('utility.water', 26000),
+  sewage: basePrice('utility.sewage', 31000)
+});
 
 export const UTILITY = {
   POWER: 'power',
@@ -356,7 +361,7 @@ export class UtilitySystem {
   }
 
   expansionCost(kind) {
-    return EXPANSION_COST[kind] || 30000;
+    return quotePrice(`utility.${kind}`, this.townRef, { fallback: EXPANSION_COST[kind] || 30000 });
   }
 
   expand(kind) {

@@ -1,10 +1,10 @@
 # TOMM construction and progression specification
 
-Updated 2026-10-03 after the industrial-chain and hospitality-economy audit.
+Updated 2026-10-03 after the dynamic-market and build-duration audit.
 
 ## Scope
 
-This specification defines the shared construction vocabulary and the progression contracts for housing, commerce, civic buildings, higher education, industry, resources, utilities, roads, public spaces, props, the council, and provider benchmarking.
+This specification defines the shared construction vocabulary and the progression contracts for housing, commerce, civic buildings, higher education, industry, resources, utilities, roads, public spaces, props, the council, provider benchmarking, and the external market/build-time charts.
 
 ## Design principles
 
@@ -14,6 +14,7 @@ This specification defines the shared construction vocabulary and the progressio
 4. Footprints are reserved before geometry is emitted. A failed build restores the grid, buildings, accounts, inventory, claims, and project ledger.
 5. Growth must be earned by housing, services, work, education, resource capacity, transport, and fiscal runway. A road extension may only be selected from measured network benefit or connectivity evidence.
 6. Council qualities are observations, not instructions. The experiment supplies evidence, interfaces, and consequences; intelligence, restraint, creativity, and concern for residents must emerge from provider decisions and measured outcomes.
+7. Prices and construction duration are data contracts. Simulation code may apply bounded live modifiers, but base values and coefficients belong in versioned JSON charts that can be inspected, tested, and replaced without editing planner logic.
 
 ## Functional requirements
 
@@ -24,6 +25,14 @@ This specification defines the shared construction vocabulary and the progressio
 3. constructionBlockQuote(id, { area }) shall return a frozen bill with cost, materials, labour hours, and modules. An explicit block quote remains stable through site selection and project start.
 4. constructionBlockDemand(id, town) shall expose measured gates for complete streets, cycle corridors, transit stops, and mobility/charging bays.
 5. The browser shall expose catalogue, quote/audit helpers, demand gates, and constructionPalette() on window.
+
+### Dynamic market and construction timing
+
+5a. `src/data/priceChart.json` shall contain versioned base prices and adjustment coefficients for construction families, land, vehicles, commodities, and commerce rungs. `priceChart()`, `basePrice()`, `quotePrice()`, `commodityPrice()`, and `priceIndex()` shall resolve these values through one lookup module.
+5b. Live price factors shall be deterministic and bounded by the chart defaults. Commodity scarcity shall use storehouse stock versus chart capacity; construction shall respond to measured growth pressure, congestion where relevant, and fiscal runway. A missing town context shall return the chart base value, preserving deterministic catalogue audits.
+5c. Construction and land quotes shall use the live quote at decision time and retain the resulting amount in the project/decision record. Vehicle procurement and industry import/export/production accounting shall use the same commodity/vehicle quote path; no caller may silently reintroduce a parallel fixed price table.
+5d. `src/data/buildtime.json` shall contain versioned base hours and footprint/floor/pressure modifiers for every project type, including landmarks. `buildHoursFor()` shall derive a bounded deterministic duration from the chart and the live town; zero-hour infrastructure and policy actions remain explicit chart rows.
+5e. A project shall retain its quoted build hours through funding and execution. A later change in pressure may affect a new quote but may not mutate an already-started project. Council reports shall expose the chart versions and current price indices so providers can reason about fiscal and timing trade-offs.
 
 ### Housing, commerce, and mixed use
 

@@ -82,6 +82,16 @@ export const CIVIC_VERTICAL_CAPS = Object.freeze({
   university: 8
 });
 
+// Facility evolution is deliberately conservative: it only replaces a civic
+// with a better authored variant that fits the same parcel area. Larger
+// campuses still use a new BUILD_CIVIC order or WING so the land decision stays
+// visible instead of silently swallowing neighbouring plots.
+export const CIVIC_UPGRADE_PATHS = Object.freeze({
+  community: Object.freeze({ to: 'library', minPopulation: 60, reason: 'a mature town can turn its community centre into a library' }),
+  library: Object.freeze({ to: 'museum', minPopulation: 160, reason: 'a larger town can evolve its library into a museum' }),
+  busdepot: Object.freeze({ to: 'transit', minPopulation: 180, reason: 'a growing network can evolve a depot into a transit hub' })
+});
+
 export const CIVIC_CATALOGUE = {
   townhall: {
     label: 'Town Hall',

@@ -1,6 +1,22 @@
 ﻿# Construction and metropolis roadmap
 
-Updated 2026-10-03 after the industrial-chain and hospitality-economy audit.
+Updated 2026-10-03 after the dynamic-market and build-duration audit.
+
+## Completed in this pass
+
+- [x] Added `src/data/priceChart.json` and one resolver module. Construction families, land, vehicles, commodities, and commerce rungs now have inspectable base values and bounded live factors instead of scattered fixed quotes.
+- [x] Linked price responses to measured scarcity, housing/industrial pressure, congestion, treasury runway, and fiscal stress. The Council report exposes price-chart version and current construction, land, and commodity indices.
+- [x] Added `src/data/buildtime.json` and `buildHoursFor()`. Project duration now derives from external base hours plus footprint, floors, pressure, congestion, and fiscal capacity; active projects retain their quoted duration.
+- [x] Added civic same-parcel progression for community centre → library → museum and bus depot → transit hub, while larger school/college/university/hospital campuses remain explicit land-aware builds or wings.
+- [x] State service audit at 800 simulated days (seed 1337) now reaches transit readiness, keeps police/fire/ambulance station coverage valid, scales buses with population, and completes with no page errors.
+- [x] Council report now lists all intents as priority/feasible/blocked/conditional and includes building, land, resource-site, service-fleet, transit, price, and build-time evidence.
+
+## Next measurable work
+
+- [ ] Add a player-facing transit-stop placement tool and persist stop edits through save/restore.
+- [ ] Add a small price-history sparkline to the Trade/Storehouse UI using the chart resolver, with no new simulation authority.
+- [ ] Run a normal-provider 1,200-day matrix comparing price volatility, project completion time, treasury runway, and resident outcomes across providers.
+- [ ] Tune commodity capacities and chart elasticities only from recorded horizon outcomes; keep the JSON versioned and preserve replay fixtures.
 
 ## Completed
 

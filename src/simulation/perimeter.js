@@ -1,5 +1,6 @@
 import { events } from '../core/events.js';
 import { CELL_KIND } from '../core/config.js';
+import { basePrice, quotePrice } from './priceChart.js';
 
 /**
  * The rendered grid is deliberately larger than the founding hamlet. This
@@ -25,7 +26,7 @@ export class PerimeterSystem {
     this.expansions = 0;
     this.acquiredCells = 0;
     this.last = null;
-    this.costPerCell = 650;
+    this.costPerCell = basePrice('land', 650);
   }
 
   key(x, y) { return `${x},${y}`; }
@@ -150,7 +151,8 @@ export class PerimeterSystem {
       const key = this.key(x, y);
       if (!fresh.some((c) => c.key === key)) fresh.push({ x, y, key });
     }
-    return { cells: fresh.map(({ x, y }) => [x, y]), cost: fresh.length * this.costPerCell };
+    const cost = fresh.length ? quotePrice('land', this.town, { quantity: fresh.length, fallback: this.costPerCell }) : 0;
+    return { cells: fresh.map(({ x, y }) => [x, y]), cost };
   }
 
   frontierCells(limit = 6) {
@@ -250,7 +252,7 @@ export class PerimeterSystem {
       expansions: this.expansions,
       bounds: Number.isFinite(this.minX) ? { minX: this.minX, minY: this.minY, maxX: this.maxX, maxY: this.maxY } : null,
       last: this.last,
-      nextTileCost: this.costPerCell
+      nextTileCost: quotePrice('land', this.town, { fallback: this.costPerCell })
     };
   }
 }

@@ -3,6 +3,7 @@ import { CELL_KIND } from '../core/config.js';
 import { ECON, PUBLIC_PROJECT_TYPES, PRIVATE_PROJECT_TYPES, SECTOR, TRANSACTION_CATEGORIES } from './economicConfig.js';
 import { qualifies } from '../kits/citizens/personality.js';
 import { setJob } from '../kits/citizens/citizenProfile.js';
+import { basePrice } from './priceChart.js';
 
 export const TICKET = 16;
 
@@ -25,10 +26,10 @@ export const AREA_PER_STAFF = 15;
 export const STAFF_UNIT = 70;
 export const ASSESS = { residential: 45000, commercial: 70000, industrial: 140000, civic: 220000, park: 15000 };
 export const SHOP_TIERS = {
-  stall: { id: 'stall', label: 'market stall', cellCost: 4500, capacity: 70, sizes: [[1, 1]] },
-  kiosk: { id: 'kiosk', label: 'kiosk', cellCost: 6500, capacity: 140, sizes: [[2, 1], [1, 2]] },
-  shop: { id: 'shop', label: 'shop', cellCost: 8500, capacity: 300, sizes: [[2, 2], [2, 1]] },
-  store: { id: 'store', label: 'department store', cellCost: 11000, capacity: 650, sizes: [[3, 2], [4, 2], [3, 1]] }
+  stall: { id: 'stall', label: 'market stall', cellCost: basePrice('commerce.stall', 4500), capacity: 70, sizes: [[1, 1]] },
+  kiosk: { id: 'kiosk', label: 'kiosk', cellCost: basePrice('commerce.kiosk', 6500), capacity: 140, sizes: [[2, 1], [1, 2]] },
+  shop: { id: 'shop', label: 'shop', cellCost: basePrice('commerce.shop', 8500), capacity: 300, sizes: [[2, 2], [2, 1]] },
+  store: { id: 'store', label: 'department store', cellCost: basePrice('commerce.store', 11000), capacity: 650, sizes: [[3, 2], [4, 2], [3, 1]] }
 };
 
 export function money(v) { return `$${Math.round(v || 0).toLocaleString('en-US')}`; }

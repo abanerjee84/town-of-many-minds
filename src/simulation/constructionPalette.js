@@ -48,7 +48,7 @@ export function constructionPalette(town, opts = {}) {
   const cash = Math.max(0, Number(eco.treasury || 0) - reserve);
   const filter = opts.family || opts.kit ? { family: opts.family, kit: opts.kit } : {};
   const rows = listConstructionBlocks(filter).map((block) => {
-    const quote = constructionBlockQuote(block.id);
+    const quote = constructionBlockQuote(block.id, { town });
     const mapZone = opts.zone || null;
     const zoneOk = !mapZone || ZONE_FOR_FAMILY[block.family] === mapZone;
     const footprint = hasFootprint(town, block, mapZone);

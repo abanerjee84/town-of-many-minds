@@ -1,4 +1,5 @@
 import { events } from '../core/events.js';
+import { commodityPrice, priceChart } from './priceChart.js';
 
 /**
  * Phase 6 — industry & trade. Factories produce the materials construction
@@ -93,15 +94,15 @@ export const COMMODITIES = [
 const RAW_INPUTS = new Set(['crude_oil']);
 const PRODUCIBLE_COMMODITIES = COMMODITIES.filter((key) => FACTORY_TYPES.some((factory) => factory.product === key));
 
-const BASE_PRICE = {
-  lumber: 48, steel: 64, cement: 40, goods: 36,
-  cloth: 44, software: 78, furniture: 52,
-  aggregate: 22, packaged_food: 58, glass: 72, chemicals: 84,
-  paper: 46, electronics: 128, machinery: 150, refined_fuel: 92,
-  polymers: 96, medicine: 210, batteries: 180, crude_oil: 68
-};
+const BASE_PRICE = Object.freeze(Object.fromEntries(
+  Object.entries(priceChart().commodity || {}).map(([key, row]) => [key, Number(row.base) || 1])
+));
 const IMPORT_MULT = 1.18;
 const EXPORT_MULT = 0.84;
+
+function priceFor(town, key, side = 'local') {
+  return commodityPrice(town, key, side) || BASE_PRICE[key] || 1;
+}
 const CAPACITY = {
   lumber: 900, steel: 850, cement: 850, goods: 900,
   cloth: 800, software: 600, furniture: 800,
@@ -440,14 +441,14 @@ export class IndustrySystem {
   /** Daily full-capacity output value of one factory — its GDP contribution. */
   revenuePerDay(building) {
     const key = this.typeOf(building).product;
-    return Math.round(this.factoryProductionRate(building) * BASE_PRICE[key]);
+    return Math.round(this.factoryProductionRate(building) * priceFor(this.town, key));
   }
 
   manualBuy(key, qty = 50) {
     if (!CAPACITY[key]) return { ok: false, reason: 'no such goods' };
     const n = Math.min(qty, Math.floor(CAPACITY[key] - this.totalStock(key)));
     if (n < 1) return { ok: false, reason: 'storehouse is full' };
-    const imported = this.town.economy.importGoods({ sector: 'business', id: 'contractor' }, key, n, BASE_PRICE[key] * IMPORT_MULT);
+    const imported = this.town.economy.importGoods({ sector: 'business', id: 'contractor' }, key, n, priceFor(this.town, key, 'import'));
     if (!imported.ok) return imported;
     const cost = imported.cost;
     this.imported += cost;
@@ -480,7 +481,7 @@ export class IndustrySystem {
       if (!need) continue;
       const capacity = CAPACITY[key] || 0;
       if (need > Math.max(0, Math.floor(capacity - this.totalStock(key)))) return false;
-      total += need * BASE_PRICE[key] * IMPORT_MULT;
+      total += need * priceFor(this.town, key, 'import');
     }
     return contractor.balance + 1e-8 >= total;
   }
@@ -518,7 +519,7 @@ export class IndustrySystem {
       const need = Math.max(0, Math.ceil((Number(value) || 0) - this.totalStock(key)));
       if (!need) continue;
       if (need > Math.max(0, Math.floor((CAPACITY[key] || 0) - this.totalStock(key)))) return false;
-      total += need * BASE_PRICE[key] * IMPORT_MULT;
+      total += need * priceFor(this.town, key, 'import');
     }
     return contractor.balance + 1e-8 >= total;
   }
@@ -541,7 +542,7 @@ export class IndustrySystem {
     if (!CAPACITY[key]) return { ok: false, reason: 'no such goods' };
     const n = Math.min(qty, Math.floor(this.stocks[key]));
     if (n < 1) return { ok: false, reason: 'storehouse is empty' };
-    const exported = this.town.economy.exportGoods({ sector: 'business', id: 'contractor' }, key, n, BASE_PRICE[key] * EXPORT_MULT);
+    const exported = this.town.economy.exportGoods({ sector: 'business', id: 'contractor' }, key, n, priceFor(this.town, key, 'export'));
     if (!exported.ok) return exported;
     const gain = exported.revenue;
     this.exported += gain;
@@ -569,7 +570,7 @@ export class IndustrySystem {
       if (this.stocks[key] <= cap * 0.85) continue;
       const qty = Math.floor(this.stocks[key] - cap * 0.6);
       if (qty < 1) continue;
-      const gain = Math.round(BASE_PRICE[key] * EXPORT_MULT * qty);
+      const gain = Math.round(priceFor(this.town, key, 'export') * qty);
       this.town.economy.transfer({ from: 'external', to: 'contractor', amount: gain, category: 'export', metadata: { commodity: key, quantity: qty } });
       this.exported += gain;
       this.stocks[key] -= qty;
@@ -581,7 +582,7 @@ export class IndustrySystem {
     const g = this.stocks.goods;
     if (g < CAPACITY.goods * 0.2) {
       const qty = Math.min(40, Math.floor(CAPACITY.goods * 0.5 - g));
-      const cost = Math.round(BASE_PRICE.goods * IMPORT_MULT * qty);
+      const cost = Math.round(priceFor(this.town, 'goods', 'import') * qty);
       const contractor = this.town.economy?._account?.('contractor');
       if (qty > 0 && contractor && contractor.balance >= cost) {
         const paid = this.town.economy.transfer({ from: 'contractor', to: 'external', amount: cost, category: 'import', metadata: { commodity: 'goods', quantity: qty } });
@@ -677,7 +678,7 @@ export class IndustrySystem {
       const consumed = Object.fromEntries(Object.entries(needs).map(([input, perUnit]) => [input, made * perUnit]));
       firm.productionFactor = factor;
       firm.utilityFactor = utilityFactor;
-      if (made > 0) economy.recordProduction(firm, key, made, consumed, BASE_PRICE[key]);
+      if (made > 0) economy.recordProduction(firm, key, made, consumed, priceFor(this.town, key));
       const band = factor >= 0.99 ? 'full' : factor <= 0 ? 'stopped' : `reduced-${Math.floor(factor * 4)}`;
       if (band !== firm.lastConstraintBand && band !== 'full')
         this.note(`${firm.name} production reduced to ${Math.round(factor * 100)}% by labour, inputs, capital or utilities.`);
@@ -691,7 +692,7 @@ export class IndustrySystem {
         if (!need) continue;
         const trade = economy.buyInventory({
           buyer: { sector: 'business', id: retailer.id }, seller: { sector: 'business', id: goodsProducer.id },
-          commodity: 'goods', quantity: need, unitPrice: BASE_PRICE.goods
+          commodity: 'goods', quantity: need, unitPrice: priceFor(this.town, 'goods')
         });
         if (!trade.ok && trade.reason === 'insufficient_funds') retailer.status = 'input_arrears';
       }
@@ -702,7 +703,7 @@ export class IndustrySystem {
       for (const firm of economy?.businesses?.filter((b) => b.type === 'industry') || []) {
         if ((firm.inventory[key] || 0) <= cap * 0.2) continue;
         const qty = Math.floor((firm.inventory[key] || 0) - cap * 0.15);
-        const sold = economy.exportGoods({ sector: 'business', id: firm.id }, key, qty, BASE_PRICE[key] * EXPORT_MULT);
+        const sold = economy.exportGoods({ sector: 'business', id: firm.id }, key, qty, priceFor(this.town, key, 'export'));
         if (!sold.ok) continue;
         this.exported += sold.revenue;
         this.note(`${firm.name} exported ${sold.quantity} ${LABEL[key].toLowerCase()} for $${Math.round(sold.revenue).toLocaleString('en-US')}.`);
@@ -710,7 +711,7 @@ export class IndustrySystem {
     }
     const retail = economy?.businesses?.find((b) => b.type !== 'industry' && (b.inventory.goods || 0) < 20);
     if (retail) {
-      const bought = economy.importGoods({ sector: 'business', id: retail.id }, 'goods', 40, BASE_PRICE.goods * IMPORT_MULT);
+      const bought = economy.importGoods({ sector: 'business', id: retail.id }, 'goods', 40, priceFor(this.town, 'goods', 'import'));
       if (bought.ok) {
         this.imported += bought.cost;
         this.note(`${retail.name} imported 40 goods for $${Math.round(bought.cost).toLocaleString('en-US')}.`);
@@ -764,8 +765,8 @@ export class IndustrySystem {
         stock: Math.round(s),
         capacity: CAPACITY[key],
         percent: Math.round((s / CAPACITY[key]) * 100),
-        buy: Math.round(BASE_PRICE[key] * IMPORT_MULT),
-        sell: Math.round(BASE_PRICE[key] * EXPORT_MULT)
+        buy: Math.round(priceFor(this.town, key, 'import')),
+        sell: Math.round(priceFor(this.town, key, 'export'))
       };
     }
     const factories = this.factories();

@@ -1284,6 +1284,32 @@ export class Town {
     return next;
   }
 
+  /** Replace a same-area civic facility with its next authored progression. */
+  upgradeCivicBuilding(rec, { facility } = {}) {
+    if (!rec || rec.kind !== 'civic' || !facility || !this.buildings.includes(rec)) return null;
+    const cells = rec.footprint?.length ? rec.footprint.map((cell) => cell.slice()) : [rec.cell.slice()];
+    const footprint = rec.footprint?.length
+      ? {
+          cols: Math.max(...cells.map((cell) => cell[0])) - Math.min(...cells.map((cell) => cell[0])) + 1,
+          rows: Math.max(...cells.map((cell) => cell[1])) - Math.min(...cells.map((cell) => cell[1])) + 1
+        }
+      : null;
+    const origin = rec.cell?.slice();
+    if (!origin || !this.clearLot(rec)) return null;
+    const next = this.placeBuilding(origin[0], origin[1], ZONE.CIVIC, {
+      footprint,
+      footprintCells: cells,
+      floors: Math.max(1, rec.floors || 1),
+      facility,
+      acquire: false,
+      name: rec.name ? `${rec.name} ${facility}` : undefined
+    });
+    if (!next) return null;
+    next.upgradedFrom = rec.facility || null;
+    events.emit('log', { kind: 'event', text: `${next.name || 'The civic building'} evolves from ${rec.facility || 'its former use'} into a ${facility}.` });
+    return next;
+  }
+
   /**
    * Phase 8 — repaint the zoning of a brush of cells (REZONE and ANNEX_EDGE
    * both land here). Green space and the network keep their use, and the

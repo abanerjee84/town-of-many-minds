@@ -1,6 +1,7 @@
 import { SIM, CELL } from '../core/config.js';
 import { SECTOR } from './economicConfig.js';
 import { CIVILIAN_VEHICLE_TYPES, SERVICE_VEHICLE_TYPES, EMERGENCY_VEHICLE_TYPES, vehicleFootprint } from '../kits/vehicles/vehicleKit.js';
+import { basePrice, quotePrice } from './priceChart.js';
 
 /**
  * The vehicle stock: a register of durable assets that outlive any single
@@ -73,7 +74,8 @@ export function baseValue(type) {
   const size = spec.length * spec.width;
   // $900 for the smallest car up to $40,000 for the largest, on a mild curve.
   const raw = 900 * Math.pow(size / (3.3 * 1.6), 1.35) * 9;
-  return Math.round(Math.max(VALUE_FLOOR, Math.min(VALUE_CEILING, raw)) / 100) * 100;
+  const charted = basePrice(`vehicle.${type}`, 0);
+  return Math.round(Math.max(VALUE_FLOOR, Math.min(VALUE_CEILING, charted || raw)) / 100) * 100;
 }
 
 export class VehicleRegistry {
@@ -177,7 +179,7 @@ export class VehicleRegistry {
    */
   procure(type, opts = {}) {
     const reason = opts.reason || 'required';
-    const value = baseValue(type);
+    const value = quotePrice(`vehicle.${type}`, this.town, { fallback: baseValue(type) });
     const paid = this.town.economy.transfer({
       from: 'government',
       to: 'external',
@@ -196,6 +198,7 @@ export class VehicleRegistry {
     });
     slot.procuredFor = reason;
     slot.stationCell = opts.homeCell || null;
+    slot.stationKey = opts.stationKey || (opts.homeCell ? `${opts.homeCell[0]},${opts.homeCell[1]}` : null);
     this.treasurySpend += value;
     // Deploy it. If the road network cannot take it right now the slot still
     // exists and the town can crew it later — but say so, because a purchased
@@ -727,7 +730,12 @@ export class VehicleRegistry {
 
     // 1. The state answers its own shortfalls, if it can pay for them.
     for (const gap of this.stateShortfall()) {
-      const result = this.procure(gap.unit, { reason: gap.reason });
+      const result = this.procure(gap.unit, {
+        reason: gap.reason,
+        homeCell: gap.homeCell,
+        homeLabel: gap.homeLabel,
+        stationKey: gap.stationKey
+      });
       if (result.ok) outcomes.stateBought++;
     }
 
@@ -924,17 +932,63 @@ export class VehicleRegistry {
     }
 
     // 2. Coverage for a town this size.
-    for (const { unit, ratio } of COVERAGE) {
+    for (const { unit, ratio } of SERVICE_COVERAGE) {
       const required = 1 + Math.floor(pop / ratio);
       if (count(unit) < required) {
+        // Do not purchase an emergency vehicle with nowhere to station it.
+        // Growth exposes the missing facility as a civic need; once the station
+        // exists this row carries its road frontage into procurement.
+        const station = this.stationForUnit(unit);
+        if (!station) continue;
+        const homeCell = this.town.nearestRoadCell?.(station.cell[0], station.cell[1]) || station.cell;
         need.push({
           unit: TYPE_FOR_UNIT[unit],
           reason: `${pop} residents on ${count(unit)} ${unit.toLowerCase()}`,
-          urgency: 0.5
+          urgency: 0.5,
+          homeCell,
+          homeLabel: station.label,
+          stationKey: `${station.cell[0]},${station.cell[1]}`
         });
       }
     }
     return need;
+  }
+
+  /** Public facilities that can physically house each emergency vehicle class. */
+  stationForUnit(unit) {
+    const facilities = unit === 'Ambulance' ? new Set(['clinic', 'hospital']) :
+      unit === 'Police' ? new Set(['police']) : new Set(['fire']);
+    return (this.town.buildings || [])
+      .filter((b) => b.kind === 'civic' && facilities.has(b.facility) && b.cell)
+      .sort((a, b) => (a.cell[0] - b.cell[0]) || (a.cell[1] - b.cell[1]))
+      .map((b) => ({ cell: b.cell, label: b.name || b.house?.spec?.label || b.facility, building: b }))[0] || null;
+  }
+
+  /**
+   * Station capacity is separate from vehicle coverage. A single founding
+   * station can keep up with a hamlet, but larger towns need a second response
+   * point before buying another vehicle. This is the civic demand that was
+   * missing from the growth planner, so the fleet could ask for units while the
+   * building catalogue never offered their homes.
+   */
+  stationShortfall() {
+    const pop = this.population();
+    const rows = [];
+    for (const spec of SERVICE_COVERAGE) {
+      const facilities = spec.facilities || [spec.facility];
+      const count = (this.town.buildings || []).filter((b) => b.kind === 'civic' && facilities.includes(b.facility)).length;
+      const required = Math.max(1, Math.ceil(pop / spec.ratio));
+      if (count < required) {
+        rows.push({
+          facility: spec.facility,
+          unit: spec.unit,
+          count,
+          required,
+          reason: `${pop} residents need ${required} ${spec.facility} station${required === 1 ? '' : 's'}; ${count} available`
+        });
+      }
+    }
+    return rows;
   }
 
   /**
@@ -1026,10 +1080,10 @@ const TYPE_FOR_UNIT = { Police: 'police', Ambulance: 'ambulance', Fire: 'fire', 
  * tuned, and they are here rather than inline so the shape of the rule is
  * readable at a glance.
  */
-const COVERAGE = [
-  { unit: 'Police', ratio: 180 },
-  { unit: 'Ambulance', ratio: 220 },
-  { unit: 'Fire', ratio: 320 }
+const SERVICE_COVERAGE = [
+  { unit: 'Police', ratio: 180, facility: 'police' },
+  { unit: 'Ambulance', ratio: 220, facility: 'clinic', facilities: ['clinic', 'hospital'] },
+  { unit: 'Fire', ratio: 320, facility: 'fire' }
 ];
 
 function unitFor(type) {

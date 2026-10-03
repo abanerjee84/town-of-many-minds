@@ -8,6 +8,7 @@
  * distinction explicit.
  */
 import { getSettings } from '../core/settings.js';
+import { basePrice, quotePrice } from '../simulation/priceChart.js';
 
 const BLOCKS = [
   // Housing and mixed-use shells.
@@ -89,6 +90,11 @@ const BLOCKS = [
   { id: 'road.cycle', kit: 'roads', family: 'mobility', label: 'Cycle corridor', footprint: [1, 1], modules: ['cycle-lane', 'crosswalk', 'parking-lane'] },
   { id: 'road.transit', kit: 'roads', family: 'mobility', label: 'Transit stop', footprint: [1, 1], modules: ['bus-stop', 'shelter', 'crosswalk'] },
   { id: 'road.bridge', kit: 'roads', family: 'mobility', label: 'Bridge crossing', footprint: [1, 1], modules: ['bridge', 'ramp', 'drainage'] },
+  // Arterial and junction modules give the road kit real planning choices
+  // beyond a one-cell complete street. They are catalogue blocks, so the
+  // council can quote them consistently with buildings and public works.
+  { id: 'road.arterial', kit: 'roads', family: 'mobility', label: 'Four-lane arterial', footprint: [1, 1], modules: ['four-lane', 'median', 'turn-pocket', 'drainage', 'street-light'] },
+  { id: 'road.roundabout', kit: 'roads', family: 'mobility', label: 'Roundabout junction', footprint: [3, 3], modules: ['central-island', 'yield-marking', 'approach', 'street-light'] },
 
   // Public realm and neighbourhood furniture.
   { id: 'public.path', kit: 'publicspace', family: 'public', label: 'Pedestrian path', footprint: [1, 1], modules: ['path', 'lamp', 'bench'] },
@@ -118,24 +124,24 @@ export const CONSTRUCTION_BLOCKS = Object.freeze(BLOCKS.map((block) => Object.fr
  * a project's treasury reserve without inventing a second economy.
  */
 const FAMILY_BILLS = Object.freeze({
-  housing: { cost: 9000, materials: { lumber: 18, cement: 14, steel: 4 }, labourHours: 16 },
-  commerce: { cost: 12000, materials: { lumber: 22, cement: 18, steel: 7 }, labourHours: 20 },
-  civic: { cost: 30000, materials: { lumber: 32, cement: 28, steel: 12 }, labourHours: 32 },
-  mobility: { cost: 18000, materials: { lumber: 20, cement: 24, steel: 14 }, labourHours: 26 },
-  industry: { cost: 26000, materials: { lumber: 24, cement: 26, steel: 16 }, labourHours: 36 },
-  resource: { cost: 30000, materials: { lumber: 20, cement: 24, steel: 18 }, labourHours: 40 },
-  utility: { cost: 18000, materials: { lumber: 12, cement: 22, steel: 20 }, labourHours: 28 },
-  public: { cost: 3000, materials: { lumber: 8, cement: 8, steel: 2 }, labourHours: 8 }
+  housing: { cost: basePrice('construction.house', 9000), materials: { lumber: 18, cement: 14, steel: 4 }, labourHours: 16 },
+  commerce: { cost: basePrice('construction.shop', 12000), materials: { lumber: 22, cement: 18, steel: 7 }, labourHours: 20 },
+  civic: { cost: basePrice('construction.civic', 30000), materials: { lumber: 32, cement: 28, steel: 12 }, labourHours: 32 },
+  mobility: { cost: basePrice('construction.road', 18000), materials: { lumber: 20, cement: 24, steel: 14 }, labourHours: 26 },
+  industry: { cost: basePrice('construction.factory', 26000), materials: { lumber: 24, cement: 26, steel: 16 }, labourHours: 36 },
+  resource: { cost: basePrice('construction.utility', 30000), materials: { lumber: 20, cement: 24, steel: 18 }, labourHours: 40 },
+  utility: { cost: basePrice('construction.utility', 18000), materials: { lumber: 12, cement: 22, steel: 20 }, labourHours: 28 },
+  public: { cost: basePrice('construction.park', 3000), materials: { lumber: 8, cement: 8, steel: 2 }, labourHours: 8 }
 });
 
 const MODULE_PREMIUM = Object.freeze({
-  ramp: { cost: 450, materials: { cement: 2, steel: 1 }, labourHours: 1 },
-  balcony: { cost: 650, materials: { cement: 1, steel: 3 }, labourHours: 2 },
-  'solar-roof': { cost: 1800, materials: { steel: 4, cement: 1 }, labourHours: 3 },
-  'green-roof': { cost: 1100, materials: { lumber: 2, cement: 2 }, labourHours: 3 },
-  battery: { cost: 2200, materials: { steel: 5, cement: 2 }, labourHours: 3 },
-  'ev-charger': { cost: 900, materials: { steel: 2 }, labourHours: 1 },
-  'play-structure': { cost: 700, materials: { lumber: 3, steel: 2 }, labourHours: 2 }
+  ramp: { cost: basePrice('module.ramp', 450), materials: { cement: 2, steel: 1 }, labourHours: 1 },
+  balcony: { cost: basePrice('module.balcony', 650), materials: { cement: 1, steel: 3 }, labourHours: 2 },
+  'solar-roof': { cost: basePrice('module.solar-roof', 1800), materials: { steel: 4, cement: 1 }, labourHours: 3 },
+  'green-roof': { cost: basePrice('module.green-roof', 1100), materials: { lumber: 2, cement: 2 }, labourHours: 3 },
+  battery: { cost: basePrice('module.battery', 2200), materials: { steel: 5, cement: 2 }, labourHours: 3 },
+  'ev-charger': { cost: basePrice('module.ev-charger', 900), materials: { steel: 2 }, labourHours: 1 },
+  'play-structure': { cost: basePrice('module.play-structure', 700), materials: { lumber: 3, steel: 2 }, labourHours: 2 }
 });
 
 const mergeMaterials = (a, b, scale = 1) => {
@@ -153,13 +159,21 @@ export function constructionBlockQuote(id, context = {}) {
   const area = Math.max(1, Number(context.area || block.footprint[0] * block.footprint[1]));
   const base = FAMILY_BILLS[block.family] || FAMILY_BILLS.housing;
   const scale = Math.max(1, area / Math.max(1, block.footprint[0] * block.footprint[1]));
-  let cost = Math.round(base.cost * area * 0.85);
+  const familyPriceKey = {
+    housing: 'house', commerce: 'shop', civic: 'civic', mobility: 'road',
+    industry: 'factory', resource: 'utility', utility: 'utility', public: 'park'
+  }[block.family] || 'house';
+  const dynamicBase = quotePrice(`construction.${familyPriceKey}`, context.town, {
+    fallback: base.cost,
+    quantity: area
+  });
+  let cost = Math.round(dynamicBase * 0.85);
   let labourHours = Math.round(base.labourHours * Math.max(1, scale));
   let materials = mergeMaterials({}, base.materials, Math.max(1, scale));
   for (const module of block.modules || []) {
     const premium = MODULE_PREMIUM[module];
     if (!premium) continue;
-    cost += premium.cost;
+    cost += quotePrice(`module.${module}`, context.town, { fallback: premium.cost });
     labourHours += premium.labourHours;
     materials = mergeMaterials(materials, premium.materials);
   }
@@ -188,6 +202,8 @@ export function constructionBlockDemand(id, town) {
     'road.complete': averageCongestion > congestionGate,
     'road.cycle': (mobility.trips || 0) > 40 || pop > 70,
     'road.transit': pop > 60,
+    'road.arterial': averageCongestion > Math.max(congestionGate + 0.1, 0.6) || pop > 180,
+    'road.roundabout': averageCongestion > congestionGate && ((mobility.junctions || mobility.junctionCount || mobility.crossings || 0) > 0 || pop > 120),
     'prop.mobility': (mobility.parkingPressure || 0) > 1 || pop > 80
   };
   return Object.prototype.hasOwnProperty.call(gate, id) ? !!gate[id] : true;
