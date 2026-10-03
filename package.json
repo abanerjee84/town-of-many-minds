@@ -51,6 +51,7 @@
     ,"test:provider-matrix": "node scripts/_provider_matrix_check.mjs"
     ,"test:transit-stop": "node scripts/_transit_stop_check.mjs"
     ,"test:speed": "node scripts/_speed_check.mjs"
+    ,"test:bus-stuck": "node scripts/_bus_stuck_check.mjs"
   },
   "dependencies": {
     "three": "^0.169.0"

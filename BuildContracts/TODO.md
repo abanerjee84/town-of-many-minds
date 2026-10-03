@@ -19,6 +19,7 @@ Updated 2026-10-03 after the dynamic-market and build-duration audit.
 - [x] Added `BuildContracts/hardcode-catalog.json` and `BuildContracts/HARDCODE_AUDIT.md`, covering runtime tuning constants by priority, target JSON module, rationale, and extraction order.
 - [x] Extracted seasons and weather modifiers from `src/simulation/weather.js` into versioned `src/data/weather.json` while preserving deterministic seeded behavior.
 - [x] Added `npm run test:speed` to exercise every ribbon speed button, active-state synchronisation, pause, exact Clock scaling through 100×, Settings persistence, and page-error safety.
+- [x] Fixed the recurring bus deadlock at station approaches: transit stops now avoid junctions and one-cell station-bay clearances, stale routes are invalidated after rebuilds, and stationary blockers yield to a held bus. Added `npm run test:bus-stuck` for the seeded 180-day transit regression.
 
 ## Hardcode extraction queue
 

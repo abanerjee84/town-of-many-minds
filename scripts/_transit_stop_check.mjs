@@ -11,7 +11,10 @@ try {
   const result = await page.evaluate(() => {
     const town = window.town;
     town.generate('transit-stop-1337');
-    const cell = town.grid.roadCells().find(([x, y]) => town.grid.isRoad(x, y));
+    const protectedKeys = town.transport.stationApproachKeys();
+    const cell = town.grid.roadCells().find(([x, y]) =>
+      town.grid.roadDegree(x, y) === 2 && !protectedKeys.has(`${x},${y}`)
+    );
     const placed = town.placeTransitStop(...cell);
     const saved = town.exportIntegrityState();
     if (!saved.ok) return { placed, save: saved, errors: ['save refused'] };

@@ -2164,6 +2164,38 @@ export class TrafficSystem {
     }
   }
 
+  /**
+   * Transit is a scheduled service, so a stopped vehicle blocking its next
+   * stop must not be allowed to form an endless one-way queue. A bus can wait
+   * on a utility or emergency unit without a cycle appearing in the wait-for
+   * graph: the blocker may simply be facing the bus and still have its own
+   * route. In that case the normal cycle breaker never sees a cycle to solve.
+   * Give the blocker the same deterministic yield manoeuvre used for cycles
+   * once the bus has held long enough to prove this is a deadlock rather than
+   * an ordinary signal or queue.
+   */
+  prioritizeTransit() {
+    for (const bus of this.vehicles) {
+      if (bus.role !== 'transit' || bus.speed > 0.3 || bus.holdT < 4) continue;
+      const blocker = bus.waitingOn;
+      if (!blocker || !blocker.group?.parent || blocker === bus) continue;
+      // Emergency response keeps priority over scheduled transit. Station
+      // approaches are filtered out of the stop catalogue, so an ambulance
+      // should never be forced to back away from a call or its post for a bus.
+      if (blocker.role === 'emergency') continue;
+      if (blocker.parkTimer > 0 || blocker.sceneT > 0 || blocker.backing || blocker.giveWay || blocker.resolveT > 0) continue;
+      if (blocker.speed > 0.3 || blocker.holdT < 2) continue;
+
+      // Keep the bus's next stop as the destination. The blocker is the unit
+      // that has room to yield; rerouting the bus here would strand a route at
+      // a different stop and repeat the same deadlock on the next loop.
+      this.yieldTo(blocker, bus, this.canBack(blocker));
+      if (blocker.backing || blocker.giveWay || blocker.rerouteT > 0) {
+        bus.jamState = `priority wait for #${blocker.uid}`;
+      }
+    }
+  }
+
   /** Follow primary wait edges to the vehicle actually causing a queue. */
   chainOf(v) {
     const chain = [v];
@@ -2247,6 +2279,7 @@ export class TrafficSystem {
   resolveJams(dt) {
     if (this.jamLogT > 0) this.jamLogT -= dt;
     for (const cyc of this.findCycles()) this.breakCycle(cyc);
+    this.prioritizeTransit();
     for (const v of this.vehicles) this.escalate(v);
   }
 
