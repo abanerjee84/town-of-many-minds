@@ -210,6 +210,52 @@ The council system prompt is an epistemic contract for provider comparison: it d
 
 The next social-system acceptance pass shall add a player-facing stop-placement tool, staffed court throughput, neighbourhood-specific budgets, and seeded provider comparisons for approval, fiscal runway, crime resolution, and land-use efficiency. These are follow-up experiments rather than hidden Council objectives.
 
+## Kit modularity and extension architecture
+
+This section defines the target architecture for turning the current specialist kits into replaceable runtime modules. The existing `src/kits/*` packages and shared JSON catalogues remain compatible during migration. A kit is considered pluggable only when its catalogue, capabilities, lifecycle, accounting, placement, and persistence contracts are discoverable through the registry rather than through scattered imports and hand-maintained branches.
+
+49. The runtime shall provide one `KitRegistry` as the authoritative registry for built-in and test kits. A kit shall register under a namespaced, stable ID and semantic version. Duplicate IDs, unsupported versions, missing required hooks, duplicate intent ownership, and duplicate catalogue IDs shall fail registration before a town is generated.
+
+50. Every kit manifest shall declare:
+   - `id`, `version`, and `apiVersion`;
+   - the JSON catalogue and schema version it consumes;
+   - owned families, zones, facilities, resources, or vehicle roles;
+   - supported Council intents and project types;
+   - quote, demand, placement, build, upgrade, and inspection capabilities;
+   - lifecycle hooks for `create`, `reset`, `generate`, `updateHour`, `updateDay`, `stats`, `serialize`, `restore`, and `dispose` where applicable.
+
+51. A kit shall receive a narrow `KitContext` interface instead of the complete `Town` object. The context shall expose read-only snapshots and explicit services for grid queries, acquired land, road access, materials, treasury transfers, events, seeded randomness, and entity allocation. A kit shall not reach into another system's private arrays, mutate another kit's records, or import `Town` to obtain hidden state.
+
+52. Cross-kit communication shall use versioned contracts or domain events. At minimum, the shared contracts shall cover `BuildingContract`, `ProjectContract`, `DemandSignal`, `ResourceFlow`, `ServiceCoverage`, `VehicleAssignment`, and `KitStats`. Each contract shall identify its producer, schema version, stable entity ID, and rollback token when a mutation can fail.
+
+53. Catalogue data shall be namespaced by kit and validated at load time. A catalogue row shall not become buildable merely because it exists in JSON: the registry shall confirm that its declared builder, quote path, placement capability, and plan type are present. Unknown module IDs, missing materials, invalid footprints, and unsupported capacity kinds shall produce an actionable validation error.
+
+54. Intent routing shall be registry-driven. The action registry shall resolve an intent to its owning kit capability and plan type. Governance, growth, and the construction palette shall consume this same mapping; adding an intent shall not require a second family table, parser branch, or report-only entry. An intent with no currently feasible plan shall return a structured reason from its owner rather than a generic missing-procedure result.
+
+55. Kit lifecycle execution shall be centralized. Town initialization, reset, hourly updates, daily updates, save/restore, and disposal shall iterate registered manifests in declared dependency order. A kit may declare dependencies, but cyclic dependencies shall be rejected. Adding a kit shall not require manually editing unrelated reset or serialization branches.
+
+56. Kit mutations shall be transactional. Placement, upgrade, demolition, resource expansion, vehicle procurement, and project completion shall reserve footprints, land, materials, labour, and treasury through shared services, then commit or roll back atomically. A failed kit hook shall leave no geometry, grid ownership, staff assignment, ledger entry, event, or catalogue record behind.
+
+57. Renderer ownership shall remain local to the kit. Geometry builders shall consume a stable build contract and return disposable scene objects plus inspection metadata. Simulation code shall not depend on Three.js object structure, and geometry replacement shall not change capacity, staffing, production, or accounting unless the declared contract version changes.
+
+58. Kit statistics and evidence shall be discoverable through the registry. `Town.stats()`, Council evidence, the construction palette, validation, and benchmark snapshots shall query registered `KitStats` providers instead of importing each specialist implementation directly. Missing optional kits shall produce an explicit unavailable capability, not a null dereference or fabricated zero.
+
+59. A kit shall be independently testable with a fixture `KitContext`. Its tests shall cover catalogue schema, deterministic placement, quote stability, demand reasons, lifecycle reset, transaction rollback, serialization, and interaction with declared dependencies. A fixture kit used by tests shall be registerable without changing `Town`, `GrowthSystem`, or `GovernanceSystem` source files.
+
+60. The registry shall expose a compatibility report containing loaded kits, versions, owned IDs, intent routes, dependencies, schema versions, and failed registrations. The report shall be available to the developer diagnostics and included in replay metadata so two provider runs cannot silently use different kit sets.
+
+61. Migration shall preserve current public APIs. Existing exports such as `civicFacility`, `constructionBlock`, `buildHouse`, `ResourceSystem`, `UtilitySystem`, `VehicleRegistry`, and `PublicTransportSystem` shall remain adapters over registered capabilities until the deprecation window ends. No migration step may change seeded placement, accounting, or Council intent semantics without a versioned contract update and regression fixture.
+
+### Kit architecture acceptance tests
+
+- A registry audit shall load every built-in kit, verify unique IDs and versions, resolve every catalogue row to a builder/quote/placement capability, and report no orphaned intent.
+- A fixture kit shall register and run through create, reset, daily update, stats, serialization, and disposal without edits to Town or Governance source.
+- Removing an optional fixture kit shall yield an explicit unavailable capability while the remaining town can generate, simulate, save, restore, and render.
+- A forced build failure shall leave grid ownership, acquired land, materials, treasury, staffing, project ledger, scene nodes, and events identical to the pre-build snapshot.
+- Replacing a kit renderer with a test renderer shall preserve its capacity, staffing, resource flow, Council evidence, and seeded placement contracts.
+- The same registered intent shall produce the same parser, report, prompt, quote, and executor route; no intent may be present in only one of those surfaces.
+- Replay metadata shall include the registry compatibility report, catalogue versions, and kit API versions, and a mismatched replay shall fail with a named compatibility error.
+
 ## Acceptance tests
 
 - npm run build, npm run test:ui, npm run test:kits, npm run test:economy, npm run test:governor, npm run test:glow, npm run test:resources, npm run test:lake, npm run test:council, npm run test:soak, and npm run test:metropolis pass with no page errors.
