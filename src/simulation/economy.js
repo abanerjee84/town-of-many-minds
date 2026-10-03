@@ -2,6 +2,7 @@ import { events } from '../core/events.js';
 import { CELL_KIND } from '../core/config.js';
 import { ECON, PUBLIC_PROJECT_TYPES, PRIVATE_PROJECT_TYPES, SECTOR, TRANSACTION_CATEGORIES } from './economicConfig.js';
 import { qualifies } from '../kits/citizens/personality.js';
+import { setJob } from '../kits/citizens/citizenProfile.js';
 
 export const TICKET = 16;
 
@@ -53,6 +54,35 @@ function hashId(id) {
     h = Math.imul(h, 16777619);
   }
   return h >>> 0;
+}
+
+// A state-run works does not have a proprietor to recruit a specialist from
+// the local labour pool.  Keep the mapping here so the public staffing pass
+// can choose a credible trade, with assembler as the safe fallback for a new
+// worker who has not yet earned the steel/cement credential.
+const FACTORY_JOB = Object.freeze({
+  sawmill: 'millworker',
+  steelworks: 'metallurgist',
+  cement: 'cementworker',
+  goods: 'assembler',
+  textile: 'assembler',
+  software: 'assembler',
+  furniture: 'assembler',
+  quarry: 'assembler',
+  'food-processing': 'assembler',
+  glassworks: 'assembler',
+  chemicals: 'assembler',
+  paper: 'assembler',
+  electronics: 'assembler',
+  machinery: 'assembler',
+  refinery: 'assembler',
+  polymers: 'assembler',
+  pharma: 'assembler',
+  batteries: 'assembler'
+});
+
+function isGovernmentBuilding(building) {
+  return building?.ownerType === SECTOR.GOVERNMENT || building?.owner === 'state';
 }
 function blankPeriod(day = 1) {
   return {
@@ -358,6 +388,7 @@ export class EconomySystem {
     this.ensureBuildingIdentity(building);
     const id = building.businessId || this.nextId('business');
     building.businessId = id;
+    const governmentOwned = isGovernmentBuilding(building);
     const type = building.purpose === 'industrial'
       ? 'industry'
       : building.kind === 'office'
@@ -366,10 +397,18 @@ export class EconomySystem {
           ? 'lodging'
           : building.zone === 1 ? 'retail' : 'services';
     const propertyValue = this.propertyValue(building);
-    const owner = this.createOwner({ id });
+    const owner = governmentOwned ? null : this.createOwner({ id });
     const business = {
-      id, sector: SECTOR.BUSINESS, building, buildingId: building.id, ownerId: owner.id, owner,
-      equityInvestor: 'developer',
+      id, sector: SECTOR.BUSINESS, building, buildingId: building.id,
+      ownerId: governmentOwned ? 'government' : owner.id,
+      owner,
+      // A public works still has a business ledger for inventory and output,
+      // but its operating employer is the state.  Keeping that distinction
+      // prevents syncEntities() from silently turning a public factory into a
+      // private firm and lets payroll use the government account.
+      operatorSector: governmentOwned ? SECTOR.GOVERNMENT : SECTOR.BUSINESS,
+      operatorId: governmentOwned ? 'government' : id,
+      equityInvestor: governmentOwned ? 'government' : 'developer',
       name: building.name || `${businessLabel(building)} ${id.split('-').pop()}`, type,
       cash: 0,
       inventory: type === 'industry' ? {} : { goods: ECON.business.retailOpeningInventory },
@@ -382,18 +421,34 @@ export class EconomySystem {
       rate: Math.max(0, Number(building.tourism?.nightlyRate || building.house?.spec?.tourism?.nightlyRate) || 0),
       tourismRevenue: 0
     };
-    building.ownerType = SECTOR.BUSINESS;
-    building.ownerId = id;
-    building.owner = 'private';
+    if (governmentOwned) {
+      building.ownerType = SECTOR.GOVERNMENT;
+      building.ownerId = 'government';
+      building.owner = 'state';
+    } else {
+      building.ownerType = SECTOR.BUSINESS;
+      building.ownerId = id;
+      building.owner = 'private';
+    }
     this.businessesById.set(id, business);
-    this.ownersById.set(owner.id, owner);
+    if (owner) this.ownersById.set(owner.id, owner);
     for (const [commodity, quantity] of Object.entries(business.inventory))
       this.inventoryExpected.set(`${id}:${commodity}`, quantity);
-    const capital = this.transfer({
-      from: 'developer', to: { sector: SECTOR.BUSINESS, id }, amount: ECON.business.startupCash,
-      category: 'capital_injection', metadata: { businessId: id, ownerId: owner.id, openingBalance: true }
-    });
-    if (!capital.ok) this.issueLoan({ sector: SECTOR.BUSINESS, id }, ECON.business.startupCash);
+    // Public works already received their capital through project finance; do
+    // not charge the treasury a second private-style startup float when the
+    // economy merely registers the building. Private firms retain the normal
+    // developer injection and bounded loan fallback.
+    const openingCash = governmentOwned ? 0 : ECON.business.startupCash;
+    const capital = openingCash
+      ? this.transfer({
+          from: 'developer', to: { sector: SECTOR.BUSINESS, id }, amount: openingCash,
+          category: 'capital_injection', metadata: { businessId: id, ownerId: business.ownerId, openingBalance: true, governmentOwned }
+        })
+      : { ok: true };
+    // A public works must not quietly borrow as a private firm when the
+    // treasury cannot fund its operating float.  Private businesses retain
+    // their existing bounded owner loan fallback.
+    if (!capital.ok && !governmentOwned) this.issueLoan({ sector: SECTOR.BUSINESS, id }, ECON.business.startupCash);
     return business;
   }
 
@@ -985,6 +1040,11 @@ export class EconomySystem {
    * multiple of its equity.
    */
   ownerCanPay(job) {
+    if (job?.operatorSector === SECTOR.GOVERNMENT || isGovernmentBuilding(job?.building)) {
+      const government = this._account('government');
+      const dailyWage = Math.max(ECON.wages.minimumAnnual, Number(job?.building?.staffWage) || 0) / 365;
+      return !!government && government.balance - dailyWage + 1e-8 >= ECON.government.reserveOperatingFloor;
+    }
     const account = this._account({ sector: SECTOR.BUSINESS, id: job.id });
     if (!account) return true;
     if (account.balance > 0) return true;
@@ -995,8 +1055,69 @@ export class EconomySystem {
     return equity > 0 && limit > 0;
   }
 
+  /**
+   * Staff state-owned factories without taking workers away from private
+   * firms. A public works can recruit an unemployed local and, if the town has
+   * a vacant home, bring in one credentialed newcomer. The cap keeps a single
+   * newly opened works from importing its whole workforce in one tick.
+   */
+  staffPublicFactories(limit = 3) {
+    const ped = this.town.pedestrians;
+    if (!ped?.citizens) return 0;
+    const factories = this.businesses
+      .filter((business) => business.type === 'industry' && business.building && isGovernmentBuilding(business.building))
+      .sort((a, b) => (b.jobsRequired - b.employees) - (a.jobsRequired - a.employees));
+    if (!factories.length) return 0;
+
+    let hired = 0;
+    for (const business of factories) {
+      if (!this.ownerCanPay(business)) continue;
+      const target = Math.max(0, business.jobsRequired - ped.citizens.filter((c) => c.work === business.building &&
+        c.p?.age >= 18 && c.p?.age < 66 && c.p?.job?.id !== 'retired').length);
+      let remaining = target;
+      const factoryId = this.town.industry?.typeOf?.(business.building)?.id;
+      const preferred = FACTORY_JOB[factoryId] || 'assembler';
+      while (remaining > 0 && hired < limit) {
+        let candidate = ped.citizens.find((c) =>
+          c.p && c.p.age >= 18 && c.p.age < 66 && c.p.job?.id !== 'retired' &&
+          !c.work && (c.p.employmentStatus === 'unemployed' || !c.p.employmentStatus)
+        );
+        if (candidate) {
+          const jobId = qualifies(candidate.p.education?.level, preferred) ? preferred : 'assembler';
+          const changed = candidate.p.job?.id === jobId || setJob(candidate.p, jobId, this.rng);
+          if (!changed) {
+            candidate = null;
+          } else {
+            candidate.work = business.building;
+            candidate.routeGoalKey = null;
+            remaining--;
+            hired++;
+            continue;
+          }
+        }
+
+        const lifecycle = this.town.lifecycle;
+        if (!lifecycle?.immigrate) break;
+        const jobId = preferred;
+        const before = new Set(ped.citizens);
+        if (!lifecycle.immigrate({ job: jobId })) break;
+        const newcomer = ped.citizens.find((c) => before.has(c) ? false : true);
+        if (!newcomer) break;
+        newcomer.work = business.building;
+        newcomer.routeGoalKey = null;
+        remaining--;
+        hired++;
+      }
+      if (hired >= limit) break;
+    }
+    return hired;
+  }
+
   assignEmployees() {
     this.syncEntities();
+    // New resource sites can appear after the founding pass. Give their
+    // public crews a chance to claim idle locals before the business census.
+    this.town.pedestrians?.staffWorkforce?.();
     const citizens = this.town.pedestrians?.citizens || [];
     const byBuilding = new Map(this.businesses.map((b) => [b.building, b]));
     for (const business of this.businesses) {
@@ -1020,6 +1141,10 @@ export class EconomySystem {
       .filter((b) => b.building && ['shop', 'office', 'hotel', 'resort', 'factory'].includes(b.building.kind))
       .sort((a, b) => (b.jobsRequired - b.employees) - (a.jobsRequired - a.employees));
     this.hireResidents(jobs);
+    // State-owned factories are public employment. If no resident already has
+    // the matching industrial trade, recruit into the vacancy rather than
+    // leaving a government works visibly open with zero staff.
+    this.staffPublicFactories();
 
     // The census is the only place a citizen becomes `business.employees`: it
     // seats them against each firm's post budget in town order, and a citizen
@@ -1048,7 +1173,8 @@ export class EconomySystem {
       const at = business ? seated.get(business.id) || 0 : 0;
       if (business && at < business.jobsRequired) {
         seated.set(business.id, at + 1);
-        p.employerId = business.id; p.employmentStatus = 'employed'; employed++;
+        p.employerId = business.operatorSector === SECTOR.GOVERNMENT ? 'government' : business.id;
+        p.employmentStatus = 'employed'; employed++;
       } else if (publicJob) {
         p.employerId = siteDoor ? 'site' : 'government';
         p.employmentStatus = 'employed'; employed++;
@@ -2233,7 +2359,8 @@ export class EconomySystem {
     if (!b) return null;
     return {
       id: b.id, name: b.name, type: b.type, status: b.status, cash: Math.round(b.cash), debt: Math.round(b.debt),
-      owner: b.owner ? b.owner.name : null, ownerId: b.ownerId,
+      owner: b.operatorSector === SECTOR.GOVERNMENT ? 'State' : (b.owner ? b.owner.name : null),
+      ownerId: b.ownerId,
       inventory: { ...b.inventory }, customers: b.customers, revenue: Math.round(b.revenue), profit: Math.round(b.profit),
       rooms: b.type === 'lodging' ? b.rooms : undefined,
       nightlyRate: b.type === 'lodging' ? b.rate : undefined,
