@@ -43,7 +43,9 @@
     "test:campus": "node scripts/_campus_spacing_check.mjs",
     "test:tourism": "node scripts/_tourism_check.mjs",
     "test:lake": "node scripts/_lake_check.mjs",
-    "test:market-chart": "node scripts/_market_chart_check.mjs"
+    "test:market-chart": "node scripts/_market_chart_check.mjs",
+    "test:intents": "node scripts/_intent_coverage_check.mjs",
+    "test:state-service": "node scripts/_state_service_audit.mjs"
   },
   "dependencies": {
     "three": "^0.169.0"

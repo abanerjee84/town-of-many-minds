@@ -82,6 +82,31 @@ export class PublicTransportSystem {
     this.ensureFleet();
   }
 
+  /**
+   * Return the civic parcel that owns the line. A literal `transit` station
+   * key made the roster look valid even when a bus depot had moved or a hub
+   * had been replaced. The station is resolved from the same buildings that
+   * unlock the network, so fleet records and the visible civic map agree.
+   */
+  networkStation() {
+    const candidates = (this.town.buildings || [])
+      .filter((b) => b.cell && ['busdepot', 'transit'].includes(b.facility))
+      .map((building) => {
+        const cell = this.town.nearestRoadCell?.(building.cell[0], building.cell[1]) || building.cell;
+        const stop = this.stops[0] || cell;
+        const distance = Math.abs(cell[0] - stop[0]) + Math.abs(cell[1] - stop[1]);
+        return { building, cell, distance };
+      })
+      .sort((a, b) => a.distance - b.distance || String(a.building.facility).localeCompare(String(b.building.facility)));
+    const chosen = candidates[0];
+    if (!chosen) return null;
+    return {
+      building: chosen.building,
+      cell: chosen.cell,
+      key: `${chosen.building.cell[0]},${chosen.building.cell[1]}`
+    };
+  }
+
   ensureFleet() {
     if (!this.networkReady || !this.town.buildings.some((b) => ['busdepot', 'transit'].includes(b.facility))) {
       this.fleet = this.town.vehicles?.slots?.filter((s) => s.type === 'bus' && !s.scrapped && s.owner?.sector === 'government').length || 0;
@@ -95,12 +120,15 @@ export class PublicTransportSystem {
     // asset, station, ledger entry, and live traffic agent stay in sync.
     const pop = this.town.pedestrians?.citizens?.length || 0;
     const required = Math.min(8, Math.max(1, Math.ceil(pop / 120)));
+    const station = this.networkStation();
+    const stationCell = station?.cell || this.stops[0];
+    const stationKey = station?.key || (stationCell ? `${stationCell[0]},${stationCell[1]}` : null);
     while (stateBus.length < required) {
       const result = this.town.vehicles?.procure?.('bus', {
         reason: `public transport coverage for ${pop} residents`,
-        homeCell: this.stops[0],
+        homeCell: stationCell,
         homeLabel: 'Transit network',
-        stationKey: 'transit'
+        stationKey
       });
       if (!result?.ok) break;
       stateBus.push(result.slot);
@@ -111,9 +139,11 @@ export class PublicTransportSystem {
     // known so its first leg can be planned immediately instead of leaving a
     // bus permanently parked with an unbound slot.
     for (const slot of stateBus) {
+      if (stationCell) slot.stationCell = stationCell.slice();
+      if (stationKey) slot.stationKey = stationKey;
       if (slot.agent || !this.stops.length) continue;
       const agent = this.town.traffic?.spawn(1, this.stops[0], {
-        type: 'bus', slot, homeCell: this.stops[0], homeLabel: 'Transit network', stationKey: 'transit'
+        type: 'bus', slot, homeCell: stationCell || this.stops[0], homeLabel: 'Transit network', stationKey
       });
       if (agent) {
         agent.transitRoute = this.route;
@@ -150,6 +180,18 @@ export class PublicTransportSystem {
   }
 
   stats() {
-    return { stops: this.stops.length, routeTiles: this.route.length, fleet: this.fleet, ridership: this.ridership, dailyRides: this.dailyRides, coverage: Math.round(this.coverage * 100) / 100, ready: this.networkReady };
+    const buses = (this.town.vehicles?.slots || [])
+      .filter((s) => s.type === 'bus' && !s.scrapped && s.owner?.sector === 'government');
+    const operational = buses.filter((slot) => slot.agent?.transitRoute?.length > 1 && slot.stationKey).length;
+    return {
+      stops: this.stops.length,
+      routeTiles: this.route.length,
+      fleet: this.fleet,
+      operationalFleet: operational,
+      ridership: this.ridership,
+      dailyRides: this.dailyRides,
+      coverage: Math.round(this.coverage * 100) / 100,
+      ready: this.networkReady
+    };
   }
 }

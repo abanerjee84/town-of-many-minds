@@ -20,6 +20,12 @@ const result = await page.evaluate(({ days }) => {
     const facilities = {};
     for (const b of t.buildings) if (b.kind === 'civic') facilities[b.facility] = (facilities[b.facility] || 0) + 1;
     const fleet = t.vehicles.slots.filter((s) => !s.scrapped && s.owner?.sector === 'government');
+    const busAssets = fleet.filter((s) => s.type === 'bus').map((s) => ({
+      id: s.id,
+      stationKey: s.stationKey || null,
+      stationCell: s.stationCell || null,
+      operational: !!(s.agent?.transitRoute?.length > 1)
+    }));
     const units = {};
     for (const s of fleet) units[s.unit || s.type] = (units[s.unit || s.type] || 0) + 1;
     return {
@@ -28,6 +34,7 @@ const result = await page.evaluate(({ days }) => {
       facilities,
       fleet: { total: fleet.length, emergency: fleet.filter((s) => s.role === 'emergency').length, units },
       transport: t.transport.stats(),
+      busAssets,
       shortfall: t.vehicles.stateShortfall().map((x) => x.unit),
       civicLoads: t.growth.civicLoads?.(t) || [],
       ranked: t.growth.ranked().slice(0, 8).map((x) => ({ type: x.type, score: x.score, opts: x.opts }))
@@ -50,8 +57,15 @@ const result = await page.evaluate(({ days }) => {
     }
     if (day % 100 === 99 || day === days - 1) snapshots.push(snapshot(day + 1));
   }
-  return { snapshots, final: snapshot(days) };
+  const final = snapshot(days);
+  const failures = [];
+  if (final.transport.ready && final.transport.fleet < 1) failures.push('transit network has no state bus');
+  if (final.transport.ready && final.transport.operationalFleet !== final.transport.fleet) failures.push('one or more state buses lack a station or live route');
+  if (final.transport.ready && final.busAssets.some((bus) => !bus.stationKey || !bus.stationCell || !bus.operational)) failures.push('bus asset metadata is incomplete');
+  if (final.shortfall.length) failures.push(`uncovered emergency service: ${final.shortfall.join(', ')}`);
+  return { snapshots, final, failures };
 }, { days: Number(process.env.SERVICE_AUDIT_DAYS || 800) });
 
 console.log(JSON.stringify({ ...result, errors }, null, 2));
 await browser.close();
+if (errors.length || result.failures?.length) process.exitCode = 1;

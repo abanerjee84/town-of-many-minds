@@ -34,6 +34,14 @@ This specification defines the shared construction vocabulary and the progressio
 5d. `src/data/buildtime.json` shall contain versioned base hours and footprint/floor/pressure modifiers for every project type, including landmarks. `buildHoursFor()` shall derive a bounded deterministic duration from the chart and the live town; zero-hour infrastructure and policy actions remain explicit chart rows.
 5e. A project shall retain its quoted build hours through funding and execution. A later change in pressure may affect a new quote but may not mutate an already-started project. Council reports shall expose the chart versions and current price indices so providers can reason about fiscal and timing trade-offs.
 
+### Checklist closure and regression contracts
+
+5f. Public transport shall resolve every state vehicle to an existing bus depot or transit hub parcel, retain station coordinates and a stable station key, and bind each active bus to a route with at least two route tiles. `transport.stats()` shall expose both fleet and operational-fleet counts; a ready network with an unbound vehicle is an audit failure.
+5g. Civic growth shall expose explicit demand for missing emergency stations, transit depots, waste capacity, and higher-education capacity. Vertical capacity shall stop at each facility's authored cap; horizontal wings or a new catalogue facility shall answer demand once that cap is reached.
+5h. The roads kit shall include measured catalogue entries for a complete street, cycle corridor, transit stop, bridge, four-lane arterial, and 3×3 roundabout. Each entry shall carry modules, a quote, a demand gate, and a reason when the gate or connected footprint is unavailable.
+5i. The Council action registry is the single vocabulary. Every canonical intent shall parse through the registry, expose a project/direct action descriptor, appear in the prompt vocabulary, and be represented as priority, feasible, blocked, or conditional in the report. `npm run test:intents` is the regression guard.
+5j. The seeded 800-day service horizon shall complete with no browser errors, no emergency station shortfall, and an operational public-transport fleet. `npm run test:state-service` is the regression guard; long-horizon metropolis and road probes remain the progression and network guards.
+
 ### Housing, commerce, and mixed use
 
 6. HouseKit shall support accessible entrances, balconies, solar roofs, and planted roofs with role-tagged geometry and module records.

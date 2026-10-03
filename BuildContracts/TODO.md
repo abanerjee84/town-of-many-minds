@@ -10,6 +10,12 @@ Updated 2026-10-03 after the dynamic-market and build-duration audit.
 - [x] Added civic same-parcel progression for community centre → library → museum and bus depot → transit hub, while larger school/college/university/hospital campuses remain explicit land-aware builds or wings.
 - [x] State service audit at 800 simulated days (seed 1337) now reaches transit readiness, keeps police/fire/ambulance station coverage valid, scales buses with population, and completes with no page errors.
 - [x] Council report now lists all intents as priority/feasible/blocked/conditional and includes building, land, resource-site, service-fleet, transit, price, and build-time evidence.
+- [x] Checklist closure: public transport now resolves its fleet station to the actual bus depot/transit hub parcel, records station coordinates, binds every bus to a live route, and exposes `operationalFleet`; the 800-day service audit fails if any bus is unstationed or route-less.
+- [x] Checklist closure: civic service demand covers emergency station shortfalls, transit, waste, clinics, schools, colleges, universities, and recycling; authored vertical caps and same-parcel civic evolution are exercised by the seeded horizon audit.
+- [x] Checklist closure: the road kit exposes complete streets, cycle corridors, transit stops, four-lane arterials, bridges, and 3×3 roundabouts with catalogue modules and measured demand gates.
+- [x] Checklist closure: bounded loans, debt ceiling, protected reserve, repayment runway, dynamic price chart, and dynamic build-time chart are wired through one quote path and included in the Council evidence report.
+- [x] Checklist closure: `npm run test:intents` verifies all 59 canonical Council intents parse through the shared registry and remain represented in the prompt/report contract; it also checks the arterial and roundabout kit rows.
+- [x] Checklist closure: `npm run test:state-service` runs the seeded 800-day public-service horizon with no page errors, no uncovered emergency shortfall, a ready transit network, and station-bound operational buses.
 
 ## Next measurable work
 
