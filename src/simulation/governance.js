@@ -1818,6 +1818,21 @@ export class GovernanceSystem {
       decision.status = 'blocked';
       decision.detail = quoted.reason;
       this.record(decision);
+      // A model may still repeat BUILD_FACTORY after seeing a frontier
+      // works need. When the complete campus is not on acquired serviced land,
+      // make the prerequisite explicit instead of falling back to an unrelated
+      // build and leaving the factory demand stranded.
+      if (parsed.intent === 'BUILD_FACTORY' && t.growth.factoryLandNeeded?.(parsed.params || {})) {
+        const acquisition = this.enact('INTENT: ACQUIRE_LAND', 'rules');
+        acquisition.substituted = {
+          intent: decision.intent,
+          status: decision.status,
+          detail: decision.detail,
+          confidence: decision.confidence,
+          how: decision.how
+        };
+        return acquisition;
+      }
       return source === 'llm' && this.fallback ? this.substitute(decision) : decision;
     }
     decision.quotedCost = quoted.quote.finalCost;

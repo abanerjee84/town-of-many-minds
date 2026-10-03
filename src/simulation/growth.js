@@ -1120,7 +1120,7 @@ export function planFor(town, type, opts = {}) {
       if (growthInputs && housingNeedsBuild(growthInputs.pop, growthInputs.capacity, growthInputs.pressure) &&
         !growth.findCell('house')) {
         target = planFor(town, 'house');
-      } else if (population >= 80 && !town.buildings.some((b) => b.purpose === 'industrial')) {
+      } else if (growth.factoryLandNeeded?.()) {
         target = planFor(town, 'factory');
       } else if (population >= 45 && !town.buildings.some((b) => b.facility === 'college' || b.facility === 'university')) {
         target = planFor(town, 'civic', { facility: 'college' });
@@ -1934,13 +1934,34 @@ export class GrowthSystem {
   }
 
   /** Land is acquired as a response to a local shortage, not as decoration. */
+  factorySiteAvailable(opts = {}) {
+    const plan = planFor(this.town, 'factory', opts);
+    return !!plan && !!this.siteForFootprint(plan);
+  }
+
+  factoryLandNeeded(opts = {}) {
+    const s = this.inputs();
+    const industry = this.town.industry;
+    const noWorksAtMilestone = s.pop >= 80 && !this.town.buildings.some((b) => b.purpose === 'industrial');
+    const materialNeed = !!industry?.missingConstructionProduct?.() ||
+      !!industry?.deficitProduct?.() || !!industry?.strainedProduct?.();
+    return this.factoryRoom() && (noWorksAtMilestone || materialNeed) && !this.factorySiteAvailable(opts);
+  }
+
+  /**
+   * The land order must carry the same target that made it necessary. A
+   * factory is a campus, so a single vacant frontage cell is not enough to
+   * make BUILD_FACTORY feasible; the survey needs to find the complete
+   * footprint on acquired, serviced land first.
+   */
   landNeeded() {
     const perimeter = this.town.perimeter;
     if (!perimeter?.frontierCells(1).length) return false;
     const s = this.inputs();
     const housingPressure = (s.pressure || 0) >= 0.9;
     const strainedProduct = this.town.industry?.missingConstructionProduct?.();
-    const firstWorksDeficit = !this.town.industry?.factories?.().length && this.town.industry?.deficitProduct?.();
+    const firstWorksDeficit = !this.town.industry?.factories?.().length &&
+      (this.town.industry?.missingConstructionProduct?.() || this.town.industry?.deficitProduct?.());
     const civicDemand = s.pop > s.civicCount * CIVIC_PER_POP || !!civicExpansionNeed(this.town) ||
       (!!this.town.resources?.stats?.().waste && !this.town.buildings.some((b) => b.facility === 'recycling'));
     // Land purchase is a last resort. A campus or works footprint may be hard
@@ -1956,10 +1977,12 @@ export class GrowthSystem {
       (s.pop >= 150 && this.town.buildings.some((b) => b.facility === 'college') &&
         !this.town.buildings.some((b) => b.facility === 'university' || b.subtype === 'campus') &&
         !hasSitedFootprint('civic', { facility: 'university' }));
-    const worksNeed = s.pop >= 80 && !this.town.buildings.some((b) => b.purpose === 'industrial') &&
-      this.factoryRoom() && !hasSitedFootprint('factory');
+    const worksNeed = this.factoryLandNeeded();
     const vacant = this.vacantAcquiredPlots(1);
-    if (vacant > 0) return false;
+    // A spare one-cell plot does not satisfy a missing factory or campus
+    // footprint. Those progression shortages must be allowed to buy a
+    // contiguous frontier patch even while smaller plots remain.
+    if (vacant > 0 && !worksNeed && !educationNeed) return false;
     return housingPressure || !!strainedProduct || !!firstWorksDeficit || civicDemand || educationNeed || worksNeed;
   }
 
@@ -2356,7 +2379,7 @@ export class GrowthSystem {
     // alive even while the initial stockpile is still above a shortage gate;
     // the quote still enforces the real lot, cash, utility and material rules.
     const industrialCount = this.town.buildings.filter((b) => b.purpose === 'industrial').length;
-    if (s.pop >= 80 && industrialCount === 0 && this.factoryRoom() && this.findCell('factory')) {
+    if (s.pop >= 80 && industrialCount === 0 && this.factoryRoom() && this.factorySiteAvailable()) {
       const starter = this.town.industry?.missingConstructionProduct?.() ||
         this.town.industry?.deficitProduct?.() || this.town.industry?.strainedProduct?.() || 'lumber';
       const def = FACTORY_TYPES.find((f) => f.product === starter) || FACTORY_TYPES[0];
@@ -2396,7 +2419,7 @@ export class GrowthSystem {
         ? this.town.industry.deficitProduct?.() || this.town.industry.strainedProduct()
         : null);
       const def = strained && FACTORY_TYPES.find((f) => f.product === strained);
-      if (def) add('factory', 0.9, { factory: def.id });
+      if (def && this.factorySiteAvailable({ factory: def.id })) add('factory', 0.9, { factory: def.id });
     }
     // Landmark builds (LANDMARKS catalogue): every large block-acquire the
     // town currently wants, each firing at most once — see hasBuilding().
@@ -2415,7 +2438,10 @@ export class GrowthSystem {
     // Frontier acquisition and in-place renewal are discretionary projects:
     // expose them in Feasible now so a Council can choose them deliberately,
     // while keeping them out of the demand fallback that drives essentials.
-    if (crewsFree && this.landNeeded()) add('land', 0.42, undefined, false);
+    // When an acquired campus is missing, land is the prerequisite for the
+    // actual factory/civic build. Keep ACQUIRE_LAND ahead of the blocked
+    // BUILD_FACTORY request instead of letting the model retry a partial lot.
+    if (crewsFree && this.landNeeded()) add('land', 15.1, undefined, false);
     if (crewsFree && this.town.buildings.some((b) => b.house && b.facility !== 'townhall' && (b.kind === 'civic' ? civicHasVerticalHeadroom(b) : b.floors < MAX_FLOORS))) {
       add('restructure', 0.16, undefined, true);
     }
@@ -2601,7 +2627,7 @@ export class GrowthSystem {
         const strained = this.town.industry && (starter || (this.town.industry.factories().length === 0
           ? this.town.industry.deficitProduct?.() || this.town.industry.strainedProduct()
           : null));
-        return this.factoryRoom() && !!strained && !!this.findCell('factory');
+        return this.factoryRoom() && !!strained && this.factorySiteAvailable();
       }
       case 'resource': {
         const rs = this.town.resources;
@@ -2718,6 +2744,7 @@ export class GrowthSystem {
           ? this.town.industry.deficitProduct?.() || this.town.industry.strainedProduct()
           : null));
         if (!this.factoryRoom()) return 'no room — works already outnumber the workforce';
+        if (!this.factorySiteAvailable()) return 'no acquired industrial campus — ACQUIRE_LAND first';
         return `storehouse is healthy${strained ? '' : ' — no strained commodity'}`;
       }
       case 'resource':
