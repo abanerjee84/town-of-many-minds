@@ -170,7 +170,7 @@ Updated 2026-10-03 after the dynamic-market and build-duration audit.
 - [x] Added regression coverage for flowing-but-undelayed traffic, sparse-history hotspot priority, live bypass generation/selection, the no-demand middle-branch guard, and the unmeasured road-end turn guard in `scripts/_road_extension_check.mjs`.
 - [x] Re-ran a 100-day forced seed-42 horizon after the turn/outlet guards: two valid `EXTEND_STREET` decisions added eight tiles, the network remained one connected component with zero unmarked off-road vehicles, zero unacquired roads, and a clean accounting audit.
 - [x] Ran a bounded 200-day forced road horizon for seeds 42 and 1337: both stayed at one connected component with zero unacquired roads, zero off-road/unmarked vehicles, clean accounting audits, and no arbitrary `EXTEND_STREET` order while completed-trip evidence remained empty.
-- [ ] Re-run the full 800-day seed matrix after a longer browser soak and compare congestion relief, component count, unacquired roads, and off-road vehicles against the prior baseline.
+- [x] Re-ran the 800-day fast road horizon on seed 42 after the scene/registry migration: roads 70→78, two legal four-tile extensions, one connected component, zero unacquired roads, zero off-road/unmarked vehicles, final congestion 0.50, and a clean audit.
 
 ## Regression coverage
 
@@ -243,7 +243,7 @@ Updated 2026-10-03 after the dynamic-market and build-duration audit.
 
 ### Follow-up checks
 
-- [ ] Add a player-facing transit-stop placement tool so bus routes can be authored as well as discovered from road markings.
+- [x] Add a player-facing transit-stop placement tool so bus routes can be authored as well as discovered from road markings. The Stop tool persists manual marks through integrity save/restore.
 - [ ] Expand justice into staffed court throughput and neighbourhood-specific service budgets once the base ledger has enough observations.
 - [ ] Compare multiple Council providers on approval, fiscal runway, crime resolution, and land-use efficiency over the same seeded horizon.
 
