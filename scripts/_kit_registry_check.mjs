@@ -64,12 +64,12 @@ assert.equal(tx.ok, false);
 assert.equal(mutable, 1);
 
 const fixture = new KitRegistry();
-fixture.register({ id: 'fixture.base', version: '1.0.0', apiVersion: 1, catalogue: [{ id: 'fixture.base.block', footprint: [1, 1] }] });
+fixture.register({ id: 'fixture.base', version: '1.0.0', apiVersion: 1, planTypes: ['fixture'], capabilities: { builder: true, quote: true, placement: true }, catalogue: [{ id: 'fixture.base.block', footprint: [1, 1] }] });
 let restoredMarker = null;
 fixture.register({
   id: 'fixture.demo', version: '1.0.0', apiVersion: 1, dependencies: ['fixture.base'],
   intents: ['TEST_FIXTURE'], planTypes: ['fixture'], catalogue: [{ id: 'fixture.demo.block', footprint: [2, 1] }],
-  capabilities: { build: true }, hooks: {
+  capabilities: { builder: true, quote: true, placement: true, build: true }, hooks: {
     stats: () => ({ ok: true }),
     serialize: () => ({ marker: 'fixture-state' }),
     restore: ({ state }) => { restoredMarker = state?.marker || null; return { restored: restoredMarker }; },
@@ -90,6 +90,7 @@ assert.equal(rendered.ok, true);
 assert.equal(rendered.result.inspection.capacity, 6);
 assert.equal(rendered.result.staffing, 2);
 assert.throws(() => fixture.register({ id: 'fixture.demo', version: '1.0.0', apiVersion: 1 }), /already registered/);
+assert(fixture.compatibilityReport().failedRegistrations.some((row) => /already registered/.test(row.reason)));
 
 const hookCalls = { transport: 0, society: 0, forest: 0 };
 registry.invoke('updateHour', {

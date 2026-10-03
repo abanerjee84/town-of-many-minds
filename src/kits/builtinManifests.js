@@ -26,14 +26,14 @@ export function registerBuiltinKits(registry) {
       catalogue: rowsFor('houses'),
       routes: { DEVELOP_HOUSING: 'house', OPEN_SHOP: 'shop', BUILD_OFFICE: 'office', TIERUP: 'tierup', UPGRADE_BUILDING: 'upgrade', RENOVATE: 'renovate', WING: 'wing', RESTRUCTURE_BUILDING: 'restructure' },
       planTypes: ['house', 'shop', 'office', 'tierup', 'upgrade', 'renovate', 'wing', 'restructure'],
-      capabilities: { catalogue: true, build: true, upgrade: true, staffing: true },
+      capabilities: { catalogue: true, builder: true, quote: true, placement: true, build: true, upgrade: true, staffing: true },
       hooks: { stats: ({ town }) => ({ buildings: (town.buildings || []).filter((b) => b.kind === 'house' || b.purpose === 'commercial').length }) }
     },
     {
       id: 'industry', version: '1.0.0', apiVersion: 1, domains: ['industry'],
       catalogueSchemaVersion: '1', catalogue: rowsFor('industry'), zones: ['industrial'],
       routes: { BUILD_FACTORY: 'factory' }, planTypes: ['factory'],
-      capabilities: { production: true, staffing: true, catalogue: true },
+      capabilities: { production: true, staffing: true, catalogue: true, builder: true, quote: true, placement: true, build: true },
       hooks: { stats: simpleStats('industry') }
     },
     {
@@ -42,7 +42,7 @@ export function registerBuiltinKits(registry) {
       catalogue: rowsFor('civic'),
       routes: { BUILD_CIVIC: 'civic', EXPAND_CLINIC: 'civic', BUILD_LANDMARK: 'landmark', EXPAND_LANDMARK: 'wing' },
       planTypes: ['civic', 'landmark', 'wing'],
-      capabilities: { catalogue: true, build: true, upgrade: true, serviceDemand: true },
+      capabilities: { catalogue: true, builder: true, quote: true, placement: true, build: true, upgrade: true, serviceDemand: true },
       hooks: { stats: ({ town }) => ({ facilities: [...(town.civicIndex?.values?.() || [])] }) }
     },
     {
@@ -50,7 +50,7 @@ export function registerBuiltinKits(registry) {
       catalogueSchemaVersion: '1', zones: ['resource'],
       catalogue: rowsFor('resources'),
       routes: { UPGRADE_RESOURCE: 'resource' }, planTypes: ['resource'],
-      capabilities: { catalogue: true, production: true, storage: true, placement: true },
+      capabilities: { catalogue: true, builder: true, quote: true, placement: true, production: true, storage: true },
       hooks: { stats: simpleStats('resources') }
     },
     {
@@ -58,7 +58,7 @@ export function registerBuiltinKits(registry) {
       catalogueSchemaVersion: '1', zones: ['utility'],
       catalogue: rowsFor('utilities'),
       routes: { EXPAND_POWER: 'power', EXPAND_WATER: 'water', EXPAND_SEWAGE: 'sewage' }, planTypes: ['power', 'water', 'sewage'],
-      capabilities: { catalogue: true, networks: true, placement: true },
+      capabilities: { catalogue: true, builder: true, quote: true, placement: true, networks: true },
       hooks: { stats: simpleStats('utilities') }
     },
     {
@@ -67,7 +67,7 @@ export function registerBuiltinKits(registry) {
       catalogue: rowsFor('roads'),
       routes: { EXTEND_STREET: 'road', EXTEND_FOOTWAY: 'footway', UPGRADE_ROAD: 'roadup', BUILD_BRIDGE: 'bridge', ADD_PARKING: 'parking' },
       planTypes: ['road', 'footway', 'roadup', 'bridge', 'parking'],
-      capabilities: { catalogue: true, planning: true, placement: true },
+      capabilities: { catalogue: true, builder: true, quote: true, placement: true, planning: true },
       hooks: { stats: ({ town }) => town.roadKit?.stats || null }
     },
     {
@@ -75,7 +75,7 @@ export function registerBuiltinKits(registry) {
       catalogueSchemaVersion: '1', zones: ['public'],
       catalogue: rowsFor('publicspace'),
       routes: { PARK_LAND: 'park', PAVE_PLAZA: 'plaza' }, planTypes: ['park', 'plaza'],
-      capabilities: { catalogue: true, placement: true },
+      capabilities: { catalogue: true, builder: true, quote: true, placement: true },
       hooks: { stats: ({ town }) => publicSpaceStats(town) }
     },
     {
@@ -83,7 +83,7 @@ export function registerBuiltinKits(registry) {
       catalogueSchemaVersion: '1', zones: ['public', 'mobility'],
       catalogue: rowsFor('props'),
       routes: { PLANT_TREES: 'prop-tree', INSTALL_LAMP: 'prop-lamp' }, planTypes: ['prop-tree', 'prop-lamp'],
-      capabilities: { catalogue: true, placement: true }
+      capabilities: { catalogue: true, builder: true, quote: true, placement: true }
     },
     {
       id: 'vehicles', version: '1.0.0', apiVersion: 1, domains: ['transport', 'emergency'],

@@ -21,7 +21,8 @@ function catalogueRows(manifest) {
     const normalized = catalogueContract({
       ...row,
       kit: row.kit || manifest.id,
-      schemaVersion: row.schemaVersion || manifest.catalogueSchemaVersion
+      schemaVersion: row.schemaVersion || manifest.catalogueSchemaVersion,
+      planType: row.planType || manifest.planTypes?.[0] || null
     }, manifest.id);
     if (normalized.kit !== manifest.id) {
       throw new Error(`kit ${manifest.id} catalogue row ${normalized.id} is owned by ${normalized.kit}`);
@@ -63,6 +64,13 @@ function normalizeManifest(raw) {
   for (const hook of raw.requiredHooks || []) {
     if (!HOOK_NAMES.includes(hook) || !hooks[hook]) throw new Error(`kit ${id} requires missing hook ${hook}`);
   }
+  const capabilities = { ...(raw.capabilities || {}) };
+  if (raw.catalogue?.length) {
+    const required = ['builder', 'quote', 'placement'];
+    const missing = required.filter((capability) => !capabilities[capability]);
+    if (missing.length) throw new Error(`kit ${id} catalogue requires capabilities: ${missing.join(', ')}`);
+    if (!raw.planTypes?.length) throw new Error(`kit ${id} catalogue requires at least one plan type`);
+  }
   return Object.freeze({
     id,
     version: raw.version,
@@ -78,7 +86,7 @@ function normalizeManifest(raw) {
     intents: Object.freeze(intents),
     planTypes: Object.freeze([...(raw.planTypes || [])]),
     routes: freezeData(routes),
-    capabilities: freezeData({ ...(raw.capabilities || {}) }),
+    capabilities: freezeData(capabilities),
     catalogue: Object.freeze(catalogueRows({ ...raw, id })),
     hooks: Object.freeze(hooks)
   });
@@ -115,6 +123,7 @@ export class KitRegistry {
       this._compatibility = null;
       return manifest;
     } catch (error) {
+      this._compatibility = null;
       this._failedRegistrations.push(Object.freeze({
         id: rawManifest?.id ? String(rawManifest.id) : null,
         reason: error?.message || String(error)
