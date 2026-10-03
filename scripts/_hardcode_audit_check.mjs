@@ -27,4 +27,19 @@ for (const season of weather.seasons) {
   for (const id of season.weather) assert(weather.states[id], `${season.id} references missing weather state ${id}`);
 }
 
-console.log(`HARDCODE AUDIT OK: ${catalog.sources.length} tracked source groups; weather chart schema valid`);
+const readJson = (file) => JSON.parse(fs.readFileSync(path.join(root, file), 'utf8'));
+const industry = readJson('src/data/industryCatalog.json');
+assert(industry.version === 1 && industry.factoryTypes && industry.commodities, 'industry catalogue schema is incomplete');
+const construction = readJson('src/data/constructionCatalog.json');
+assert(construction.version === 1 && Array.isArray(construction.blocks) && construction.blocks.length >= 70, 'construction catalogue schema is incomplete');
+const blockIds = construction.blocks.map((row) => row.id);
+assert.equal(new Set(blockIds).size, blockIds.length, 'construction catalogue contains duplicate block IDs');
+assert(construction.familyBills && construction.modulePremium, 'construction bills are not externalized');
+const civic = readJson('src/data/civicCatalog.json');
+assert(civic.version === 1 && civic.catalogue?.college && civic.catalogue?.university, 'civic catalogue is missing tertiary facilities');
+const resources = readJson('src/data/resourceRules.json');
+assert(resources.version === 1 && resources.agricultureTiers?.farm && resources.planning?.maxGrowthSites, 'resource rules schema is incomplete');
+const transport = readJson('src/data/transportRules.json');
+assert(transport.version === 1 && transport.vehicleFinance && transport.publicTransport && transport.serviceCoverage?.length, 'transport rules schema is incomplete');
+
+console.log(`HARDCODE AUDIT OK: ${catalog.sources.length} tracked source groups; extracted catalogue schemas valid`);

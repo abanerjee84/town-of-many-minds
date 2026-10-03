@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "vehicleFinance": {
+    "vehiclesPerCapita": 0.16,
+    "valueCeiling": 45000,
+    "valueFloor": 1800,
+    "depreciationYears": 12,
+    "dailyUpkeep": 3.2,
+    "dailyRent": 6.5
+  },
+  "publicTransport": {
+    "residentsPerBus": 120,
+    "maxBuses": 8,
+    "stopCoverageResidents": 4,
+    "ridershipFactor": 0.45,
+    "maxStops": 12
+  },
+  "serviceCoverage": [
+    { "unit": "Police", "ratio": 180, "facility": "police" },
+    { "unit": "Ambulance", "ratio": 220, "facility": "clinic", "facilities": ["clinic", "hospital"] },
+    { "unit": "Fire", "ratio": 320, "facility": "fire" }
+  ],
+  "fleet": {
+    "cap": 8,
+    "roster": [
+      { "type": "police", "homes": ["police"], "each": 2, "max": 2 },
+      { "type": "fire", "homes": ["fire"], "each": 1, "max": 1 },
+      { "type": "ambulance", "homes": ["hospital", "clinic"], "each": 1, "max": 2 },
+      { "type": "utility", "homes": ["townhall", "government"], "each": 1, "max": 2 },
+      { "type": "bus", "homes": ["busdepot", "transit"], "each": 1, "max": 4 }
+    ]
+  }
+}

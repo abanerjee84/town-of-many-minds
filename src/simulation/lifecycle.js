@@ -13,25 +13,26 @@ import { rollJob } from '../kits/citizens/personality.js';
 import { ageScale } from '../kits/citizens/citizenKit.js';
 import { resourceStress, SITE_CREW, CREW_ROLES } from '../kits/resources/resourceKit.js';
 import { civicLoads } from './growth.js';
+import rules from '../data/lifecycleRules.json' with { type: 'json' };
 
-const MIN_AGE_WORK = 18;
-const MIN_AGE_PARTNER = 20;
-const MIN_AGE_PARENT = 22;
-const MAX_AGE_PARENT = 45;
-const RETIRE_AGE = 66;
+const MIN_AGE_WORK = rules.age.work;
+const MIN_AGE_PARTNER = rules.age.partner;
+const MIN_AGE_PARENT = rules.age.parent;
+const MAX_AGE_PARENT = rules.age.maxParent;
+const RETIRE_AGE = rules.age.retire;
 
 /**
  * A7 — the housing target. 0.9, not 1.0: a town that fills every last bed has
  * no room for the household forming, and the Day-81 churn came from a target
  * that could be overshot and then bled.
  */
-const BED_FILL = 0.9;
+const BED_FILL = rules.housing.bedFill;
 /** Spare beds per head that saturate the "there is room here" term. */
-const ROOM_PULL = 0.5;
+const ROOM_PULL = rules.housing.roomPull;
 /** Open posts per head that saturate the "there is work here" term. */
-const WORK_PULL = 0.35;
+const WORK_PULL = rules.housing.workPull;
 /** The most who may arrive in a day, however loud the campaign. */
-const MAX_ARRIVALS = 3;
+const MAX_ARRIVALS = rules.maxArrivals;
 
 function hasHigherEducation(town) {
   const load = civicLoads(town).find((row) => row.kind === 'tertiary');
@@ -43,7 +44,7 @@ function hasHigherEducation(town) {
 }
 
 /** A3 — ATTRACT_SETTLERS. A campaign is a dated multiplier on `pull()`. */
-export const CAMPAIGN = { cost: 15000, days: 20, multiplier: 2.2 };
+export const CAMPAIGN = Object.freeze({ ...rules.campaign });
 
 function clamp(v, a, b) {
   return Math.max(a, Math.min(b, v));
@@ -58,7 +59,7 @@ export class LifecycleSystem {
     // until 45) lasted days, so age-deaths outran births (Day-81: 39 died vs
     // 21 born) and only immigration kept the town alive. A quarter year per
     // day keeps generational turnover visible without the death wave.
-    this.yearsPerDay = 0.25;
+    this.yearsPerDay = rules.yearsPerDay;
     this.pendingYears = 0;
     this.lastDay = 1;
     this.tallies = { born: 0, died: 0, movedIn: 0, movedOut: 0, partnered: 0, retired: 0 };

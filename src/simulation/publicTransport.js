@@ -1,6 +1,7 @@
 import { events } from '../core/events.js';
 import { findPath } from '../core/pathfinding.js';
 import { CELL_KIND } from '../core/config.js';
+import transportRules from '../data/transportRules.json' with { type: 'json' };
 
 const walkable = (x, y, grid) => grid.kindAt(x, y) === CELL_KIND.ROAD;
 
@@ -67,7 +68,7 @@ export class PublicTransportSystem {
         addStop(farthest);
       }
     }
-    this.stops = stops.slice(0, 12);
+    this.stops = stops.slice(0, transportRules.publicTransport.maxStops);
     this.route = [];
     if (this.stops.length >= 2) {
       for (let i = 0; i < this.stops.length - 1; i++) {
@@ -115,11 +116,14 @@ export class PublicTransportSystem {
     const slots = this.town.vehicles?.slots || [];
     let stateBus = slots.filter((s) => s.type === 'bus' && !s.scrapped && s.owner?.sector === 'government');
     // Public transport is a population service, not a one-time founding prop.
-    // Keep roughly one bus per 120 residents, bounded so a small network does
+    // Keep roughly one bus per configured resident threshold, bounded so a small network does
     // not drain the treasury. Procurement uses the vehicle registry so the
     // asset, station, ledger entry, and live traffic agent stay in sync.
     const pop = this.town.pedestrians?.citizens?.length || 0;
-    const required = Math.min(8, Math.max(1, Math.ceil(pop / 120)));
+    const required = Math.min(
+      transportRules.publicTransport.maxBuses,
+      Math.max(1, Math.ceil(pop / transportRules.publicTransport.residentsPerBus))
+    );
     const station = this.networkStation();
     const stationCell = station?.cell || this.stops[0];
     const stationKey = station?.key || (stationCell ? `${stationCell[0]},${stationCell[1]}` : null);
@@ -169,13 +173,13 @@ export class PublicTransportSystem {
     if (clock.day !== this.lastDay) {
       this.lastDay = clock.day;
       this.rebuild();
-      this.coverage = pop ? Math.min(1, (this.stops.length * 4) / Math.max(1, pop)) : 0;
+      this.coverage = pop ? Math.min(1, (this.stops.length * transportRules.publicTransport.stopCoverageResidents) / Math.max(1, pop)) : 0;
       const citizens = this.town.pedestrians?.citizens || [];
       const eligible = citizens.filter((c) => c.p.preferences?.transport === 'bus' || c.p.preferences?.transport === 'walk');
-      this.ridership = Math.round(eligible.length * Math.min(1, this.coverage) * 0.45);
+      this.ridership = Math.round(eligible.length * Math.min(1, this.coverage) * transportRules.publicTransport.ridershipFactor);
       this.dailyRides = this.ridership * 2;
     }
-    this.coverage = pop ? Math.min(1, (this.stops.length * 4) / Math.max(1, pop)) : 0;
+    this.coverage = pop ? Math.min(1, (this.stops.length * transportRules.publicTransport.stopCoverageResidents) / Math.max(1, pop)) : 0;
     this.ensureFleet();
   }
 

@@ -10,22 +10,25 @@ Already externalized:
 - `src/data/buildtime.json`: project base hours and bounded timing factors.
 - `src/data/council_schemes.json`: Council schemes and policy effects.
 - `src/data/weather.json`: seasons, weather selection weights, temperatures, and simulation modifiers. This extraction is included in the current pass.
+- `src/data/industryCatalog.json`: factory sizes, recipes, production rates, capacities, initial stock, and trade multipliers.
+- `src/data/economyRules.json`: tax, wages, credit, reserve, developer funding, and fiscal runway rules.
+- `src/data/lifecycleRules.json`: age bands, housing fill, migration pulls, arrival limits, and campaign parameters.
+- `src/data/growthRules.json`: land, road, housing, civic, office, congestion, and skyline gates.
+- `src/data/resourceRules.json`: resource footprints, agriculture tiers, storage, spacing, site caps, and import limits.
+- `src/data/constructionCatalog.json`: shared block IDs, footprints, modules, and placement roles.
+- `src/data/civicRules.json`: civic capacity kinds, vertical caps, and same-parcel upgrade paths.
+- `src/data/civicCatalog.json`: authored civic massing, finish, capacity, and facility presentation data.
+- `src/data/vehicleCatalog.json` and `src/data/transportRules.json`: vehicle dimensions, public-transport thresholds, fleet roster, finance, and emergency coverage ratios.
 
 The highest-value remaining candidates are:
 
 | Priority | Current source | Hardcoded groups | Candidate data module | Why it should move |
 | --- | --- | --- | --- | --- |
-| P0 | `src/simulation/industry.js` | Factory types, sizes, recipes, inputs, rates, capacities, initial stock, import/export multipliers, strain gate | `industryCatalog.json` | Factory balance and commodity progression can change without editing production algorithms. |
-| P0 | `src/kits/constructionBlocks.js` | Block definitions, footprints, modules, family bills, module premiums | `constructionCatalog.json` | The palette and Council already consume this as a shared catalogue; the remaining bills should become data too. |
-| P0 | `src/simulation/growth.js` | Road lengths, land reserve, active-project cap, housing/service/traffic gates, civic ratios, office and skyline thresholds | `growthRules.json` | These values decide when the Council builds, acquires land, extends roads, adds services, and reaches a metropolis. |
-| P0 | `src/simulation/economicConfig.js` | Tax, wages, developer capital, credit, reserve, runway, construction shares | `economyRules.json` | Fiscal scenarios and difficulty need one versioned balance contract. |
-| P0 | `src/kits/civic/civicKit.js` | Facility capacities, footprints, vertical caps, and same-parcel upgrade paths | `civicCatalog.json` | Civic progression is content data and should be extensible without changing the renderer. |
-| P0 | `src/simulation/lifecycle.js` | Age bands, housing fill, migration pulls, arrival cap, campaign cost/duration/multiplier | `lifecycleRules.json` | Demographic growth and settlement scenarios are tunable rules. |
-| P0 | `src/kits/resources/resourceKit.js` | Farm sizes, production, storage, site spacing, import limits, and upgrade ceilings | `resourceRules.json` | Resource scarcity and land pressure are currently controlled by a large embedded table. |
+| P0 | `src/kits/constructionBlocks.js` | Family bills, module premiums | `constructionCatalog.json` | The block catalogue is externalized; bills remain the last construction balance table to move. |
+| P0 | `src/kits/civic/civicKit.js` | Facility capacity/footprint catalogue | `civicRules.json` | Capacity maps and progression are externalized; the large authored facility table remains. |
 | P1 | `src/kits/resources/resourceKit.js`, `src/kits/utilities/utilityKit.js` | Resource ratings, site levels, expansion costs, production and demand coefficients | `resourceRules.json`, `utilityRules.json` | Resource scarcity and utility reliability currently require source edits to rebalance. |
 | P1 | `src/simulation/economy.js` | Retail tiers, property assessment, staffing units, service-ticket value, factory job coefficients | `commerceRules.json` | Commerce progression and labour demand are balance content. |
-| P1 | vehicle kits and `publicTransport.js` | Vehicle dimensions/speeds, state fleet roster, bus ratio, coverage multiplier | `vehicleCatalog.json`, `transportRules.json` | Vehicle physics and public-service coverage should share one contract. |
-| P1 | `src/simulation/vehicleRegistry.js` | Vehicle entitlement, value bounds, depreciation, upkeep, rent, emergency coverage ratios | `transportRules.json` | Fleet finance and service coverage should not be tuned in a separate table from vehicle content. |
+| P1 | `src/kits/vehicles/fleetKit.js` | Remaining fleet presentation rules | `transportRules.json` | The fleet roster and cap are externalized; geometry remains kit-owned. |
 | P1 | `society.js`, `incidents.js` | Neighbourhood names, mood weights, crime risk, election cadence, incident timeouts | `societyRules.json`, `incidentRules.json` | Social policy and emergency response are user-visible simulation rules. |
 | P1 | `roadExtensionPlanner.js`, `placementController.js` | Trip sample thresholds, hotspot pressure, block dimensions, industrial edge, link limits | `roadRules.json` | These thresholds decide whether a street is evidence-backed and where it may connect. |
 | P1 | `traffic.js`, `core/signals.js` | Collision margins, congestion sampling, fuel patience, parking waits, signal phases | `trafficRules.json` | These values alter driving stability, jams, stranded vehicles, and junction behavior. |

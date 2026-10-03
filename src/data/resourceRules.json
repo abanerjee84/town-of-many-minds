@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "siteFootprints": {
+    "windmill": 4,
+    "solar": 4,
+    "farm": 28,
+    "husbandry": 28,
+    "poultry": 28,
+    "silo": 4,
+    "gas": 4,
+    "reservoir": 2,
+    "battery": 4
+  },
+  "output": {
+    "lake": 12,
+    "windmill": 220,
+    "solar": 150,
+    "farm": 90,
+    "husbandry": 70,
+    "poultry": 55,
+    "gas": 110
+  },
+  "agricultureTiers": {
+    "farm": [
+      { "level": 1, "label": "Smallholding", "cells": 28, "output": 90, "crew": 2 },
+      { "level": 2, "label": "Farm", "cells": 40, "output": 150, "crew": 3 },
+      { "level": 3, "label": "Estate farm", "cells": 54, "output": 220, "crew": 4 }
+    ],
+    "husbandry": [
+      { "level": 1, "label": "Paddock", "cells": 28, "output": 70, "crew": 2 },
+      { "level": 2, "label": "Ranch", "cells": 40, "output": 120, "crew": 3 },
+      { "level": 3, "label": "Stockyard", "cells": 54, "output": 180, "crew": 4 }
+    ],
+    "poultry": [
+      { "level": 1, "label": "Coop run", "cells": 28, "output": 55, "crew": 2 },
+      { "level": 2, "label": "Poultry farm", "cells": 40, "output": 95, "crew": 3 },
+      { "level": 3, "label": "Hatchery", "cells": 54, "output": 140, "crew": 3 }
+    ]
+  },
+  "tierRectangles": {
+    "28": [7, 4],
+    "40": [8, 5],
+    "54": [9, 6],
+    "4": [2, 2],
+    "6": [3, 2],
+    "9": [3, 3]
+  },
+  "storage": {
+    "reservoir": 750,
+    "silo": 1400,
+    "gas": 400,
+    "battery": 1200
+  },
+  "storehouse": {
+    "reservoir": true,
+    "silo": true,
+    "battery": true
+  },
+  "baseStorage": {
+    "water": 150,
+    "energy": 4500,
+    "food": 160,
+    "fuel": 250
+  },
+  "planning": {
+    "surplus": 1.25,
+    "bufferDays": 1.6,
+    "initialFill": 0.55,
+    "siteGap": 6,
+    "siteGapTight": 3,
+    "windFarm": { "of": "windmill", "gap": 1 },
+    "clusterPull": 100,
+    "gapLadder": [3, 2, 1],
+    "maxSpur": 8,
+    "edgeMargin": 1,
+    "lakeMax": 64,
+    "lakeMin": 24,
+    "lakeReach": 8,
+    "lakeTries": 12,
+    "maxEnergySites": 7,
+    "minEnergySites": 3,
+    "maxFarms": 4,
+    "maxFuelSites": 3,
+    "maxGrowthSites": { "energy": 12, "food": 12, "fuel": 8 },
+    "maxSiteLevel": 3
+  },
+  "vehicleFuelPerDay": 7,
+  "imports": {
+    "fuelMax": 400,
+    "waterMax": 600
+  }
+}

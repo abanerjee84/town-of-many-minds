@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { PALETTE } from '../../core/config.js';
 import { box, boxEuler, cyl, sphere, merge, jitterColor } from '../geometry.js';
 import { sharedVehicleGlow, sharedHeadlightGlow, sharedHeadlightBeam } from '../glow.js';
+import vehicleCatalog from '../../data/vehicleCatalog.json' with { type: 'json' };
 
 const wheelGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.24, 12);
 wheelGeo.rotateZ(Math.PI / 2);
@@ -14,23 +15,9 @@ const hubMat = new THREE.MeshStandardMaterial({ color: 0xb9bec6, roughness: 0.4,
 // occupied almost the full centre-to-centre gap, leaving no visual or
 // collision buffer while passing. Keep meshes and exported footprints on this
 // one scale so every vehicle fits its lane with a small clearance.
-export const VEHICLE_SCALE = 0.68;
+export const VEHICLE_SCALE = vehicleCatalog.scale;
 
-export const VEHICLE_TYPES = [
-  { id: 'sedan', weight: 26, length: 3.3, width: 1.6, height: 1.35, speed: 1.0 },
-  { id: 'hatchback', weight: 16, scale: 0.84, length: 2.9, width: 1.5, height: 1.3, speed: 0.96 },
-  { id: 'taxi', weight: 9, length: 3.3, width: 1.6, height: 1.35, speed: 1.05 },
-  { id: 'van', weight: 12, length: 3.6, width: 1.75, height: 1.95, speed: 0.9 },
-  { id: 'pickup', weight: 9, scale: 0.95, length: 3.6, width: 1.72, height: 1.6, speed: 0.94 },
-  { id: 'sport', weight: 6, scale: 0.9, length: 3.4, width: 1.62, height: 1.15, speed: 1.35 },
-  { id: 'truck', weight: 5, length: 4.4, width: 1.85, height: 2.3, speed: 0.78 },
-  { id: 'bus', weight: 3, role: 'transit', unit: 'Bus', length: 5.4, width: 1.95, height: 2.5, speed: 0.72 },
-  { id: 'police', weight: 0, role: 'emergency', unit: 'Police', length: 3.5, width: 1.7, height: 1.4, speed: 1.18 },
-  { id: 'ambulance', weight: 0, role: 'emergency', unit: 'Ambulance', length: 4.3, width: 1.9, height: 2.05, speed: 1.1 },
-  { id: 'fire', weight: 0, role: 'emergency', unit: 'Fire', length: 4.9, width: 2.0, height: 2.3, speed: 1.02 },
-  { id: 'utility', weight: 0, role: 'service', unit: 'Utility', length: 3.7, width: 1.8, height: 1.95, speed: 0.92 },
-  { id: 'refuse', weight: 0, role: 'service', unit: 'Refuse', length: 4.6, width: 1.9, height: 2.3, speed: 0.8 }
-];
+export const VEHICLE_TYPES = Object.freeze(vehicleCatalog.types.map((spec) => Object.freeze({ ...spec })));
 
 export const CIVILIAN_VEHICLE_TYPES = VEHICLE_TYPES.filter((v) => v.role == null);
 

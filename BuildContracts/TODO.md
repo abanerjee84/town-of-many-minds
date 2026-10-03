@@ -21,8 +21,10 @@ Updated 2026-10-03 after the dynamic-market and build-duration audit.
 
 ## Hardcode extraction queue
 
-- [ ] P0: extract industry catalog, growth gates, economy rules, civic catalog, and lifecycle rules into versioned JSON adapters.
-- [ ] P1: extract resources/utilities, vehicles/transit, society, and incidents into versioned JSON adapters.
+- [x] P0: extract industry catalog, growth gates, economy rules, lifecycle rules, construction blocks, and resource placement rules into versioned JSON adapters while preserving the public APIs.
+- [x] P0: civic facility catalogue, construction family bills, and module premiums now load from versioned JSON adapters; public APIs remain unchanged.
+- [x] P1 partial: resource placement, vehicle catalogue, fleet finance/service ratios, and public-transport growth thresholds now load from versioned JSON adapters.
+- [ ] P1 remaining: extract utility coefficients, society, and incidents into versioned JSON adapters.
 - [ ] P2: extract world/theme, citizen content, and research/learning rules after replay fixtures are in place.
 
 ## Next measurable work

@@ -1,14 +1,9 @@
 import { civicFacility } from '../civic/civicKit.js';
+import transportRules from '../../data/transportRules.json' with { type: 'json' };
 
-export const FLEET_CAP = 8;
+export const FLEET_CAP = transportRules.fleet.cap;
 
-const ROSTER = [
-  { type: 'police', homes: ['police'], each: 2, max: 2 },
-  { type: 'fire', homes: ['fire'], each: 1, max: 1 },
-  { type: 'ambulance', homes: ['hospital', 'clinic'], each: 1, max: 2 },
-  { type: 'utility', homes: ['townhall', 'government'], each: 1, max: 2 },
-  { type: 'bus', homes: ['busdepot', 'transit'], each: 1, max: 4 }
-];
+const ROSTER = Object.freeze(transportRules.fleet.roster.map((row) => Object.freeze({ ...row, homes: Object.freeze([...row.homes]) })));
 
 export function civicSites(town) {
   const g = town.grid;

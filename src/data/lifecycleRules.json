@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "age": {
+    "work": 18,
+    "partner": 20,
+    "parent": 22,
+    "maxParent": 45,
+    "retire": 66
+  },
+  "housing": { "bedFill": 0.9, "roomPull": 0.5, "workPull": 0.35 },
+  "maxArrivals": 3,
+  "yearsPerDay": 0.25,
+  "campaign": { "cost": 15000, "days": 20, "multiplier": 2.2 }
+}

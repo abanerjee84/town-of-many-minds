@@ -2,6 +2,7 @@ import { SIM, CELL } from '../core/config.js';
 import { SECTOR } from './economicConfig.js';
 import { CIVILIAN_VEHICLE_TYPES, SERVICE_VEHICLE_TYPES, EMERGENCY_VEHICLE_TYPES, vehicleFootprint } from '../kits/vehicles/vehicleKit.js';
 import { basePrice, quotePrice } from './priceChart.js';
+import transportRules from '../data/transportRules.json' with { type: 'json' };
 
 /**
  * The vehicle stock: a register of durable assets that outlive any single
@@ -40,22 +41,22 @@ import { basePrice, quotePrice } from './priceChart.js';
  */
 
 /** Private vehicles the town is entitled to, per resident. */
-export const VEHICLES_PER_CAPITA = 0.16;
+export const VEHICLES_PER_CAPITA = transportRules.vehicleFinance.vehiclesPerCapita;
 
 /** A private vehicle is never worth more than this, however rich the buyer. */
-const VALUE_CEILING = 45000;
+const VALUE_CEILING = transportRules.vehicleFinance.valueCeiling;
 
 /** Floor on the value of anything roadworthy, so nothing is given away. */
-const VALUE_FLOOR = 1800;
+const VALUE_FLOOR = transportRules.vehicleFinance.valueFloor;
 
 /** Years a vehicle is assumed to last before it is worth scrapping. */
-const DEPRECIATION_YEARS = 12;
+const DEPRECIATION_YEARS = transportRules.vehicleFinance.depreciationYears;
 
 /** What a private vehicle costs to keep on the road for a day. */
-const DAILY_UPKEEP = 3.2;
+const DAILY_UPKEEP = transportRules.vehicleFinance.dailyUpkeep;
 
 /** What it costs to rent one for a day instead of owning it. */
-const DAILY_RENT = 6.5;
+const DAILY_RENT = transportRules.vehicleFinance.dailyRent;
 
 let uid = 0;
 
@@ -1080,11 +1081,10 @@ const TYPE_FOR_UNIT = { Police: 'police', Ambulance: 'ambulance', Fire: 'fire', 
  * tuned, and they are here rather than inline so the shape of the rule is
  * readable at a glance.
  */
-const SERVICE_COVERAGE = [
-  { unit: 'Police', ratio: 180, facility: 'police' },
-  { unit: 'Ambulance', ratio: 220, facility: 'clinic', facilities: ['clinic', 'hospital'] },
-  { unit: 'Fire', ratio: 320, facility: 'fire' }
-];
+const SERVICE_COVERAGE = Object.freeze(transportRules.serviceCoverage.map((row) => Object.freeze({
+  ...row,
+  facilities: row.facilities ? Object.freeze([...row.facilities]) : undefined
+})));
 
 function unitFor(type) {
   return { police: 'Police', ambulance: 'Ambulance', fire: 'Fire', utility: 'Utility', refuse: 'Refuse', bus: 'Bus' }[type] || null;

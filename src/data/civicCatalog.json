@@ -1,0 +1,520 @@
+{
+  "version": 1,
+  "catalogue": {
+    "townhall": {
+      "label": "Town Hall",
+      "style": "townhouse",
+      "floors": 2,
+      "w": [
+        3.1,
+        3.5
+      ],
+      "d": [
+        2.6,
+        3
+      ],
+      "roofType": "gable",
+      "wall": 15260868,
+      "trim": 16118506,
+      "roofColor": [
+        4871520,
+        6122360,
+        4148055
+      ],
+      "doorColor": 3625067,
+      "signBg": "#24405c",
+      "porch": true,
+      "chimney": true,
+      "capacity": 90
+    },
+    "library": {
+      "label": "Public Library",
+      "style": "townhouse",
+      "floors": 2,
+      "w": [
+        3,
+        3.4
+      ],
+      "d": [
+        2.6,
+        3
+      ],
+      "roofType": "hip",
+      "wall": 14668733,
+      "trim": 15986660,
+      "roofColor": [
+        5529708,
+        4608606
+      ],
+      "doorColor": 4020810,
+      "signBg": "#2b4a39",
+      "porch": true,
+      "chimney": false,
+      "capacity": 70
+    },
+    "school": {
+      "label": "School",
+      "style": "townhouse",
+      "floors": 2,
+      "w": [
+        3.2,
+        3.5
+      ],
+      "d": [
+        2.7,
+        3
+      ],
+      "roofType": "gable",
+      "wall": 15784358,
+      "trim": 8014383,
+      "roofColor": [
+        10242612,
+        9060400
+      ],
+      "doorColor": 3104070,
+      "signBg": "#7a4a1f",
+      "porch": false,
+      "chimney": true,
+      "capacity": 240
+    },
+    "clinic": {
+      "label": "Clinic",
+      "style": "shop",
+      "floors": 1,
+      "w": [
+        3,
+        3.4
+      ],
+      "d": [
+        2.6,
+        3
+      ],
+      "roofType": "flat",
+      "wall": 15659758,
+      "trim": 13621970,
+      "roofColor": [
+        9411233
+      ],
+      "doorColor": 3108730,
+      "signBg": "#20565e",
+      "porch": false,
+      "chimney": false,
+      "awningColor": 3108730,
+      "capacity": 45
+    },
+    "hospital": {
+      "label": "Hospital",
+      "style": "shop",
+      "floors": 3,
+      "w": [
+        3.2,
+        3.5
+      ],
+      "d": [
+        2.7,
+        3
+      ],
+      "roofType": "flat",
+      "wall": 16054007,
+      "trim": 13884126,
+      "roofColor": [
+        8358804
+      ],
+      "doorColor": 2379883,
+      "signBg": "#7a2f2f",
+      "porch": false,
+      "chimney": false,
+      "awningColor": 2379883,
+      "capacity": 160
+    },
+    "police": {
+      "label": "Police Station",
+      "style": "townhouse",
+      "floors": 2,
+      "w": [
+        3,
+        3.4
+      ],
+      "d": [
+        2.6,
+        2.9
+      ],
+      "roofType": "hip",
+      "wall": 14147044,
+      "trim": 15922422,
+      "roofColor": [
+        4148055,
+        3555661
+      ],
+      "doorColor": 2240574,
+      "signBg": "#1f2c3a",
+      "porch": false,
+      "chimney": false,
+      "capacity": 40
+    },
+    "fire": {
+      "label": "Fire Station",
+      "style": "shop",
+      "floors": 1,
+      "w": [
+        3.3,
+        3.5
+      ],
+      "d": [
+        2.6,
+        2.9
+      ],
+      "roofType": "flat",
+      "wall": 12603452,
+      "trim": 15853276,
+      "roofColor": [
+        7027248
+      ],
+      "doorColor": 3092275,
+      "signBg": "#6b2f2f",
+      "porch": false,
+      "chimney": false,
+      "garage": true,
+      "awningColor": 3092275,
+      "capacity": 24
+    },
+    "government": {
+      "label": "Government Office",
+      "style": "townhouse",
+      "floors": 3,
+      "w": [
+        3.1,
+        3.5
+      ],
+      "d": [
+        2.7,
+        3
+      ],
+      "roofType": "hip",
+      "wall": 14275784,
+      "trim": 15789540,
+      "roofColor": [
+        4870748,
+        4147024
+      ],
+      "doorColor": 3360348,
+      "signBg": "#2c3f55",
+      "porch": true,
+      "chimney": false,
+      "capacity": 120
+    },
+    "community": {
+      "label": "Community Centre",
+      "style": "cottage",
+      "floors": 1,
+      "w": [
+        3.2,
+        3.5
+      ],
+      "d": [
+        2.7,
+        3
+      ],
+      "roofType": "hip",
+      "wall": 15129016,
+      "trim": 9072458,
+      "roofColor": [
+        8019002,
+        7033139
+      ],
+      "doorColor": 4877119,
+      "signBg": "#3f5a2b",
+      "porch": true,
+      "chimney": true,
+      "awningColor": 4877119,
+      "capacity": 110
+    },
+    "postoffice": {
+      "label": "Post Office",
+      "style": "townhouse",
+      "floors": 1,
+      "w": [
+        3,
+        3.4
+      ],
+      "d": [
+        2.6,
+        3
+      ],
+      "roofType": "hip",
+      "wall": 14272942,
+      "trim": 15789024,
+      "roofColor": [
+        4148055,
+        5529708
+      ],
+      "doorColor": 3099243,
+      "signBg": "#2f4a6b",
+      "porch": false,
+      "chimney": false,
+      "capacity": 60
+    },
+    "daycare": {
+      "label": "Daycare Centre",
+      "style": "cottage",
+      "floors": 1,
+      "w": [
+        3.1,
+        3.5
+      ],
+      "d": [
+        2.7,
+        3
+      ],
+      "roofType": "gable",
+      "wall": 15918016,
+      "trim": 12092988,
+      "roofColor": [
+        12742714,
+        11034420
+      ],
+      "doorColor": 4160090,
+      "signBg": "#3f7a5a",
+      "porch": true,
+      "chimney": true,
+      "awningColor": 12092988,
+      "capacity": 30
+    },
+    "museum": {
+      "label": "Museum",
+      "style": "townhouse",
+      "floors": 2,
+      "w": [
+        3.2,
+        3.5
+      ],
+      "d": [
+        2.7,
+        3
+      ],
+      "roofType": "flat",
+      "wall": 14999250,
+      "trim": 9406328,
+      "roofColor": [
+        7039856
+      ],
+      "doorColor": 4865899,
+      "signBg": "#3f3a6b",
+      "porch": false,
+      "chimney": false,
+      "capacity": 90
+    },
+    "conservatory": {
+      "label": "Conservatory",
+      "style": "townhouse",
+      "floors": 2,
+      "w": [
+        3.1,
+        3.4
+      ],
+      "d": [
+        2.6,
+        3
+      ],
+      "roofType": "hip",
+      "wall": 14543068,
+      "trim": 4880981,
+      "roofColor": [
+        4156234,
+        5537887
+      ],
+      "doorColor": 4156234,
+      "signBg": "#2f5a3a",
+      "porch": false,
+      "chimney": false,
+      "awningColor": 4880981,
+      "capacity": 50
+    },
+    "busdepot": {
+      "label": "Bus Depot",
+      "style": "shop",
+      "floors": 1,
+      "w": [
+        3.3,
+        3.5
+      ],
+      "d": [
+        2.7,
+        3
+      ],
+      "roofType": "flat",
+      "wall": 13617597,
+      "trim": 4869975,
+      "roofColor": [
+        4870748
+      ],
+      "doorColor": 3095367,
+      "signBg": "#2f4a3a",
+      "porch": false,
+      "chimney": false,
+      "garage": true,
+      "awningColor": 3095367,
+      "capacity": 40
+    },
+    "courthouse": {
+      "label": "Courthouse",
+      "style": "townhouse",
+      "floors": 2,
+      "w": [
+        3.2,
+        3.6
+      ],
+      "d": [
+        2.7,
+        3.1
+      ],
+      "roofType": "hip",
+      "wall": 14276044,
+      "trim": 16052714,
+      "roofColor": [
+        5857642,
+        4870748
+      ],
+      "doorColor": 3425882,
+      "signBg": "#35495d",
+      "porch": true,
+      "chimney": false,
+      "accessible": true,
+      "capacity": 70
+    },
+    "shelter": {
+      "label": "Emergency Shelter",
+      "style": "cottage",
+      "floors": 2,
+      "w": [
+        3.3,
+        3.7
+      ],
+      "d": [
+        2.8,
+        3.2
+      ],
+      "roofType": "gable",
+      "wall": 15259837,
+      "trim": 8217157,
+      "roofColor": [
+        9129784,
+        7684912
+      ],
+      "doorColor": 4022857,
+      "signBg": "#3d6249",
+      "porch": true,
+      "chimney": true,
+      "accessible": true,
+      "greenRoof": true,
+      "capacity": 80
+    },
+    "transit": {
+      "label": "Transit Hub",
+      "style": "shop",
+      "floors": 1,
+      "w": [
+        3.4,
+        3.8
+      ],
+      "d": [
+        2.8,
+        3.3
+      ],
+      "roofType": "flat",
+      "wall": 13293274,
+      "trim": 4154994,
+      "roofColor": [
+        5139831
+      ],
+      "doorColor": 2973548,
+      "signBg": "#2d5f6c",
+      "porch": false,
+      "chimney": false,
+      "accessible": true,
+      "solar": true,
+      "capacity": 90
+    },
+    "recycling": {
+      "label": "Recycling Centre",
+      "style": "shop",
+      "floors": 1,
+      "w": [
+        3.4,
+        3.8
+      ],
+      "d": [
+        2.9,
+        3.4
+      ],
+      "roofType": "flat",
+      "wall": 12571333,
+      "trim": 4089936,
+      "roofColor": [
+        5011036
+      ],
+      "doorColor": 4025163,
+      "signBg": "#3d6b4b",
+      "porch": false,
+      "chimney": false,
+      "accessible": true,
+      "solar": true,
+      "greenRoof": true,
+      "capacity": 55
+    },
+    "college": {
+      "label": "College",
+      "style": "townhouse",
+      "floors": 3,
+      "w": [
+        3.4,
+        3.9
+      ],
+      "d": [
+        3,
+        3.5
+      ],
+      "roofType": "flat",
+      "wall": 14147816,
+      "trim": 5205384,
+      "roofColor": [
+        5205384,
+        6125711
+      ],
+      "doorColor": 3035760,
+      "signBg": "#2e5270",
+      "porch": true,
+      "chimney": false,
+      "accessible": true,
+      "solar": true,
+      "capacity": 180
+    },
+    "university": {
+      "label": "University",
+      "style": "townhouse",
+      "floors": 4,
+      "w": [
+        3.8,
+        4.4
+      ],
+      "d": [
+        3.4,
+        4
+      ],
+      "roofType": "flat",
+      "wall": 13490659,
+      "trim": 3889523,
+      "roofColor": [
+        3889523,
+        4940924
+      ],
+      "doorColor": 2573919,
+      "signBg": "#27465f",
+      "porch": true,
+      "chimney": false,
+      "accessible": true,
+      "greenRoof": true,
+      "capacity": 320
+    }
+  }
+}

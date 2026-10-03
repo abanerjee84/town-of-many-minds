@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "tax": { "income": 0.18, "sales": 0.08, "property": 0.03, "corporate": 0.16 },
+  "wages": { "minimumAnnual": 18000, "pensionAnnual": 18000 },
+  "consumption": { "propensity": 0.72, "dailyMinimum": 4 },
+  "business": {
+    "startupCash": 250000,
+    "developerCash": 12000000,
+    "contractorCash": 250000,
+    "retailOpeningInventory": 240,
+    "depreciationRate": 0.04,
+    "ownerCredit": 1.5,
+    "developerDemandPerSeat": 90,
+    "developerReserve": 150000
+  },
+  "construction": {
+    "labour": 0.35,
+    "domesticMaterials": 0.35,
+    "contractorMargin": 0.15,
+    "importedInputs": 0.1,
+    "feesTaxes": 0.05,
+    "relocationShare": 0.08,
+    "demolitionShare": 0.04
+  },
+  "property": { "landWeight": 0.75, "qualityPerBudgetTier": 0.12, "annualRentYield": 0.045 },
+  "credit": {
+    "businessRate": 0.065,
+    "governmentBondRate": 0.05,
+    "businessLimitMultiple": 1.5,
+    "bondMaturityDays": 365,
+    "arrearsPenalty": 2
+  },
+  "banking": { "openingSavingsShare": 0.4, "liquidFloor": 400, "savingsRate": 0.6 },
+  "government": {
+    "fixedDailySpend": 420,
+    "perResidentDailySpend": 6,
+    "warningRunwayDays": 7,
+    "operatingRunwayDays": 30,
+    "reserveTargetShare": 0.25,
+    "reserveOperatingFloor": 250000
+  }
+}

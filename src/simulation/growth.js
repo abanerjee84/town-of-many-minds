@@ -18,6 +18,7 @@ import { civicVerticalCap, CIVIC_UPGRADE_PATHS } from '../kits/civic/civicKit.js
 import { basePrice, quotePrice } from './priceChart.js';
 import { BASE_BUILD_HOURS, buildHoursFor } from './buildTime.js';
 import { agriculturalSetbackConflict, resourceSetbackConflict, educationCampusConflict } from '../placement/siteRules.js';
+import rules from '../data/growthRules.json' with { type: 'json' };
 const COST = {
   house: basePrice('construction.house', 9000), shop: basePrice('construction.shop', 11000),
   civic: basePrice('construction.civic', 30000), park: basePrice('construction.park', 3000),
@@ -81,7 +82,7 @@ export function districtQueue(town, opts = {}) {
     count: houses,
     cost: dynamicCost(town, 'house', houses),
     need
-  });
+});
 
   // 3. Serve. One shop and one civic building per stretch of housing, more if
   //    the worst facility is already over its design load.
@@ -124,10 +125,10 @@ export function districtQueue(town, opts = {}) {
  * frame, so "12 tries" meant twelve frames — about 0.2 s of real time and two
  * sim-seconds at 10x — which is not a grace period at all.
  */
-export const DISTRICT_STEP_PATIENCE_SECONDS = 180;
+export const DISTRICT_STEP_PATIENCE_SECONDS = rules.districtStepPatienceSeconds;
 
 /** Phase 9 — the widest river gap a bridge may span, in water cells. */
-export const MAX_BRIDGE_GAP = 3;
+export const MAX_BRIDGE_GAP = rules.maxBridgeGap;
 const BRIDGE_DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 
 /**
@@ -136,16 +137,16 @@ const BRIDGE_DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
  * cost is the sum over the cells it will actually change of every rung it
  * climbs: cost follows the class delta, not a flat fee.
  */
-export const ROAD_UPGRADE_RUNG = { alley: 700, local: 1400, street: 2600, avenue: 4200 };
+export const ROAD_UPGRADE_RUNG = Object.freeze({ ...rules.roadUpgradeRung });
 /**
  * EXTEND_STREET lays a RUN of this many tiles per order instead of a single
  * stub: a street order either closes a gap between two roads or extends the
  * network by 3–4 tiles, so the work is visible in the town plan.
  */
-export const EXTEND_STREET_TILES = 4;
-export const UTILITY_RESERVE = 47000;
+export const EXTEND_STREET_TILES = rules.extendStreetTiles;
+export const UTILITY_RESERVE = rules.utilityReserve;
 /** Council work pauses while this many sites are already under construction. */
-export const MAX_ACTIVE = 2;
+export const MAX_ACTIVE = rules.maxActiveProjects;
 
 /* ---------------------------------------------------- Phase 8 · land brushes
  * The land-use family (REZONE / UPZONE / ANNEX_EDGE) repaints a 3×3 brush of
@@ -167,7 +168,7 @@ export function edgeDistance(g, x, y) {
 }
 
 /** ANNEX_EDGE only ever touches the outer ring of the map. */
-export const EDGE_RING = 2;
+export const EDGE_RING = rules.edgeRing;
 /**
  * Phase 17 — how much of `COST.annex` a surveyed cell saves. Not the whole
  * price: a survey is worth knowing the ground, not worth annexing it for
@@ -175,7 +176,7 @@ export const EDGE_RING = 2;
  * module innovation.js already imports — a discount constant in the other
  * direction would make the pair circular.
  */
-export const ANNEX_SURVEY_DISCOUNT = 0.4;
+export const ANNEX_SURVEY_DISCOUNT = rules.annexSurveyDiscount;
 export function edgeCell(g, x, y) {
   return edgeDistance(g, x, y) < EDGE_RING;
 }
@@ -240,21 +241,14 @@ const NO_EXPAND = new Set([
  */
 /** Per-capacity-kind demand. Exported so the catalogue probe can assert every
  *  CIVIC_CAPACITY_KIND value has a row (no silent pop×0.5 fallback). */
-export const CIVIC_DEMAND = {
-  students: (s) => s.students, // children + teens of school age
-  'patients/day': (s) => Math.round(s.pop * 0.4),
-  beds: (s) => Math.round(s.pop * 0.02),
-  visitors: (s) => Math.round(s.pop * 0.6),
-  officers: (s) => Math.max(1, Math.round(s.pop * 0.03)),
-  firefighters: (s) => Math.max(1, Math.round(s.pop * 0.015)),
-  staff: (s) => Math.round(s.pop * 0.05),
-  mail: (s) => Math.round(s.pop * 1.2), // parcels/day through the post office
-  children: (s) => Math.max(2, Math.round(s.pop * 0.06)), // daycare places
-  pupils: (s) => Math.max(1, Math.round(s.students * 0.5)), // conservatory pupils
-  riders: (s) => Math.round(s.pop * 0.9), // daily bus passengers
-  tertiary: (s) => Math.max(1, Math.round(s.pop * 0.12)),
-  waste: (s) => Math.max(1, Math.round(s.pop * 0.8))
+const demandFromRule = (rule, s) => {
+  const base = rule.mode === 'students' ? s.students : s.pop;
+  const value = Math.round(base * (rule.multiplier ?? 1));
+  return rule.min == null ? value : Math.max(rule.min, value);
 };
+export const CIVIC_DEMAND = Object.freeze(Object.fromEntries(
+  Object.entries(rules.civicDemand).map(([kind, rule]) => [kind, (s) => demandFromRule(rule, s)])
+));
 
 /** Aggregate load per capacity kind: one kind's demand is shared over every
  *  facility of that kind (two clinics split the same patients), so a town
@@ -343,15 +337,15 @@ export function civicUpgradeTarget(town, threshold = 0.85, pending = null) {
     .sort((a, b) => buildingLoad(town, b) - buildingLoad(town, a))[0] || null;
 }
 /** Filler work (floor upgrades, design commissions) needs savings above this. */
-export const BUILD_FLOOR = 250000;
+export const BUILD_FLOOR = rules.buildFloor;
 
 /**
  * Every need gate ranked()/wanted()/situationKey() tests, exported because the
  * council prompt QUOTES these numbers — one source, so the prompt can never
  * drift from the planner (Phase 4 C2 asserts this pair stays in agreement).
  */
-export const HOUSE_PRESSURE_GATE = 0.8;
-export const HOUSE_SPARE_BEDS = 14;
+export const HOUSE_PRESSURE_GATE = rules.housePressureGate;
+export const HOUSE_SPARE_BEDS = rules.houseSpareBeds;
 /** Keep a proportional construction buffer as the town gets large. */
 export function housingSpareGate(population = 0) {
   return Math.max(HOUSE_SPARE_BEDS, Math.ceil(Math.max(0, population) * 0.12));
@@ -367,22 +361,16 @@ export function housingNeedsBuild(population = 0, capacity = 0, pressure = 0) {
   return pressure > HOUSE_PRESSURE_GATE &&
     capacity - population <= housingSpareGate(population) + 2;
 }
-export const FILLER_PRESSURE_GATE = 0.6;
+export const FILLER_PRESSURE_GATE = rules.fillerPressureGate;
 /**
  * Population-earned vertical ladder. A town can add floors before it is a
  * metropolis, but the desired cap rises in measured stages so early buildings
  * do not jump straight to towers and a long run does not remain permanently
  * one-storey. Ten floors is the user-visible skyscraper milestone.
  */
-export const SKYSCRAPER_FLOORS = 10;
+export const SKYSCRAPER_FLOORS = rules.skyscraperFloors;
 export function desiredFloorsForPopulation(population = 0) {
-  if (population >= 800) return 20;
-  if (population >= 600) return 16;
-  if (population >= 320) return 12;
-  if (population >= 200) return 9;
-  if (population >= 120) return 6;
-  if (population >= 60) return 4;
-  return 2;
+  return rules.floorLadder.find((rung) => population >= rung.population)?.floors || 2;
 }
 /**
  * Unemployment gate — a FRACTION, because `EconomySystem.unemployment` is
@@ -392,8 +380,8 @@ export function desiredFloorsForPopulation(population = 0) {
  * was permanently false: the jobs feedback loop was dead code. `UNEMPLOYMENT_PCT`
  * is the same number for the prompt, which quotes it in percent.
  */
-export const UNEMPLOYMENT_GATE = 0.1;
-export const UNEMPLOYMENT_PCT = 10;
+export const UNEMPLOYMENT_GATE = rules.unemploymentGate;
+export const UNEMPLOYMENT_PCT = rules.unemploymentPercent;
 
 /**
  * The town's unemployment as a FRACTION, always read from the one field that
@@ -415,19 +403,19 @@ const ECON_DEVELOPER_RESERVE = ECON.business.developerReserve;
  * none at all below OFFICE_MIN_POP: a hamlet's accountant is its shopkeeper,
  * and an office block with four desks earns nothing.
  */
-export const OFFICE_PER_POP = 90;
-export const OFFICE_MIN_POP = 55;
+export const OFFICE_PER_POP = rules.officePerPopulation;
+export const OFFICE_MIN_POP = rules.officeMinPopulation;
 /**
  * Phase 18 — the treasury floor a district commission needs. A district is
  * many buildings, so it is committed to when the council can plainly afford the
  * whole queue, not just the first step.
  */
-export const DISTRICT_FLOOR = 60000;
-export const CIVIC_PER_POP = 12;
-export const PARKS_PER_POP = 0.6;
+export const DISTRICT_FLOOR = rules.districtFloor;
+export const CIVIC_PER_POP = rules.civicPerPopulation;
+export const PARKS_PER_POP = rules.parksPerPopulation;
 // Default road-planning trigger. The live threshold is user-configurable in
 // Settings, while this export preserves a stable benchmark/API default.
-export const CONGESTION_GATE = 0.5;
+export const CONGESTION_GATE = rules.congestionGate;
 export function roadCongestionGate() {
   const configured = Number(getSettings().averageCongestionThreshold);
   return Number.isFinite(configured) ? configured : CONGESTION_GATE;
@@ -435,14 +423,14 @@ export function roadCongestionGate() {
 // At this level congestion is an immediate network-capacity problem. A legal
 // street run or corridor widening outranks lower-band infill so the council
 // does not spend a sitting on a shop while vehicles remain queued.
-export const ROAD_EMERGENCY_GATE = 0.65;
-export const CIVIC_LOAD_GATE = 0.85;
+export const ROAD_EMERGENCY_GATE = rules.roadEmergencyGate;
+export const CIVIC_LOAD_GATE = rules.civicLoadGate;
 // A founding town has no spare beds, so a resource that remains strained can
 // otherwise outrank housing forever and leave the settlement unable to admit
 // its first new household. Once occupancy reaches this level, one feasible
 // housing build is the bootstrap that creates room for the other systems to
 // catch up; the normal 0.8 pressure gate still applies after that.
-export const HOUSING_BOOTSTRAP_PRESSURE = 0.95;
+export const HOUSING_BOOTSTRAP_PRESSURE = rules.housingBootstrapPressure;
 
 // Priority bands for ranked(): a band + need01 (≤1, inactive never listed)
 // makes lower tiers strictly outrank higher ones — utility 10 > housing 9 >
@@ -450,13 +438,7 @@ export const HOUSING_BOOTSTRAP_PRESSURE = 0.95;
 // upgrades 3 > archetypes 2 — while need still orders candidates inside a band.
 // Near full occupancy, ranked() temporarily raises housing to a bootstrap
 // band so a persistent resource strain cannot starve the town of spare beds.
-const BAND = {
-  power: 10, water: 10, sewage: 10, resource: 10, bond: 10.5, land: 9.5, house: 9, shop: 8, civic: 7,
-  // Phase 20 — an office shares the civic band: it is the same sort of answer
-  // (a building the town needs people to work in), ranked just after a shop.
-  office: 7,
-  road: 5, roadup: 5, bridge: 5, parking: 5, tierup: 6, park: 4, plaza: 4, factory: 4,
-  upgrade: 3, renovate: 3, wing: 3, archetype: 2
+const BAND = Object.freeze({ ...rules.priorityBands
   // Land acquisition sits just below hard utility/resource work and above
   // housing polish, but appears only when the measured local-shortage gate is
   // true. Landmarks take their band from LANDMARKS[].band (ranked()'s add()).
@@ -477,7 +459,7 @@ const BAND = {
   // planner and never shown as a Priority. bridge shares the street band as
   // demand too, but only when it would reconnect two road ends across the
   // water (a redundant crossing is orderable, never offered).
-};
+});
 
 /**
  * Amenity work: real work the council may still order, but never the answer a

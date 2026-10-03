@@ -5,6 +5,7 @@ import { box, boxEuler, cyl, cone, merge, buildMesh } from '../geometry.js';
 import { events } from '../../core/events.js';
 import { resourceSiteBuildingConflict } from '../../placement/siteRules.js';
 import { basePrice, quotePrice } from '../../simulation/priceChart.js';
+import rules from '../../data/resourceRules.json' with { type: 'json' };
 
 /**
  * Resource Kit: the town's three primary resources — water, energy and food —
@@ -107,10 +108,10 @@ export const CREW_ROLES = Object.keys(SITE_CREW);
  * real field, paddock, or poultry run needs room for circulation, not just a
  * tiny vertical prop. The tier rectangles below keep the area and orientation
  * inspectable instead of letting a blob accidentally become the farm plan. */
-const SITE_FOOT = { windmill: 4, solar: 4, farm: 28, husbandry: 28, poultry: 28, silo: 4, gas: 4, reservoir: 2, battery: 4 };
+const SITE_FOOT = Object.freeze({ ...rules.siteFootprints });
 
 /** Rated output per site. The lake yields per water cell. */
-const OUTPUT = { lake: 12, windmill: 220, solar: 150, farm: 90, husbandry: 70, poultry: 55, gas: 110 };
+const OUTPUT = Object.freeze({ ...rules.output });
 
 /**
  * The agriculture ladder: three tiers per husbandry kind, shaped like the
@@ -124,26 +125,14 @@ const OUTPUT = { lake: 12, windmill: 220, solar: 150, farm: 90, husbandry: 70, p
  * credible 7x4 yard. Later rungs expand the same parcel to 8x5 and 9x6,
  * making extensification visible as well as the output/crew change.
  */
-export const AG_TIERS = {
-  farm: [
-    { level: 1, label: 'Smallholding', cells: 28, output: 90, crew: 2 },
-    { level: 2, label: 'Farm', cells: 40, output: 150, crew: 3 },
-    { level: 3, label: 'Estate farm', cells: 54, output: 220, crew: 4 }
-  ],
-  husbandry: [
-    { level: 1, label: 'Paddock', cells: 28, output: 70, crew: 2 },
-    { level: 2, label: 'Ranch', cells: 40, output: 120, crew: 3 },
-    { level: 3, label: 'Stockyard', cells: 54, output: 180, crew: 4 }
-  ],
-  poultry: [
-    { level: 1, label: 'Coop run', cells: 28, output: 55, crew: 2 },
-    { level: 2, label: 'Poultry farm', cells: 40, output: 95, crew: 3 },
-    { level: 3, label: 'Hatchery', cells: 54, output: 140, crew: 3 }
-  ]
-};
+export const AG_TIERS = Object.freeze(Object.fromEntries(
+  Object.entries(rules.agricultureTiers).map(([kind, tiers]) => [kind, tiers.map((tier) => Object.freeze({ ...tier }))])
+));
 
 /** Yard rectangles per tier, as [cols, rows] — every tier is an exact rectangle. */
-const TIER_RECT = { 28: [7, 4], 40: [8, 5], 54: [9, 6], 4: [2, 2], 6: [3, 2], 9: [3, 3] };
+const TIER_RECT = Object.freeze(Object.fromEntries(
+  Object.entries(rules.tierRectangles).map(([cells, rect]) => [cells, Object.freeze([...rect])])
+));
 
 /** The tier row a site works at (agriculture only — everything else is tierless). */
 export function agTierOf(site) {
@@ -153,17 +142,34 @@ export function agTierOf(site) {
   return ladder[lvl - 1];
 }
 /** Rated storage per site. A gas station's tanks are why fuel is never fully dry. */
-const STORAGE = { reservoir: 750, silo: 1400, gas: 400, battery: 1200 };
+const STORAGE = Object.freeze({ ...rules.storage });
 /** Sites that ONLY store — they hold stock but produce none. */
-const STOREHOUSE = { reservoir: true, silo: true, battery: true };
+const STOREHOUSE = Object.freeze({ ...rules.storehouse });
 /** Buffer the town carries without any storage building (grid, pipes, sacks, drums). */
-const BASE_STORAGE = { water: 150, energy: 4500, food: 160, fuel: 250 };
+const BASE_STORAGE = Object.freeze({ ...rules.baseStorage });
 
-const SURPLUS = 1.25; // production is aimed at 125% of planned demand
-const BUFFER_DAYS = 1.6; // storage is aimed at 1.6 days of demand
-const INITIAL_FILL = 0.55;
-const SITE_GAP = 6; // minimum Chebyshev distance between resource sites
-const SITE_GAP_TIGHT = 3; // fallback spacing when the outskirts run out
+const {
+  surplus: SURPLUS,
+  bufferDays: BUFFER_DAYS,
+  initialFill: INITIAL_FILL,
+  siteGap: SITE_GAP,
+  siteGapTight: SITE_GAP_TIGHT,
+  windFarm: WIND_FARM_RULE,
+  clusterPull: CLUSTER_PULL,
+  gapLadder: GAP_LADDER,
+  maxSpur: MAX_SPUR,
+  edgeMargin: EDGE_MARGIN,
+  lakeMax: LAKE_MAX,
+  lakeMin: LAKE_MIN,
+  lakeReach: LAKE_REACH,
+  lakeTries: LAKE_TRIES,
+  maxEnergySites: MAX_ENERGY_SITES,
+  minEnergySites: MIN_ENERGY_SITES,
+  maxFarms: MAX_FARMS,
+  maxFuelSites: MAX_FUEL_SITES,
+  maxGrowthSites: MAX_GROWTH_SITES,
+  maxSiteLevel: MAX_SITE_LEVEL
+} = rules.planning;
 /**
  * A wind farm is a ROW of turbines, not a scatter of them. Two changes make the
  * turbines read as one installation: the founding order places them
@@ -175,9 +181,7 @@ const SITE_GAP_TIGHT = 3; // fallback spacing when the outskirts run out
  * and applying it to turbines spaced them 24 m apart, which is a field of
  * lonely masts rather than a farm.
  */
-const WIND_FARM = Object.freeze({ of: 'windmill', gap: 1 });
-/** Score bonus that outweighs the far-outskirts pull, so clustering wins. */
-const CLUSTER_PULL = 100;
+const WIND_FARM = Object.freeze({ ...WIND_FARM_RULE });
 
 function chebyshev(x, y, a) {
   return Math.max(Math.abs(x - a.x), Math.abs(y - a.y));
@@ -188,20 +192,13 @@ function chebyshev(x, y, a) {
  * resource it is visibly short of. Gap 1 still forbids overlapping yards —
  * it only allows them to sit flush against each other.
  */
-const GAP_LADDER = [SITE_GAP_TIGHT, 2, 1];
-const MAX_SPUR = 8; // longest access road from a site to the network
 /** Phase 18 — the same ceiling for any off-network build's access road. */
-export const MAX_SPUR_LENGTH = 8;
-const EDGE_MARGIN = 1; // keep sites off the raw map edge
+export const MAX_SPUR_LENGTH = MAX_SPUR;
 // A founding water source is a real lake, rather than the four-cell pond the
 // old demand-only minimum produced.  The grid footprint remains authoritative
 // for water accounting and path finding, while the road kit smooths its visible
 // shoreline.  The reach cap keeps the body compact enough to service from one
 // spur and prevents it from turning into a thin river across the town.
-const LAKE_MAX = 64;
-const LAKE_MIN = 24;
-const LAKE_REACH = 8; // lake grows no further than this from its seed
-const MAX_ENERGY_SITES = 7;
 /**
  * Energy sites a founding town always gets, demand notwithstanding: the
  * guaranteed turbine/solar/turbine mix.
@@ -215,16 +212,13 @@ const MAX_ENERGY_SITES = 7;
  * people to crew them, and because those additions cluster too, the farm
  * assembles itself as the town grows.
  */
-const MIN_ENERGY_SITES = 3;
-const MAX_FARMS = 4;
+// Founding and growth caps are data-driven so balance changes do not require
+// editing simulation logic.
 /** Phase 14 — one pump covers the founding fleet; a third covers a big one. */
-const MAX_FUEL_SITES = 3;
 // Growth caps are deliberately above the founding mix.  The founding plan is
 // small, but a metropolis must be able to add real production campuses after
 // its original yards are full; otherwise a dry store can never be repaired by
 // acquiring another serviced frontier block.
-const MAX_GROWTH_SITES = { energy: 12, food: 12, fuel: 8 };
-const MAX_SITE_LEVEL = 3;
 /** Treasury cost to raise a resource's site level — level × this. */
 const UPGRADE_COST = Object.freeze({
   water: basePrice('resourceUpgrade.water', 90000),
@@ -233,7 +227,7 @@ const UPGRADE_COST = Object.freeze({
   fuel: basePrice('resourceUpgrade.fuel', 50000)
 });
 /** Litres a single vehicle burns a day. Fuel is the one resource the fleet eats. */
-const FUEL_PER_VEHICLE = 7;
+const FUEL_PER_VEHICLE = rules.vehicleFuelPerDay;
 /**
  * The town refines nothing — there is no oil refinery anywhere in it, so every
  * litre comes from a staffed, connected gas station. When those cannot cover
@@ -243,10 +237,10 @@ const FUEL_PER_VEHICLE = 7;
  */
 const FUEL_IMPORT_PRICE = basePrice('resourceImport.fuel', 12);
 /** Never buy more than this in one day, whatever the deficit. */
-const FUEL_IMPORT_MAX = 400;
+const FUEL_IMPORT_MAX = rules.imports.fuelMax;
 /** A lake is finite, so the public water service can buy a capped shipment. */
 const WATER_IMPORT_PRICE = basePrice('resourceImport.water', 10);
-const WATER_IMPORT_MAX = 600;
+const WATER_IMPORT_MAX = rules.imports.waterMax;
 
 const DIRS = [
   [1, 0],
@@ -599,9 +593,6 @@ function carveLake(g, rng, b, target, compact = false) {
   }
   return null;
 }
-
-/** How many lake seeds to try before giving up on a water supply. */
-const LAKE_TRIES = 12;
 
 /** Grow a compact blob of water from one seed cell, inside its free region. */
 function growLake(rng, seed, want) {
