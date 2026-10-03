@@ -1,4 +1,5 @@
 export const CELL = 4;
+import worldRules from '../data/worldRules.json' with { type: 'json' };
 
 /**
  * The full extent the town can ever grow to, in cells. This is the whole
@@ -14,7 +15,7 @@ export const CELL = 4;
 // 10,000 tiles at four metres per tile: a 400m x 400m build plate. The
 // founding core stays compact; this larger plate is the woodland frontier the
 // council can acquire over a long run.
-export const EXTENT = Object.freeze({ w: 100, h: 100 });
+export const EXTENT = Object.freeze({ ...worldRules.extent });
 
 /**
  * The founding core, in absolute cells, NOT a fraction of EXTENT. Sizing the
@@ -27,7 +28,7 @@ export const EXTENT = Object.freeze({ w: 100, h: 100 });
 // 30 residents a readable neighbourhood while keeping a broad ring of land on
 // every side for visible, paid expansion. The largest founding frame is 24x21,
 // well below the 30x30 initial-town ceiling while leaving room for campuses.
-export const FOUNDING_CORE = Object.freeze({ w: [22, 24], h: [19, 21] });
+export const FOUNDING_CORE = Object.freeze({ w: [...worldRules.foundingCore.w], h: [...worldRules.foundingCore.h] });
 
 /**
  * Tallest building the town may be FOUNDED with. Two storeys.
@@ -42,10 +43,10 @@ export const FOUNDING_CORE = Object.freeze({ w: [22, 24], h: [19, 21] });
  * This is a founding constraint only. `MAX_FLOORS` still governs everything
  * built afterwards.
  */
-export const FOUNDING_MAX_FLOORS = 2;
+export const FOUNDING_MAX_FLOORS = worldRules.foundingMaxFloors;
 
 /** Hard ceiling on building height in storeys — every floor clamp reads this. */
-export const MAX_FLOORS = 20;
+export const MAX_FLOORS = worldRules.maxFloors;
 
 export const CELL_KIND = {
   EMPTY: 0,

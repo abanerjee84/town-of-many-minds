@@ -48,6 +48,8 @@
     "test:state-service": "node scripts/_state_service_audit.mjs",
     "test:hardcode-audit": "node scripts/_hardcode_audit_check.mjs",
     "test:kit-registry": "node scripts/_kit_registry_check.mjs"
+    ,"test:provider-matrix": "node scripts/_provider_matrix_check.mjs"
+    ,"test:transit-stop": "node scripts/_transit_stop_check.mjs"
   },
   "dependencies": {
     "three": "^0.169.0"

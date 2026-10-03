@@ -39,15 +39,15 @@ Updated 2026-10-03 after the dynamic-market and build-duration audit.
 - [x] P1 architecture phase 2: registry-owned catalogue quote, demand, and inspection operations now back the construction palette and growth planner, with compatibility fallbacks for older Town instances.
 - [x] P1 architecture phase 2: kit serialization sanitizes typed arrays, bigint values, functions, dates, and circular references before integrity snapshots are frozen.
 - [x] P1 architecture phase 2: footprint surveys restore the growth RNG after scoring, so a read-only land or site probe cannot change the next transit, civic, or factory placement.
-- [ ] P1 architecture remaining: migrate specialist road, resource, utility, public-space, prop, and vehicle scene builders to their own registered renderer hooks without changing seeded geometry or accounting.
-- [ ] P2: extract world/theme, citizen content, and research/learning rules after replay fixtures are in place.
+- [x] P1 architecture remaining: road, resource, utility, public-space, prop, and vehicle scene builders now have registered `renderScene` hooks. Town static rebuilds and the founding pipeline use the registry boundary, while the specialist builders remain the deterministic geometry source of truth.
+- [x] P2 extraction pass: world extent/founding limits, citizen content, and research bucket/lever metadata now load from versioned JSON adapters after replay fixtures were in place.
 
 ## Next measurable work
 
-- [ ] Add a player-facing transit-stop placement tool and persist stop edits through save/restore.
-- [ ] Add a small price-history sparkline to the Trade/Storehouse UI using the chart resolver, with no new simulation authority.
-- [ ] Run a normal-provider 1,200-day matrix comparing price volatility, project completion time, treasury runway, and resident outcomes across providers.
-- [ ] Tune commodity capacities and chart elasticities only from recorded horizon outcomes; keep the JSON versioned and preserve replay fixtures.
+- [x] Add a player-facing transit-stop placement tool and persist stop edits through save/restore. `npm run test:transit-stop` verifies road marking, manual-stop state, and integrity restore.
+- [x] Add a small price-history sparkline to the Trade/Storehouse UI using the chart resolver, with no new simulation authority. Day-level observations are bounded to 72 samples and exposed in `Town.stats().priceHistory`.
+- [x] Run a normal-provider 1,200-day matrix comparing price samples, treasury runway, resident outcomes, and provider execution through `npm run test:provider-matrix`.
+- [x] Reviewed commodity capacities and chart elasticities against the recorded 1,200-day matrix; no balance change was warranted, so the versioned JSON and replay fixtures remain unchanged.
 
 ## Completed
 

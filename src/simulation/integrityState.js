@@ -21,6 +21,7 @@ function exportTransport(town) {
   const t = town.traffic;
   if (!t || !Array.isArray(t.vehicles)) return null;
   return {
+    manualStops: [...(town.transport?.manualStops || [])].sort(),
     tripStarts: t.tripStarts || 0,
     tripCompletions: t.tripCompletions || 0,
     tripCancellations: t.tripCancellations || 0,
@@ -52,6 +53,11 @@ function exportTransport(town) {
 function importTransport(town, saved) {
   const t = town.traffic;
   if (!t || !Array.isArray(t.vehicles)) return;
+  if (town.transport) {
+    town.transport.manualStops = new Set((saved?.manualStops || []).filter((key) => /^-?\d+,-?\d+$/.test(String(key))));
+    if (town.roadKit) town.roadKit.manualStops = new Set(town.transport.manualStops);
+    town.transport.rebuild?.();
+  }
   const rows = new Map(((saved && saved.vehicles) || []).filter((row) => row && row.key).map((row) => [row.key, row]));
   for (const v of t.vehicles) {
     const row = rows.get(vehicleKey(v));
@@ -203,6 +209,12 @@ export function importIntegrityState(town, saved = {}) {
       .concat(projectTxs.map((tx) => plain(tx)));
     economy.transactions = economy.ledger;
     economy._resetExpectedMoney();
+  }
+  // Restore explicit stop marks before the static road layer is rebuilt so the
+  // registered road renderer emits their shelters in the same pass.
+  if (town.transport && Array.isArray(saved.transport?.manualStops)) {
+    town.transport.manualStops = new Set(saved.transport.manualStops.filter((key) => /^-?\d+,-?\d+$/.test(String(key))));
+    if (town.roadKit) town.roadKit.manualStops = new Set(town.transport.manualStops);
   }
   town.rebuildStatic?.();
   importTransport(town, saved.transport);

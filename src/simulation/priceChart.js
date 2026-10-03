@@ -84,3 +84,22 @@ export function priceIndex(town) {
     version: chart.version
   };
 }
+
+/** Record one bounded, day-level chart sample for UI/evidence. This is a
+ * read-only market observation; it never feeds back into the quote path. */
+export function recordPriceHistory(town, day = town?.clockDay ?? 0) {
+  if (!town) return [];
+  const index = priceIndex(town);
+  const commodities = Object.fromEntries(Object.keys(chart.commodity || {}).map((key) => [key, commodityPrice(town, key)]));
+  const history = Array.isArray(town.priceHistory) ? town.priceHistory : (town.priceHistory = []);
+  const row = { day: Number(day) || 0, construction: index.construction, land: index.land, commodities };
+  const last = history[history.length - 1];
+  if (last && last.day === row.day) history[history.length - 1] = row;
+  else history.push(row);
+  if (history.length > 72) history.splice(0, history.length - 72);
+  return history;
+}
+
+export function priceHistory(town) {
+  return Array.isArray(town?.priceHistory) ? town.priceHistory.slice(-72) : [];
+}

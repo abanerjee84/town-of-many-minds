@@ -21,6 +21,7 @@ const PLAYER_WHY = {
   park: 'you added it for amenity and leisure',
   tree: 'you planted it as street improvement',
   lamp: 'you placed it for night lighting',
+  transit: 'you marked it for public transport coverage',
   car: 'you added a vehicle and driver',
   citizen: 'you moved a newcomer into a free home'
 };
@@ -67,6 +68,7 @@ const TOOLS = [
   { id: 'park', label: 'Park', hint: 'Convert a cell into parkland with trees and benches.' },
   { id: 'tree', label: 'Tree', hint: 'Plant a tree on the selected cell.' },
   { id: 'lamp', label: 'Lamp', hint: 'Place a street lamp (glows at night).' },
+  { id: 'transit', label: 'Stop', hint: 'Place or remove a bus stop on a road tile.' },
   { id: 'car', label: '+ Car', hint: 'Spawn a vehicle with a new driver personality.' },
   { id: 'citizen', label: '+ Citizen', hint: 'Move a new citizen into a free home.' }
 ];
@@ -279,6 +281,8 @@ export class Interaction {
         return true;
       case 'road':
         return g.inBounds(x, y) && g.kindAt(x, y) !== CELL_KIND.ROAD;
+      case 'transit':
+        return g.inBounds(x, y) && g.isRoad(x, y);
       case 'path':
         return (
           g.inBounds(x, y) &&
@@ -329,6 +333,13 @@ export class Interaction {
 
     if (t === 'road') ok = this.town.paintRoad(x, y);
     else if (t === 'path') ok = this.town.paintFootway(x, y);
+    else if (t === 'transit') {
+      const key = `${x},${y}`;
+      const manual = this.town.transport?.manualStops || new Set();
+      const result = manual.has(key) ? this.town.removeTransitStop(x, y) : this.town.placeTransitStop(x, y);
+      ok = !!result?.ok;
+      if (!ok) this.flashHint(result?.reason === 'stop_limit' ? 'The stop limit for this network is reached.' : 'Stops need an available road tile.');
+    }
     else if (t === 'bulldoze') ok = this.town.demolish(x, y);
     else if (t === 'house') ok = !!this.town.placeBuilding(x, y);
     else if (t === 'factory') {

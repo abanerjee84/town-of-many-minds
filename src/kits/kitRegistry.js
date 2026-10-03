@@ -1,8 +1,8 @@
 import { createKitContext, KIT_CONTEXT_API_VERSION } from './kitContext.js';
-import { buildingContract, catalogueContract, kitStats, rendererContract } from './kitContracts.js';
+import { buildingContract, catalogueContract, kitStats, rendererContract, sceneRendererContract } from './kitContracts.js';
 
 export const KIT_API_VERSION = 1;
-const HOOK_NAMES = Object.freeze(['create', 'reset', 'generate', 'updateHour', 'updateDay', 'stats', 'serialize', 'restore', 'render', 'dispose']);
+const HOOK_NAMES = Object.freeze(['create', 'reset', 'generate', 'updateHour', 'updateDay', 'stats', 'serialize', 'restore', 'render', 'renderScene', 'dispose']);
 const OPERATION_NAMES = Object.freeze(['quote', 'demand', 'place', 'build', 'upgrade', 'inspect']);
 const ID_RE = /^[a-z][a-z0-9._-]*$/;
 const INTENT_RE = /^[A-Z][A-Z0-9_]*$/;
@@ -359,6 +359,21 @@ export class KitRegistry {
         buildingId: building.id,
         ...(result || {})
       }) };
+    } catch (error) {
+      return { ok: false, reason: error?.message || String(error), kitId };
+    }
+  }
+
+  /** Invoke a registered renderer for a specialist scene layer. */
+  renderScene(town, kitId, input = {}, options = {}) {
+    const manifest = this.get(kitId);
+    if (!manifest) return { ok: false, reason: 'unknown_kit', kitId };
+    const fn = manifest.hooks.renderScene;
+    if (!fn) return { ok: false, reason: 'renderer_unavailable', kitId };
+    try {
+      const context = this.contextFor(town, manifest.id);
+      const result = fn({ context, town, input, options });
+      return { ok: true, kitId, result: sceneRendererContract({ kitId: manifest.id, ...(result || {}) }) };
     } catch (error) {
       return { ok: false, reason: error?.message || String(error), kitId };
     }

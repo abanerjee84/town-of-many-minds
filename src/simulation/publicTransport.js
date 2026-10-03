@@ -20,6 +20,7 @@ export class PublicTransportSystem {
   }
 
   reset() {
+    this.manualStops = new Set(this.manualStops || []);
     this.stops = [];
     this.route = [];
     this.ridership = 0;
@@ -30,13 +31,48 @@ export class PublicTransportSystem {
     this.networkReady = false;
   }
 
+  stopKey(x, y) { return `${Math.round(x)},${Math.round(y)}`; }
+
+  placeStop(x, y) {
+    const gx = Math.round(x), gy = Math.round(y);
+    if (!this.town.grid.inBounds(gx, gy) || !this.town.grid.isRoad(gx, gy)) return { ok: false, reason: 'road_required' };
+    const key = this.stopKey(gx, gy);
+    if (this.manualStops.has(key)) return { ok: false, reason: 'stop_exists' };
+    if (this.manualStops.size >= transportRules.publicTransport.maxStops) return { ok: false, reason: 'stop_limit' };
+    this.manualStops.add(key);
+    if (this.town.roadKit) this.town.roadKit.manualStops = new Set(this.manualStops);
+    this.rebuild();
+    return { ok: true, cell: [gx, gy], key };
+  }
+
+  removeStop(x, y) {
+    const key = this.stopKey(x, y);
+    if (!this.manualStops.delete(key)) return { ok: false, reason: 'stop_missing' };
+    if (this.town.roadKit) this.town.roadKit.manualStops = new Set(this.manualStops);
+    this.rebuild();
+    return { ok: true, key };
+  }
+
+  serialize() { return { manualStops: [...this.manualStops].sort() }; }
+
+  restore(state = {}) {
+    this.manualStops = new Set((state.manualStops || []).filter((key) => /^-?\d+,-?\d+$/.test(String(key))));
+    if (this.town.roadKit) this.town.roadKit.manualStops = new Set(this.manualStops);
+    this.rebuild();
+    return { ok: true, stops: this.manualStops.size };
+  }
+
   rebuild() {
     const g = this.town.grid;
     const stops = [];
+    for (const key of this.manualStops) {
+      const [x, y] = key.split(',').map(Number);
+      if (g.inBounds(x, y) && g.isRoad(x, y)) stops.push([x, y]);
+    }
     for (const [key, info] of this.town.roadKit?.cellInfo || []) {
       if (!info?.bus) continue;
       const [x, y] = key.split(',').map(Number);
-      if (g.isRoad(x, y)) stops.push([x, y]);
+      if (g.isRoad(x, y) && !stops.some((s) => s[0] === x && s[1] === y)) stops.push([x, y]);
     }
     // A small town may have no marked stop yet. A transit hub/depot still gets
     // a usable line by selecting separated road cells near civic sites. The

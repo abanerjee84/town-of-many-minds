@@ -1,71 +1,15 @@
 import { HOUSEHOLD } from '../../core/config.js';
+import content from '../../data/citizenContent.json' with { type: 'json' };
 
-const FIRST = [
-  'Ada', 'Bruno', 'Clara', 'Dmitri', 'Elif', 'Fen', 'Greta', 'Hugo', 'Ines', 'Jonas',
-  'Kaya', 'Leo', 'Mira', 'Nils', 'Odette', 'Pablo', 'Quinn', 'Rosa', 'Sami', 'Tessa',
-  'Ugo', 'Vera', 'Wes', 'Xime', 'Yara', 'Zeno', 'Anouk', 'Bela', 'Caius', 'Dahlia',
-  'Eero', 'Frida', 'Gus', 'Halle', 'Ivo', 'Junia', 'Kai', 'Lina', 'Milo', 'Noor'
-];
+const FIRST = content.firstNames;
+const LAST = content.lastNames;
 
-const LAST = [
-  'Aalto', 'Bergström', 'Cardoso', 'Delacroix', 'Eriksen', 'Fontaine', 'Gallardo',
-  'Halvorsen', 'Ibarra', 'Jönsson', 'Kowalski', 'Lindqvist', 'Moreau', 'Nakamura',
-  'Okafor', 'Petrov', 'Quintero', 'Rasmussen', 'Sandoval', 'Thorne', 'Ustinov',
-  'Valdez', 'Wexler', 'Yamada', 'Zeller', 'Bianchi', 'Crowe', 'Duarte', 'Engel',
-  'Farrell', 'Gruber', 'Haddad', 'Iversen', 'Jarvis', 'Keller', 'Lombardi'
-];
-
-export const JOBS = [
-  { id: 'baker', label: 'Baker', work: 'shop' },
-  { id: 'barista', label: 'Barista', work: 'shop' },
-  { id: 'shopkeeper', label: 'Shopkeeper', work: 'shop' },
-  { id: 'chef', label: 'Chef', work: 'shop' },
-  { id: 'teacher', label: 'Teacher', work: 'civic' },
-  { id: 'librarian', label: 'Librarian', work: 'civic' },
-  { id: 'clerk', label: 'Town Clerk', work: 'civic' },
-  { id: 'nurse', label: 'Nurse', work: 'civic' },
-  { id: 'mechanic', label: 'Mechanic', work: 'shop' },
-  { id: 'artist', label: 'Artist', work: 'home' },
-  { id: 'writer', label: 'Writer', work: 'home' },
-  { id: 'musician', label: 'Musician', work: 'home' },
-  { id: 'gardener', label: 'Gardener', work: 'park' },
-  { id: 'courier', label: 'Courier', work: 'road' },
-  // Phase 20 (C3b) — the white-collar trades move to the office block. They
-  // were shop work before, which is why no office could staff itself.
-  { id: 'accountant', label: 'Accountant', work: 'office' },
-  { id: 'designer', label: 'Designer', work: 'office' },
-  { id: 'officeclerk', label: 'Office Clerk', work: 'office' },
-  { id: 'carpenter', label: 'Carpenter', work: 'shop' },
-  { id: 'student', label: 'Student', work: 'civic' },
-  { id: 'retired', label: 'Retired', work: 'home' },
-  { id: 'photographer', label: 'Photographer', work: 'road' },
-  { id: 'councillor', label: 'Councillor', work: 'civic' },
-  { id: 'florist', label: 'Florist', work: 'shop' },
-  { id: 'farmer', label: 'Farmer', work: 'farm' },
-  { id: 'powerworker', label: 'Power Station Worker', work: 'power' },
-  { id: 'attendant', label: 'Fuel Station Attendant', work: 'fuel' },
-  { id: 'millworker', label: 'Sawmill Worker', work: 'industry' },
-  { id: 'metallurgist', label: 'Steelworker', work: 'industry' },
-  { id: 'cementworker', label: 'Cement Worker', work: 'industry' },
-  { id: 'assembler', label: 'Factory Assembler', work: 'industry' }
-];
+export const JOBS = content.jobs;
 
 const LEVEL_RANK = { none: 0, primary: 1, secondary: 2, tertiary: 3 };
 
 /** Minimum schooling for a job — anything unlisted needs no credential. */
-export const JOB_REQUIRE = {
-  teacher: 'tertiary',
-  nurse: 'tertiary',
-  accountant: 'tertiary',
-  councillor: 'tertiary',
-  powerworker: 'tertiary',
-  librarian: 'secondary',
-  clerk: 'secondary',
-  designer: 'secondary',
-  mechanic: 'secondary',
-  metallurgist: 'secondary',
-  officeclerk: 'secondary'
-};
+export const JOB_REQUIRE = content.jobRequirements;
 
 export function qualifies(level, jobId) {
   const id = jobId && typeof jobId === 'object' ? jobId.id : jobId;
@@ -115,54 +59,10 @@ export function credentialFloor(level, jobId) {
   return (LEVEL_RANK[level] ?? 0) >= LEVEL_RANK[req] ? level : req;
 }
 
-const HOBBIES = [
-  'bird watching', 'pottery', 'chess', 'cycling', 'astronomy', 'baking sourdough',
-  'urban gardening', 'jazz records', 'kite flying', 'stamp collecting', 'rock climbing',
-  'film photography', 'knitting', 'beekeeping', 'night fishing', 'geocaching',
-  'collecting toy robots', 'competitive sudoku', 'salsa dancing', 'drone racing'
-];
-
-const CATCHPHRASES = [
-  'Lovely weather for a walk.',
-  'I never lock my front door.',
-  'The bakery opens at six, you know.',
-  'Mind the tram tracks.',
-  'I have a spreadsheet for that.',
-  'Everything is temporary except the potholes.',
-  'Say hi to the fountain for me.',
-  'My tomatoes are doing better than me.',
-  'I peaked in the ninth grade.',
-  'You can never have too many umbrellas.',
-  'I only drive the speed limit. Usually.',
-  'The bus is never on time, but it is honest.',
-  'I know a shortcut. Trust me.',
-  'Fresh bread fixes everything.',
-  'I am saving that parking spot for later.',
-  'Do not talk to me before my coffee.'
-];
-
-const QUIRKS = [
-  'waves at every passing car',
-  'always carries a spare umbrella',
-  'counts the steps on the town hall stairs',
-  'refuses to walk under ladders',
-  'greets the fountain every morning',
-  'keeps a pocket full of buttons',
-  'hums while waiting at crossings',
-  'names every potted plant',
-  'insists the long way round is shorter',
-  'collects lost single gloves',
-  'salutes the war memorial',
-  'takes photos of doorbells'
-];
-
-const TRAIT_KEYS = [
-  'openness',
-  'conscientiousness',
-  'extraversion',
-  'agreeableness',
-  'neuroticism'
-];
+const HOBBIES = content.hobbies;
+const CATCHPHRASES = content.catchphrases;
+const QUIRKS = content.quirks;
+const TRAIT_KEYS = content.traits;
 
 function trait(rng, mean = 0.5, sd = 0.18) {
   return Math.min(0.99, Math.max(0.01, rng.gauss(mean, sd)));

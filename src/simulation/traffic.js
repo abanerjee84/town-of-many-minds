@@ -2914,7 +2914,10 @@ export class TrafficSystem {
         this.spawnFailures.lastEligibility = this.eligibilityReport(rigSpec);
         break;
       }
-      const rig = buildVehicle({ rng: this.rng, type });
+      const rendered = this.town.kits?.renderScene?.(this.town, 'vehicles', { id: `vehicle-${this.nextId || type}`, type, params: { type } }, { rng: this.rng });
+      const rig = rendered?.ok && rendered.result?.payload
+        ? rendered.result.payload
+        : buildVehicle({ rng: this.rng, type });
       const driver = citizen?.p || createPersonality(this.rng);
       const agent = new VehicleAgent(this.town, rig, driver);
       if (citizen) { agent.driverCitizen = citizen; citizen.vehicle = agent; }

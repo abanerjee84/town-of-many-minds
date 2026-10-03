@@ -2,6 +2,7 @@ import { events } from '../core/events.js';
 import { CELL_KIND } from '../core/config.js';
 import { ORDER } from '../kits/resources/resourceKit.js';
 import { civicLoads, worstCivicLoad, edgeCell, EDGE_RING } from './growth.js';
+import researchRules from '../data/researchRules.json' with { type: 'json' };
 
 /**
  * Innovation (Phase 17 — A4).
@@ -22,29 +23,11 @@ import { civicLoads, worstCivicLoad, edgeCell, EDGE_RING } from './growth.js';
 /* ------------------------------------------------------------------ buckets */
 
 /** The three buckets, and how much research each dollar buys. */
-export const BUCKETS = {
-  academia: {
-    label: 'Academia',
-    rate: 1.0,
-    hint: 'pupils in the schools become research capacity',
-    perPupil: 0.55,
-    source: (town) => pupilsIn(town)
-  },
-  companies: {
-    label: 'Companies',
-    rate: 0.8,
-    hint: 'industry works fund applied research',
-    perUnit: 1400,
-    source: (town) => worksIn(town)
-  },
-  exploration: {
-    label: 'Exploration',
-    rate: 0.55,
-    hint: 'surveys of the unmapped frontier',
-    perCell: 3.2,
-    source: (town) => frontierIn(town)
-  }
-};
+export const BUCKETS = Object.freeze({
+  academia: { ...researchRules.buckets.academia, source: (town) => pupilsIn(town) },
+  companies: { ...researchRules.buckets.companies, source: (town) => worksIn(town) },
+  exploration: { ...researchRules.buckets.exploration, source: (town) => frontierIn(town) }
+});
 
 export const BUCKET_IDS = Object.keys(BUCKETS);
 
@@ -76,47 +59,38 @@ const frontierIn = (town) => (town.research ? town.research.frontier().length : 
  * policy modifiers, so a research gain and a statute are the same shape of
  * thing landing on the same live parameter.
  */
+const LEVER_DATA = researchRules.levers;
 export const LEVERS = {
   yield: {
-    label: 'output per site',
-    hint: 'every primary resource site produces more',
-    field: 'resources.yieldBonus',
+    ...LEVER_DATA.yield,
     get: (t) => t.resources?.yieldBonus || 0,
     set: (t, v) => {
       if (t.resources) t.resources.yieldBonus = v;
     }
   },
   output: {
-    label: 'works throughput',
-    hint: 'every industry works turns out more',
-    field: 'industry.outputBonus',
+    ...LEVER_DATA.output,
     get: (t) => t.industry?.outputBonus || 0,
     set: (t, v) => {
       if (t.industry) t.industry.outputBonus = v;
     }
   },
   crew: {
-    label: 'staff efficiency',
-    hint: 'each worker counts for more in a staffed business',
-    field: 'economy.staffBonus',
+    ...LEVER_DATA.crew,
     get: (t) => t.economy?.staffBonus || 0,
     set: (t, v) => {
       if (t.economy) t.economy.staffBonus = v;
     }
   },
   service: {
-    label: 'civic capacity',
-    hint: 'every facility serves more people',
-    field: 'growth.serviceBonus',
+    ...LEVER_DATA.service,
     get: (t) => t.growth?.serviceBonus || 0,
     set: (t, v) => {
       if (t.growth) t.growth.serviceBonus = v;
     }
   },
   survey: {
-    label: 'survey rate',
-    hint: 'each day of exploration money maps more of the frontier',
-    field: 'research.surveyBonus',
+    ...LEVER_DATA.survey,
     get: (t) => t.research?.surveyBonus || 0,
     set: (t, v) => {
       if (t.research) t.research.surveyBonus = v;

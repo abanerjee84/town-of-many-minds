@@ -1,0 +1,7 @@
+{
+  "version": "1.0.0",
+  "extent": {"w":100,"h":100},
+  "foundingCore": {"w":[22,24],"h":[19,21]},
+  "foundingMaxFloors": 2,
+  "maxFloors": 20
+}

@@ -897,15 +897,20 @@ function layoutParkCell(batch, g, x, y, rng, town) {
   }
 }
 
-function addCustomProp(batch, p, type, rng) {
+function addCustomProp(batch, p, type, rng, town = null) {
   let obj = null;
-  if (type === 'tree' || type === 'pine' || type === 'bush') {
+  if (town && (type === 'tree' || type === 'pine' || type === 'bush' || type === 'lamp')) {
+    const scale = type === 'bush' ? rng.float(0.7, 1.1) : rng.float(0.7, 1.2);
+    const rendered = town.kits?.renderScene?.(town, 'props', { id: `prop-${type}`, type, scale }, { rng });
+    obj = rendered?.ok ? rendered.result?.scene : null;
+  }
+  if (!obj && (type === 'tree' || type === 'pine' || type === 'bush')) {
     const scale = type === 'bush' ? rng.float(0.7, 1.1) : rng.float(0.7, 1.2);
     obj = buildFoliage(type, rng, scale);
   }
-  else if (type === 'bench') obj = buildBench();
-  else if (type === 'lamp') obj = buildLamp();
-  else obj = buildTree(rng, rng.float(0.7, 1.2));
+  else if (!obj && type === 'bench') obj = buildBench();
+  else if (!obj && type === 'lamp') obj = buildLamp();
+  else if (!obj) obj = buildTree(rng, rng.float(0.7, 1.2));
   if (!obj) return;
   obj.position.set(p.x + rng.float(-1.2, 1.2), 0.1, p.z + rng.float(-1.2, 1.2));
   obj.rotation.y = rng.float(0, Math.PI * 2);
@@ -1030,7 +1035,7 @@ export function layoutLots(town, rng) {
 
     const custom = town.customProps.get(idx);
     if (custom) {
-      for (const type of custom) addCustomProp(batch, p, type, cellRng(town, x, y, 91));
+      for (const type of custom) addCustomProp(batch, p, type, cellRng(town, x, y, 91), town);
     }
 
     if (kind === CELL_KIND.ROAD) {
@@ -1270,7 +1275,8 @@ export function layoutLots(town, rng) {
   }
 
   town.publicPlan = planPublicSpaces(town, rng.fork(7711));
-  renderPublicSpaces(town, town.publicPlan, batch, rng.fork(7712));
+  const publicLayer = town.kits?.renderScene?.(town, 'publicspace', { id: 'public-space-layer', plan: town.publicPlan, batch }, { rng: rng.fork(7712) });
+  if (!publicLayer?.ok) renderPublicSpaces(town, town.publicPlan, batch, rng.fork(7712));
 
   batch.addTo(town.lotsGroup);
   town.parking?.finalizeRebuild(town.traffic?.vehicles || []);
@@ -1631,7 +1637,9 @@ export function placeInitialTown(town, rng) {
       });
     },
     roadKit: () => {
-      town.roadsGroup.add(town.roadKit.build());
+      town.roadKit.manualStops = new Set(town.transport?.manualStops || []);
+      const rendered = town.kits?.renderScene?.(town, 'roads', { id: 'road-layer' }, { rng: rng.fork(5) });
+      town.roadsGroup.add(rendered?.ok && rendered.result?.scene ? rendered.result.scene : town.roadKit.build());
     },
     lots: () => {
       layoutLots(town, rng);
@@ -1641,7 +1649,8 @@ export function placeInitialTown(town, rng) {
       rebuildZone(town);
     },
     utilities: () => {
-      town.utilities.build(town, rng.fork(4409));
+      const rendered = town.kits?.renderScene?.(town, 'utilities', { id: 'utility-layer' }, { rng: rng.fork(4409) });
+      if (!rendered?.ok) town.utilities.build(town, rng.fork(4409));
     },
     agents: () => {
       town.pedestrians.spawnFamilies(FOUNDING_POPULATION);

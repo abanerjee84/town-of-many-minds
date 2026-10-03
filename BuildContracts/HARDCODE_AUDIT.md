@@ -19,6 +19,9 @@ Already externalized:
 - `src/data/civicRules.json`: civic capacity kinds, vertical caps, and same-parcel upgrade paths.
 - `src/data/civicCatalog.json`: authored civic massing, finish, capacity, and facility presentation data.
 - `src/data/vehicleCatalog.json` and `src/data/transportRules.json`: vehicle dimensions, public-transport thresholds, fleet roster, finance, and emergency coverage ratios.
+- `src/data/worldRules.json`: finite build-plate extent, founding envelope, and floor ceilings.
+- `src/data/citizenContent.json`: citizen names, jobs, credential requirements, hobbies, catchphrases, quirks, and trait keys.
+- `src/data/researchRules.json`: research bucket and learning-lever metadata.
 
 The highest-value remaining candidates are:
 
@@ -33,9 +36,9 @@ The highest-value remaining candidates are:
 | P1 | `roadExtensionPlanner.js`, `placementController.js` | Trip sample thresholds, hotspot pressure, block dimensions, industrial edge, link limits | `roadRules.json` | These thresholds decide whether a street is evidence-backed and where it may connect. |
 | P1 | `traffic.js`, `core/signals.js` | Collision margins, congestion sampling, fuel patience, parking waits, signal phases | `trafficRules.json` | These values alter driving stability, jams, stranded vehicles, and junction behavior. |
 | P1 | `governance.js` | Council cadence, provider timeout/failure limits, temperature, prompt budget | `councilRules.json` | Provider experiments and Council scheduling need a versioned runtime contract. |
-| P2 | `core/config.js`, road cross-sections | World extent, founding envelope, speed options, palette, road widths and offsets | `worldRules.json`, `theme.json` | Useful for scenario packs and visual themes, but more compatibility-sensitive. |
-| P2 | citizen kits | Jobs, wages, skills, education labels, names, traits, hobbies, transport preferences | `citizenCatalog.json` | Enables culture and labour-market scenarios without changing lifecycle code. |
-| P2 | `innovation.js`, `councilLearning.js` | Research buckets/levers, bottleneck weights, learning limits and aging | `researchRules.json` | Provider-comparison experiments need reproducible research settings. |
+| P2 | `core/config.js`, road cross-sections | Remaining speed options, palette, road widths and offsets | `worldRules.json`, `theme.json` | World extent and founding limits are externalized; visual theme and structural road dimensions remain compatibility-sensitive. |
+| P2 | citizen kits | Remaining wages, skills, education labels, and transport preferences | `citizenContent.json` | Names, jobs, credential requirements, traits, hobbies, and content strings are externalized. |
+| P2 | `innovation.js`, `councilLearning.js` | Bottleneck weights, learning limits and aging | `researchRules.json` | Research buckets and lever metadata are externalized; behavior and outcome scoring remain code-owned. |
 | P2 | `forest.js`, `streetGlow.js`, foliage kit | Timber yield, glow duration/intensity, pulse values, foliage variants | `vegetationRules.json`, `visualEffects.json` | Visual and ecological tuning should be editable without changing the renderer. |
 
 Recommended extraction order:

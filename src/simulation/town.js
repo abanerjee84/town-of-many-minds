@@ -42,6 +42,7 @@ import { agriculturalSetbackConflict, resourceSetbackConflict, educationCampusCo
 import { events } from '../core/events.js';
 import { exportIntegrityState, importIntegrityState } from './integrityState.js';
 import { BUILTIN_KIT_REGISTRY } from '../kits/kitRuntime.js';
+import { recordPriceHistory, priceHistory } from './priceChart.js';
 
 export const GRID_W = EXTENT.w;
 export const GRID_H = EXTENT.h;
@@ -103,6 +104,7 @@ export class Town {
     this.pipeline = null;
     this.pipelineSummary = null;
     this.validation = null;
+    this.priceHistory = [];
 
     this.traffic = new TrafficSystem(this);
     // The vehicle register. TrafficSystem owns the BEHAVIOUR of whatever is
@@ -158,6 +160,7 @@ export class Town {
     this.rng = makeRng(normalizedSeed);
     this.forest.reset(normalizedSeed);
     this.weather.reset(normalizedSeed);
+    this.priceHistory = [];
     this.swapGrid();
     this.roadKit = new RoadKit(this.grid, this.rng);
     this.parcels = new ParcelKit();
@@ -165,6 +168,7 @@ export class Town {
     this.incidents?.resetRng(this.rng);
     this.perimeter.reset();
     this.transport.rng = this.rng.fork(8181);
+    this.transport.manualStops = new Set();
     this.transport.reset();
     this.society.rng = this.rng.fork(9191);
     this.society.reset();
@@ -243,6 +247,26 @@ export class Town {
   exportIntegrityState() { return exportIntegrityState(this); }
   importIntegrityState(saved) { return importIntegrityState(this, saved); }
 
+  placeTransitStop(x, y) {
+    const result = this.transport?.placeStop?.(x, y) || { ok: false, reason: 'transport_unavailable' };
+    if (result.ok) {
+      this.roadKit.manualStops = new Set(this.transport.manualStops);
+      this.rebuildStatic({ roads: true, lots: false, validate: false });
+      this.transport.rebuild();
+    }
+    return result;
+  }
+
+  removeTransitStop(x, y) {
+    const result = this.transport?.removeStop?.(x, y) || { ok: false, reason: 'transport_unavailable' };
+    if (result.ok) {
+      this.roadKit.manualStops = new Set(this.transport.manualStops);
+      this.rebuildStatic({ roads: true, lots: false, validate: false });
+      this.transport.rebuild();
+    }
+    return result;
+  }
+
   roadHeightAt(worldX, worldZ) {
     const { x, y } = this.grid.worldToCell(worldX, worldZ);
     if (!this.grid.inBounds(x, y)) return 0;
@@ -304,6 +328,7 @@ export class Town {
     this.clearGroup(this.buildingsGroup);
     this.swapGrid();
     this.roadKit = new RoadKit(this.grid, this.rng);
+    this.roadKit.manualStops = new Set(this.transport?.manualStops || []);
   }
 
   /**
@@ -364,7 +389,9 @@ export class Town {
       this.grid.computeRoadMask();
       this.clearGroup(this.roadsGroup);
       this.roadKit = new RoadKit(this.grid, this.rng.fork(5));
-      this.roadsGroup.add(this.roadKit.build());
+      this.roadKit.manualStops = new Set(this.transport?.manualStops || []);
+      const renderedRoads = this.kits?.renderScene?.(this, 'roads', { id: 'road-layer' }, { rng: this.rng.fork(5) });
+      this.roadsGroup.add(renderedRoads?.ok && renderedRoads.result?.scene ? renderedRoads.result.scene : this.roadKit.build());
       if (this.roadKit.signals) { this.roadKit.signals.t = oldSignalsTime; this.roadKit.signals.sync(true); }
     }
     if (lots) {
@@ -373,8 +400,10 @@ export class Town {
       rebuildZone(this);
     }
     if (roads) {
-      this.utilities.build(this, this.rng.fork(4409));
-      this.resources.build(this, this.rng.fork(5501));
+      const renderedUtilities = this.kits?.renderScene?.(this, 'utilities', { id: 'utility-layer' }, { rng: this.rng.fork(4409) });
+      if (!renderedUtilities?.ok) this.utilities.build(this, this.rng.fork(4409));
+      const renderedResources = this.kits?.renderScene?.(this, 'resources', { id: 'resource-layer' }, { rng: this.rng.fork(5501) });
+      if (!renderedResources?.ok) this.resources.build(this, this.rng.fork(5501));
       this.roadGraphVersion++;
       this.traffic?.onRoadGraphChanged?.();
     }
@@ -763,6 +792,7 @@ export class Town {
     this.streetGlow?.update(dt);
     if (clock?.day != null && clock.day !== this._kitClockDay) {
       this._kitClockDay = clock.day;
+      recordPriceHistory(this, clock.day);
       this.kits?.invoke?.('updateDay', this, { dt, clock });
     }
     // Registered kits own their declared update hooks. This is the first
@@ -1534,6 +1564,7 @@ export class Town {
       },
       perimeter: this.perimeter ? this.perimeter.stats() : null,
       transport: this.transport ? this.transport.stats() : null,
+      priceHistory: priceHistory(this),
       society: this.society ? this.society.stats() : null,
       governance: this.governance ? this.governance.stats() : null,
       mobility: this.traffic ? this.traffic.mobilityStats() : null,

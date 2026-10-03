@@ -106,6 +106,9 @@ export class RoadKit {
     this.signalMeshes = [];
     this.waterMeshes = [];
     this.stats = { tiles: 0, components: {} };
+    // Explicit player/council transit stops survive road rebuilds. The seeded
+    // markings remain the default; this set only adds commissioned stops.
+    this.manualStops = new Set();
   }
 
   hasSidewalk(x, y, dx, dy) {
@@ -181,6 +184,7 @@ export class RoadKit {
       tiles++;
       const c = this.makeContext(g, x, y);
       this.decorate(c);
+      if (this.manualStops.has(`${x},${y}`)) c.bus = c.bus || { side: 1 };
       this.dispatch(b, c);
       const xs = c.xs;
       this.xsByCell.set(`${x},${y}`, xs);

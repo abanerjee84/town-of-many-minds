@@ -238,6 +238,8 @@ This section defines the target architecture for turning the current specialist 
 
 57. Renderer ownership shall remain local to the kit. Geometry builders shall consume a stable build contract and return disposable scene objects plus inspection metadata. Simulation code shall not depend on Three.js object structure, and geometry replacement shall not change capacity, staffing, production, or accounting unless the declared contract version changes.
 
+57a. Scene-layer renderers shall use the registry's `renderScene` boundary for roads, resources, utilities, public spaces, props, and vehicles. A scene contract may carry live render nodes and optional runtime payloads, while inspection metadata remains serializable; seeded builders and accounting remain unchanged.
+
 58. Kit statistics and evidence shall be discoverable through the registry. `Town.stats()`, Council evidence, the construction palette, validation, and benchmark snapshots shall query registered `KitStats` providers instead of importing each specialist implementation directly. Missing optional kits shall produce an explicit unavailable capability, not a null dereference or fabricated zero.
 
 59. A kit shall be independently testable with a fixture `KitContext`. Its tests shall cover catalogue schema, deterministic placement, quote stability, demand reasons, lifecycle reset, transaction rollback, serialization, and interaction with declared dependencies. A fixture kit used by tests shall be registerable without changing `Town`, `GrowthSystem`, or `GovernanceSystem` source files.
@@ -245,6 +247,12 @@ This section defines the target architecture for turning the current specialist 
 60. The registry shall expose a compatibility report containing loaded kits, versions, owned IDs, intent routes, dependencies, schema versions, and failed registrations. The report shall be available to the developer diagnostics and included in replay metadata so two provider runs cannot silently use different kit sets.
 
 61. Migration shall preserve current public APIs. Existing exports such as `civicFacility`, `constructionBlock`, `buildHouse`, `ResourceSystem`, `UtilitySystem`, `VehicleRegistry`, and `PublicTransportSystem` shall remain adapters over registered capabilities until the deprecation window ends. No migration step may change seeded placement, accounting, or Council intent semantics without a versioned contract update and regression fixture.
+
+61a. The player may place or remove a manual transit stop on an existing road tile. The stop is owned by PublicTransportSystem, rendered by the road kit, included in transport stats, and persisted through integrity save/restore. Invalid cells and the configured stop limit return a named reason.
+
+61b. Price observations are recorded once per simulation day through the chart resolver and retained for a bounded history. The Storehouse/Trade view may render a sparkline from those observations, but the history has no authority over quotes, production, accounting, or Council decisions.
+
+61c. World extent/founding limits, citizen content, and research metadata are versioned JSON data contracts. Runtime modules retain deterministic behavior, validation, and compatibility fallbacks while consuming those adapters.
 
 ### Kit architecture acceptance tests
 

@@ -33,6 +33,24 @@
       "priority": "done"
     },
     {
+      "id": "world-rules",
+      "path": "src/data/worldRules.json",
+      "status": "externalized in this pass",
+      "priority": "done"
+    },
+    {
+      "id": "citizen-content",
+      "path": "src/data/citizenContent.json",
+      "status": "externalized in this pass",
+      "priority": "done"
+    },
+    {
+      "id": "research-rules",
+      "path": "src/data/researchRules.json",
+      "status": "externalized in this pass",
+      "priority": "done"
+    },
+    {
       "id": "construction-catalog",
       "path": "src/kits/constructionBlocks.js",
       "symbols": [

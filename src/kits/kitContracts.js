@@ -140,6 +140,20 @@ export function rendererContract(record = {}) {
   });
 }
 
+/** Renderer boundary for scene layers that are not individual buildings.
+ * Road, utility, resource, prop and vehicle layers still return live Three.js
+ * objects, while their inspection data remains serializable and replaceable. */
+export function sceneRendererContract(record = {}) {
+  return Object.freeze({
+    contractVersion: KIT_CONTRACT_VERSION,
+    kitId: String(record.kitId || 'unknown'),
+    scene: record.scene || null,
+    inspection: serializable(record.inspection || {}),
+    payload: record.payload || null,
+    dispose: typeof record.dispose === 'function' ? record.dispose : null
+  });
+}
+
 export function kitStats(record = {}) {
   return freeze({
     contractVersion: KIT_CONTRACT_VERSION,

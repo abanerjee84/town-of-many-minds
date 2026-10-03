@@ -1,6 +1,8 @@
 import { CONSTRUCTION_BLOCKS, constructionBlock, constructionBlockDemand, constructionBlockQuote } from './constructionBlocks.js';
-import { publicSpaceStats } from './publicspace/publicKit.js';
+import { publicSpaceStats, renderPublicSpaces } from './publicspace/publicKit.js';
 import { buildHouse } from './houses/houseKit.js';
+import { buildTree, buildPine, buildBush, buildLamp } from './props/propKit.js';
+import { buildVehicle } from './vehicles/vehicleKit.js';
 
 const rowsFor = (kit) => CONSTRUCTION_BLOCKS.filter((row) => row.kit === kit);
 const catalogueOperations = {
@@ -27,6 +29,46 @@ function buildingRenderer({ building, options = {} }) {
 
 function simpleStats(systemName) {
   return ({ town }) => town[systemName]?.stats?.() || null;
+}
+
+function roadSceneRenderer({ town }) {
+  const scene = town.roadKit?.build?.() || null;
+  return { scene, inspection: { kind: 'road-network', tiles: town.roadKit?.stats?.tiles || 0 } };
+}
+
+function utilitySceneRenderer({ town, options = {} }) {
+  const system = town.utilities;
+  if (!system?.build) return { scene: null, inspection: { kind: 'utility-network', available: false } };
+  system.build(town, options.rng || town.rng?.fork?.(4409));
+  return { scene: system.group, inspection: { kind: 'utility-network', stats: system.stats?.() || null } };
+}
+
+function resourceSceneRenderer({ town, options = {} }) {
+  const system = town.resources;
+  if (!system?.build) return { scene: null, inspection: { kind: 'resource-sites', available: false } };
+  system.build(town, options.rng || town.rng?.fork?.(5501));
+  return { scene: system.group, inspection: { kind: 'resource-sites', stats: system.stats?.() || null } };
+}
+
+function publicSpaceSceneRenderer({ town, input = {}, options = {} }) {
+  if (input.batch) renderPublicSpaces(town, input.plan || town.publicPlan, input.batch, options.rng || town.rng?.fork?.(7712));
+  return { scene: input.batch?.group || null, inspection: publicSpaceStats(town) };
+}
+
+function propSceneRenderer({ input = {}, options = {} }) {
+  const rng = options.rng || input.rng;
+  const type = input.type || 'tree';
+  const scale = Number.isFinite(Number(input.scale)) ? Number(input.scale) : 1;
+  const scene = type === 'pine' ? buildPine(rng, scale)
+    : type === 'bush' ? buildBush(rng, scale)
+      : type === 'lamp' ? buildLamp()
+        : buildTree(rng, scale);
+  return { scene, inspection: { kind: 'prop', type } };
+}
+
+function vehicleSceneRenderer({ input = {}, options = {} }) {
+  const rig = buildVehicle({ ...(input.params || {}), type: input.type || input.params?.type || 'sedan', rng: options.rng || input.params?.rng });
+  return { scene: rig.group, payload: rig, inspection: { kind: 'vehicle', type: rig.type, footprint: rig.spec, wheels: rig.wheels?.length || 0 } };
 }
 
 /**
@@ -80,7 +122,7 @@ export function registerBuiltinKits(registry) {
       routes: { UPGRADE_RESOURCE: 'resource' }, planTypes: ['resource'],
       capabilities: { catalogue: true, builder: true, quote: true, placement: true, production: true, storage: true },
       operations: catalogueOperations,
-      hooks: { stats: simpleStats('resources') }
+      hooks: { renderScene: resourceSceneRenderer, stats: simpleStats('resources') }
     },
     {
       id: 'utilities', version: '1.0.0', apiVersion: 1, domains: ['utility'],
@@ -89,7 +131,7 @@ export function registerBuiltinKits(registry) {
       routes: { EXPAND_POWER: 'power', EXPAND_WATER: 'water', EXPAND_SEWAGE: 'sewage' }, planTypes: ['power', 'water', 'sewage'],
       capabilities: { catalogue: true, builder: true, quote: true, placement: true, networks: true },
       operations: catalogueOperations,
-      hooks: { stats: simpleStats('utilities') }
+      hooks: { renderScene: utilitySceneRenderer, stats: simpleStats('utilities') }
     },
     {
       id: 'roads', version: '1.0.0', apiVersion: 1, domains: ['mobility'],
@@ -99,7 +141,7 @@ export function registerBuiltinKits(registry) {
       planTypes: ['road', 'footway', 'roadup', 'bridge', 'parking'],
       capabilities: { catalogue: true, builder: true, quote: true, placement: true, planning: true },
       operations: catalogueOperations,
-      hooks: { stats: ({ town }) => town.roadKit?.stats || null }
+      hooks: { renderScene: roadSceneRenderer, stats: ({ town }) => town.roadKit?.stats || null }
     },
     {
       id: 'publicspace', version: '1.0.0', apiVersion: 1, domains: ['public'],
@@ -108,7 +150,7 @@ export function registerBuiltinKits(registry) {
       routes: { PARK_LAND: 'park', PAVE_PLAZA: 'plaza' }, planTypes: ['park', 'plaza'],
       capabilities: { catalogue: true, builder: true, quote: true, placement: true },
       operations: catalogueOperations,
-      hooks: { stats: ({ town }) => publicSpaceStats(town) }
+      hooks: { renderScene: publicSpaceSceneRenderer, stats: ({ town }) => publicSpaceStats(town) }
     },
     {
       id: 'props', version: '1.0.0', apiVersion: 1, domains: ['public', 'mobility'],
@@ -116,14 +158,15 @@ export function registerBuiltinKits(registry) {
       catalogue: rowsFor('props'),
       routes: { PLANT_TREES: 'prop-tree', INSTALL_LAMP: 'prop-lamp' }, planTypes: ['prop-tree', 'prop-lamp'],
       capabilities: { catalogue: true, builder: true, quote: true, placement: true },
-      operations: catalogueOperations
+      operations: catalogueOperations,
+      hooks: { renderScene: propSceneRenderer }
     },
     {
       id: 'vehicles', version: '1.0.0', apiVersion: 1, domains: ['transport', 'emergency'],
       catalogueSchemaVersion: '1',
       routes: { DISPATCH_UNITS: null }, planTypes: [],
       capabilities: { catalogue: true, fleet: true, procurement: true },
-      hooks: { stats: simpleStats('vehicles') }
+      hooks: { renderScene: vehicleSceneRenderer, stats: simpleStats('vehicles') }
     },
     {
       id: 'transport', version: '1.0.0', apiVersion: 1, domains: ['transport'],
@@ -132,7 +175,9 @@ export function registerBuiltinKits(registry) {
       capabilities: { routing: true, stops: true, fleet: true },
       hooks: {
         updateHour: ({ town, dt, clock }) => town.transport?.update(dt, clock),
-        stats: simpleStats('transport')
+        stats: simpleStats('transport'),
+        serialize: ({ town }) => town.transport?.serialize?.() || null,
+        restore: ({ town, state }) => town.transport?.restore?.(state || {}) || { ok: false, reason: 'transport_unavailable' }
       }
     },
     {

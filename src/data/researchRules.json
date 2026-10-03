@@ -1,0 +1,15 @@
+{
+  "version": "1.0.0",
+  "buckets": {
+    "academia": {"label":"Academia","rate":1,"hint":"pupils in the schools become research capacity","perPupil":0.55},
+    "companies": {"label":"Companies","rate":0.8,"hint":"industry works fund applied research","perUnit":1400},
+    "exploration": {"label":"Exploration","rate":0.55,"hint":"surveys of the unmapped frontier","perCell":3.2}
+  },
+  "levers": {
+    "yield": {"label":"output per site","hint":"every primary resource site produces more","field":"resources.yieldBonus"},
+    "output": {"label":"works throughput","hint":"every industry works turns out more","field":"industry.outputBonus"},
+    "crew": {"label":"staff efficiency","hint":"each worker counts for more in a staffed business","field":"economy.staffBonus"},
+    "service": {"label":"civic capacity","hint":"every facility serves more people","field":"growth.serviceBonus"},
+    "survey": {"label":"survey rate","hint":"each day of exploration money maps more of the frontier","field":"research.surveyBonus"}
+  }
+}

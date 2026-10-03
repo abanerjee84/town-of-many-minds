@@ -75,13 +75,23 @@ function renderResources(res) {
 
 
 /** Storehouse trade rows: stock level plus manual buy/sell buttons. */
-function renderTrade(ind) {
+function renderSparkline(values, color = '#79c0ff') {
+  const nums = values.map(Number).filter(Number.isFinite);
+  if (nums.length < 2) return '<span class="sparkline empty">—</span>';
+  const lo = Math.min(...nums), hi = Math.max(...nums);
+  const span = Math.max(1, hi - lo);
+  const points = nums.map((v, i) => `${(i / (nums.length - 1)) * 48},${15 - ((v - lo) / span) * 13}`).join(' ');
+  return `<svg class="sparkline" viewBox="0 0 48 16" aria-label="recent price trend" role="img"><polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.8" vector-effect="non-scaling-stroke" /></svg>`;
+}
+
+function renderTrade(ind, history = []) {
   if (!ind || !ind.commodities) return '';
   return Object.entries(ind.commodities)
     .map(
       ([key, c]) => `<div class="trade-row" title="${esc(c.label)}: ${c.stock}/${c.capacity} in store">
         <span class="t-name">${esc(c.label)}</span>
         <b class="t-stock">${c.stock}/${c.capacity}</b>
+        ${renderSparkline(history.map((row) => row.commodities?.[key]).filter((v) => v != null))}
         <button data-trade="buy:${key}" title="Import 50 ${esc(c.label.toLowerCase())} for $${(
         c.buy * 50
       ).toLocaleString('en-US')}">↑$${c.buy}</button>
@@ -612,7 +622,7 @@ export class Hud {
       // rows of HTML into a `display:none` element 4× a second is work for
       // nothing.
       if (this.storehouseOpen) {
-        const html = renderTrade(stats.industry);
+        const html = renderTrade(stats.industry, stats.priceHistory || []);
         if (html !== this._trade) {
           this._trade = html;
           this.el.trade.innerHTML = html;
