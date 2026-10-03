@@ -1,0 +1,168 @@
+{
+  "version": 1,
+  "scope": "runtime tuning values that can change balance, progression, simulation cadence, or visual policy without changing algorithms",
+  "excluded": [
+    "enum identifiers and parser vocabulary",
+    "algorithmic constants whose meaning is structural to an invariant",
+    "mesh dimensions that describe one authored visual primitive",
+    "test fixtures and diagnostic scripts"
+  ],
+  "sources": [
+    { "id": "price-chart", "path": "src/data/priceChart.json", "status": "externalized", "priority": "done" },
+    { "id": "build-time-chart", "path": "src/data/buildtime.json", "status": "externalized", "priority": "done" },
+    { "id": "council-schemes", "path": "src/data/council_schemes.json", "status": "externalized", "priority": "done" },
+    { "id": "weather-chart", "path": "src/data/weather.json", "status": "externalized in this pass", "priority": "done" },
+    {
+      "id": "construction-catalog",
+      "path": "src/kits/constructionBlocks.js",
+      "symbols": ["BLOCKS", "FAMILY_BILLS", "MODULE_PREMIUM"],
+      "target": "src/data/constructionCatalog.json",
+      "priority": "P0",
+      "reason": "Block footprints, modules, material bills, and labour are content data shared by the palette and Council."
+    },
+    {
+      "id": "industry-catalog",
+      "path": "src/simulation/industry.js",
+      "symbols": ["MATERIALS", "FACTORY_SIZES", "FACTORY_TYPES", "COMMODITIES", "CAPACITY", "INITIAL", "RATE", "FACTORY_INPUTS", "IMPORT_MULT", "EXPORT_MULT", "STRAIN_GATE"],
+      "target": "src/data/industryCatalog.json",
+      "priority": "P0",
+      "reason": "Factory recipes, capacities, stock, rates, inputs, and material bills are balance data and should be editable without touching production code."
+    },
+    {
+      "id": "growth-rules",
+      "path": "src/simulation/growth.js",
+      "symbols": ["ROAD_UPGRADE_RUNG", "EXTEND_STREET_TILES", "UTILITY_RESERVE", "MAX_ACTIVE", "EDGE_RING", "ANNEX_SURVEY_DISCOUNT", "CIVIC_DEMAND", "BUILD_FLOOR", "HOUSE_PRESSURE_GATE", "HOUSE_SPARE_BEDS", "FILLER_PRESSURE_GATE", "SKYSCRAPER_FLOORS", "UNEMPLOYMENT_GATE", "OFFICE_PER_POP", "OFFICE_MIN_POP", "DISTRICT_FLOOR", "CIVIC_PER_POP", "PARKS_PER_POP", "CONGESTION_GATE"],
+      "target": "src/data/growthRules.json",
+      "priority": "P0",
+      "reason": "These values decide when the Council grows housing, services, roads, offices, districts, and towers."
+    },
+    {
+      "id": "economy-rules",
+      "path": "src/simulation/economicConfig.js",
+      "symbols": ["ECON", "PUBLIC_PROJECT_TYPES", "PRIVATE_PROJECT_TYPES"],
+      "target": "src/data/economyRules.json",
+      "priority": "P0",
+      "reason": "Tax, wages, credit, developer capital, reserve, and operating runway are scenario balance parameters."
+    },
+    {
+      "id": "civic-catalog",
+      "path": "src/kits/civic/civicKit.js",
+      "symbols": ["CIVIC_CAPACITY_KIND", "CIVIC_VERTICAL_CAPS", "CIVIC_UPGRADE_PATHS", "CIVIC_CATALOGUE"],
+      "target": "src/data/civicCatalog.json",
+      "priority": "P0",
+      "reason": "Facility capacity, footprint, storey caps, and progression are authored building data."
+    },
+    {
+      "id": "lifecycle-rules",
+      "path": "src/simulation/lifecycle.js",
+      "symbols": ["MIN_AGE_WORK", "MIN_AGE_PARTNER", "MIN_AGE_PARENT", "MAX_AGE_PARENT", "RETIRE_AGE", "BED_FILL", "ROOM_PULL", "WORK_PULL", "MAX_ARRIVALS", "CAMPAIGN"],
+      "target": "src/data/lifecycleRules.json",
+      "priority": "P0",
+      "reason": "Age bands, settlement pressure, arrival limits, and campaigns directly change demographic outcomes."
+    },
+    {
+      "id": "resources-and-utilities",
+      "path": "src/kits/resources/resourceKit.js and src/kits/utilities/utilityKit.js",
+      "symbols": ["RATING", "EXPANSION_COST", "resource site levels", "production coefficients", "utility demand coefficients"],
+      "target": "src/data/resourceRules.json and src/data/utilityRules.json",
+      "priority": "P1",
+      "reason": "Production, capacity, staffing, and utility demand should be scenario-tunable and shared by audits."
+    },
+    {
+      "id": "resource-placement",
+      "path": "src/kits/resources/resourceKit.js",
+      "symbols": ["SITE_FOOT", "OUTPUT", "AG_TIERS", "TIER_RECT", "STORAGE", "BASE_STORAGE", "SURPLUS", "BUFFER_DAYS", "INITIAL_FILL", "SITE_GAP", "MAX_GROWTH_SITES", "MAX_SITE_LEVEL", "FUEL_IMPORT_MAX", "WATER_IMPORT_MAX"],
+      "target": "src/data/resourceRules.json",
+      "priority": "P0",
+      "reason": "Farm sizes, production, storage, spacing, imports, and upgrade ceilings define the resource economy and land pressure."
+    },
+    {
+      "id": "commerce-and-assessment",
+      "path": "src/simulation/economy.js",
+      "symbols": ["TICKET", "AREA_PER_STAFF", "STAFF_UNIT", "ASSESS", "SHOP_TIERS", "FACTORY_JOB"],
+      "target": "src/data/commerceRules.json",
+      "priority": "P1",
+      "reason": "Retail tiers, staffing, property valuation, and service-ticket economics are scenario balance data."
+    },
+    {
+      "id": "transport-catalog",
+      "path": "src/kits/vehicles/vehicleKit.js, src/kits/vehicles/fleetKit.js, src/simulation/publicTransport.js",
+      "symbols": ["VEHICLE_TYPES", "FLEET_CAP", "ROSTER", "bus residents-per-vehicle ratio", "coverage multiplier"],
+      "target": "src/data/vehicleCatalog.json and src/data/transportRules.json",
+      "priority": "P1",
+      "reason": "Vehicle dimensions, fleet entitlement, service coverage, and transit fleet scaling should be one inspectable contract."
+    },
+    {
+      "id": "vehicle-finance-and-service",
+      "path": "src/simulation/vehicleRegistry.js",
+      "symbols": ["VEHICLES_PER_CAPITA", "VALUE_CEILING", "VALUE_FLOOR", "DEPRECIATION_YEARS", "DAILY_UPKEEP", "DAILY_RENT", "SERVICE_COVERAGE"],
+      "target": "src/data/transportRules.json",
+      "priority": "P1",
+      "reason": "Vehicle entitlement, depreciation, upkeep, rent, and emergency coverage directly affect fleet growth and treasury."
+    },
+    {
+      "id": "society-and-incidents",
+      "path": "src/simulation/society.js and src/simulation/incidents.js",
+      "symbols": ["neighbourhood names", "mood weights", "crime risk coefficients", "election cadence", "incident timeouts", "incident spawn windows"],
+      "target": "src/data/societyRules.json and src/data/incidentRules.json",
+      "priority": "P1",
+      "reason": "Safety, mood, justice, elections, and service response are policy-facing simulation parameters."
+    },
+    {
+      "id": "road-planning",
+      "path": "src/simulation/roadExtensionPlanner.js and src/placement/placementController.js",
+      "symbols": ["MAX_TRIPS", "MIN_TRIPS", "MIN_HOTSPOT_PRESSURE", "BLOCK_MIN", "BLOCK_MAX", "CORE_MARGIN", "INDUSTRIAL_MIN_EDGE", "MAX_LINK"],
+      "target": "src/data/roadRules.json",
+      "priority": "P1",
+      "reason": "Evidence thresholds and frontage/block dimensions affect when streets are proposed and where growth can connect."
+    },
+    {
+      "id": "traffic-and-signals",
+      "path": "src/simulation/traffic.js and src/core/signals.js",
+      "symbols": ["COLLISION_MARGIN", "CONGESTION_WINDOW", "FUEL_RESERVE", "FUEL_EMPTY_PATIENCE", "BAY_WAIT_MAX", "GREEN", "AMBER", "ALL_RED"],
+      "target": "src/data/trafficRules.json",
+      "priority": "P1",
+      "reason": "Collision tolerance, congestion sampling, fuel behavior, parking waits, and signal timing are runtime behavior knobs."
+    },
+    {
+      "id": "council-runtime",
+      "path": "src/simulation/governance.js",
+      "symbols": ["DEFAULT_SITTINGS_PER_DAY", "ASK_TIMEOUT_MS", "ASK_FAIL_LIMIT", "DEFAULT_COUNCIL_TEMPERATURE", "COUNCIL_PROMPT_TOKEN_BUDGET"],
+      "target": "src/data/councilRules.json",
+      "priority": "P1",
+      "reason": "Council cadence and provider safeguards should be scenario/provider settings, with user settings taking precedence where exposed."
+    },
+    {
+      "id": "vegetation-and-effects",
+      "path": "src/simulation/forest.js, src/simulation/streetGlow.js, src/kits/props/foliageKit.js",
+      "symbols": ["TIMBER_PER_TREE", "STREET_GLOW_HOURS", "FADE_HOURS", "CORE_OPACITY", "HALO_OPACITY", "PULSE_RATE", "FOLIAGE_VARIANTS"],
+      "target": "src/data/vegetationRules.json and src/data/visualEffects.json",
+      "priority": "P2",
+      "reason": "Forest density, timber yield, street glow, and foliage variants are visual/economy tuning values."
+    },
+    {
+      "id": "world-and-rendering",
+      "path": "src/core/config.js and src/kits/roads/crossSection.js",
+      "symbols": ["EXTENT", "FOUNDING_CORE", "FOUNDING_MAX_FLOORS", "MAX_FLOORS", "SIM", "HOUSEHOLD", "ROAD", "PALETTE", "cross-section widths"],
+      "target": "src/data/worldRules.json and src/data/theme.json",
+      "priority": "P2",
+      "reason": "World size, founding envelope, speed options, vehicle clearance, palette, and road dimensions are scenario/theme choices, but extraction carries compatibility risk."
+    },
+    {
+      "id": "citizen-catalog",
+      "path": "src/kits/citizens/citizenProfile.js and src/kits/citizens/personality.js",
+      "symbols": ["LIFECYCLE_STAGES", "WAGES", "JOB_SKILLS", "FIELDS", "TRANSPORT", "names", "traits", "hobbies"],
+      "target": "src/data/citizenCatalog.json",
+      "priority": "P2",
+      "reason": "Jobs, wages, education, preferences, and names are content data; extraction enables scenario and culture packs."
+    },
+    {
+      "id": "research-rules",
+      "path": "src/simulation/innovation.js and src/simulation/councilLearning.js",
+      "symbols": ["BUCKETS", "LEVERS", "BOTTLENECKS", "POINTS_PER_RUNG", "LIMIT", "PENDING_LIMIT", "MIN_AGE_DAYS"],
+      "target": "src/data/researchRules.json",
+      "priority": "P2",
+      "reason": "Research rates, levers, and learning retention affect provider comparisons and should be scenario-controlled."
+    }
+  ]
+}

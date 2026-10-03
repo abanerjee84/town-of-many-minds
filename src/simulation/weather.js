@@ -1,25 +1,14 @@
 import { makeRng } from '../core/rng.js';
 import { events } from '../core/events.js';
+import chart from '../data/weather.json' with { type: 'json' };
 
 /** A deterministic, low-frequency weather model shared by all consumers. */
-export const DAYS_PER_SEASON = 30;
+export const WEATHER_CHART = chart;
+export const DAYS_PER_SEASON = chart.daysPerSeason;
 export const DAYS_PER_YEAR = DAYS_PER_SEASON * 4;
 
-const SEASONS = [
-  { id: 'spring', label: 'Spring', icon: '🌱', temperature: 14, weather: ['clear', 'clear', 'cloudy', 'rain'] },
-  { id: 'summer', label: 'Summer', icon: '☀️', temperature: 27, weather: ['clear', 'clear', 'cloudy', 'rain', 'heatwave'] },
-  { id: 'autumn', label: 'Autumn', icon: '🍂', temperature: 15, weather: ['clear', 'cloudy', 'cloudy', 'rain', 'storm'] },
-  { id: 'winter', label: 'Winter', icon: '❄️', temperature: 4, weather: ['clear', 'cloudy', 'rain', 'snow', 'snow'] }
-];
-
-const STATES = {
-  clear: { label: 'Clear', icon: '☀️', delta: 2, precipitation: 0, foodYield: 1.04, energyDemand: 1, waterDemand: 1, trafficFactor: 1, moodDelta: 0.008 },
-  cloudy: { label: 'Cloudy', icon: '☁️', delta: 0, precipitation: 0.08, foodYield: 0.99, energyDemand: 1.02, waterDemand: 1, trafficFactor: 0.98, moodDelta: -0.002 },
-  rain: { label: 'Rain', icon: '🌧️', delta: -1, precipitation: 0.55, foodYield: 0.96, energyDemand: 1.04, waterDemand: 1.01, trafficFactor: 0.86, moodDelta: -0.012 },
-  storm: { label: 'Storm', icon: '⛈️', delta: -3, precipitation: 0.9, foodYield: 0.78, energyDemand: 1.1, waterDemand: 1.03, trafficFactor: 0.68, moodDelta: -0.028 },
-  heatwave: { label: 'Heatwave', icon: '🔥', delta: 8, precipitation: 0, foodYield: 0.88, energyDemand: 1.14, waterDemand: 1.08, trafficFactor: 0.94, moodDelta: -0.016 },
-  snow: { label: 'Snow', icon: '❄️', delta: -3, precipitation: 0.72, foodYield: 0.72, energyDemand: 1.16, waterDemand: 1.02, trafficFactor: 0.7, moodDelta: -0.02 }
-};
+const SEASONS = chart.seasons;
+const STATES = chart.states;
 
 const clampDay = (day) => Math.max(1, Math.floor(Number(day) || 1));
 
@@ -127,4 +116,3 @@ export class WeatherSystem {
     };
   }
 }
-

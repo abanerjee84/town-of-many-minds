@@ -45,7 +45,8 @@
     "test:lake": "node scripts/_lake_check.mjs",
     "test:market-chart": "node scripts/_market_chart_check.mjs",
     "test:intents": "node scripts/_intent_coverage_check.mjs",
-    "test:state-service": "node scripts/_state_service_audit.mjs"
+    "test:state-service": "node scripts/_state_service_audit.mjs",
+    "test:hardcode-audit": "node scripts/_hardcode_audit_check.mjs"
   },
   "dependencies": {
     "three": "^0.169.0"

@@ -42,6 +42,12 @@ This specification defines the shared construction vocabulary and the progressio
 5i. The Council action registry is the single vocabulary. Every canonical intent shall parse through the registry, expose a project/direct action descriptor, appear in the prompt vocabulary, and be represented as priority, feasible, blocked, or conditional in the report. `npm run test:intents` is the regression guard.
 5j. The seeded 800-day service horizon shall complete with no browser errors, no emergency station shortfall, and an operational public-transport fleet. `npm run test:state-service` is the regression guard; long-horizon metropolis and road probes remain the progression and network guards.
 
+### Runtime hardcode inventory
+
+5k. Runtime tuning constants shall be tracked in `BuildContracts/hardcode-catalog.json` and explained in `BuildContracts/HARDCODE_AUDIT.md`. Each row shall identify the current source, symbols, extraction priority, target data module, and the reason the value is content or balance data.
+5l. Versioned JSON charts shall own data while simulation modules retain validation, deterministic fallback, and behavior. Consumers shall continue to use stable named APIs so extraction does not bypass accounting, placement, or seeded replay.
+5m. Weather seasons, state probabilities, temperatures, and resource/traffic/mood modifiers shall be loaded from `src/data/weather.json`; a weather regression shall confirm the same deterministic season and effect contract after reload.
+
 ### Housing, commerce, and mixed use
 
 6. HouseKit shall support accessible entrances, balconies, solar roofs, and planted roofs with role-tagged geometry and module records.

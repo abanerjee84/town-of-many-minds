@@ -16,6 +16,14 @@ Updated 2026-10-03 after the dynamic-market and build-duration audit.
 - [x] Checklist closure: bounded loans, debt ceiling, protected reserve, repayment runway, dynamic price chart, and dynamic build-time chart are wired through one quote path and included in the Council evidence report.
 - [x] Checklist closure: `npm run test:intents` verifies all 59 canonical Council intents parse through the shared registry and remain represented in the prompt/report contract; it also checks the arterial and roundabout kit rows.
 - [x] Checklist closure: `npm run test:state-service` runs the seeded 800-day public-service horizon with no page errors, no uncovered emergency shortfall, a ready transit network, and station-bound operational buses.
+- [x] Added `BuildContracts/hardcode-catalog.json` and `BuildContracts/HARDCODE_AUDIT.md`, covering runtime tuning constants by priority, target JSON module, rationale, and extraction order.
+- [x] Extracted seasons and weather modifiers from `src/simulation/weather.js` into versioned `src/data/weather.json` while preserving deterministic seeded behavior.
+
+## Hardcode extraction queue
+
+- [ ] P0: extract industry catalog, growth gates, economy rules, civic catalog, and lifecycle rules into versioned JSON adapters.
+- [ ] P1: extract resources/utilities, vehicles/transit, society, and incidents into versioned JSON adapters.
+- [ ] P2: extract world/theme, citizen content, and research/learning rules after replay fixtures are in place.
 
 ## Next measurable work
 
