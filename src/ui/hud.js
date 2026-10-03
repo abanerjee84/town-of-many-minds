@@ -165,6 +165,7 @@ export class Hud {
     // collapsed read.
     this.storehouseOpen = new URLSearchParams(location.search).get('storehouse') !== '0';
     this.councilRows = [];
+    this.lastCouncilSittingId = null;
     this.speeds = SPEEDS;
     this.speedButtons = this.speeds.map((s, i) => {
       const btn = $(`speed-${s}`);
@@ -279,12 +280,17 @@ export class Hud {
       this.councilRows = [];
       this.feedFull = [];
       this.councilSittings = 0;
+      this.lastCouncilSittingId = null;
       this.renderCouncil();
       return;
     }
     if (!decision || (!decision.intent && !decision.action)) return;
     const isCouncil = decision.source === 'llm' || decision.source === 'rules' || (!decision.source && decision.intent);
-    if (isCouncil) this.councilSittings = (this.councilSittings || 0) + 1;
+    const sittingId = decision.sittingId || null;
+    if (isCouncil && sittingId !== this.lastCouncilSittingId) {
+      this.councilSittings = (this.councilSittings || 0) + 1;
+      this.lastCouncilSittingId = sittingId;
+    }
     const row = {
       t: this.clock.timeString,
       day: this.clock.day,
@@ -292,6 +298,10 @@ export class Hud {
       action: decision.action || decision.intent,
       status: decision.status || 'done',
       source: decision.source || (isCouncil ? 'llm' : 'town'),
+      sittingId,
+      department: decision.department || null,
+      departmentLabel: decision.departmentLabel || null,
+      mayor: decision.mayor || null,
       cost: Number(decision.cost) || 0,
       why: decision.why ?? decision.detail ?? '',
       // Phase 30 (S19b) — when the planner answered in place of the model, say
@@ -408,7 +418,7 @@ export class Hud {
               `<div class="c-row multi"><div class="c-line">` +
               `<span class="c-time">${esc(r.t)}</span>` +
               `<span class="c-actor ${actorCls}">${esc(r.actor)}</span>` +
-              `<span class="c-intent${r.source === 'rules' ? ' muted' : ''}">${esc(r.action)}</span>` +
+              `<span class="c-intent${r.source === 'rules' ? ' muted' : ''}">${esc(r.departmentLabel ? `${r.departmentLabel} · ${r.action}` : r.action)}</span>` +
               `<span class="c-status ${esc(r.status)}">${esc(r.status)}</span>` +
               (r.sub ? `<span class="c-sub" title="the council asked for this; the planner answered instead">↩ ${esc(r.sub)}</span>` : '') +
               (r.cost ? `<span class="c-cost">$${Math.round(r.cost).toLocaleString('en-US')}</span>` : '') +

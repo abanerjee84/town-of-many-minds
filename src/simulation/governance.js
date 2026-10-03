@@ -21,6 +21,7 @@ import { constructionBlockStats, constructionBlock, listConstructionBlocks } fro
 import { CouncilLearning, measureCouncilState } from './councilLearning.js';
 import { priceIndex } from './priceChart.js';
 import { BUILD_TIME_CHART } from './buildTime.js';
+import { CabinetSystem } from './cabinet.js';
 
 export { resolveLLMProvider, registerLLMProvider, listLLMProviders } from './llmProviders.js';
 
@@ -626,7 +627,7 @@ export const SYSTEM_PROMPT = [
 ].join(' ');
 
 /** Stage-shaped system prompt: identity line, stage focus, shared body. */
-export function systemPrompt(town) {
+export function systemPrompt(town, options = {}) {
   const st = settlementStage(town);
   // Phase 19 — the council is told who it has been, and that sentence is
   // computed from its own decision ledger, not written. A town with no
@@ -637,8 +638,10 @@ export function systemPrompt(town) {
     : '';
   const learning = town?.governance?.learning?.promptLine?.()
     || 'Learning record: no measured outcomes yet; treat every action as an experiment and establish a baseline.';
-  return COUNCIL_ETHOS + ' ' + st.opening + ' ' + st.focus +
-    ' Read the town report and choose exactly one action.' + voice + ' ' + learning + ' ' + PROMPT_BODY;
+  const mode = options.cabinet ?
+    ' Read the town report and prepare one evidence-backed motion for each Cabinet department; return the Cabinet JSON contract that follows.' :
+    ' Read the town report and choose exactly one action.';
+  return COUNCIL_ETHOS + ' ' + st.opening + ' ' + st.focus + mode + voice + ' ' + learning + ' ' + PROMPT_BODY;
 }
 
 function normalize(text) {
@@ -1241,6 +1244,8 @@ export class GovernanceSystem {
       endpoint: this.endpoint,
       model: this.model
     });
+    this.parseIntent = parseIntent;
+    this.cabinet = new CabinetSystem(this, opts.cabinet || {});
     // Public simulation decisions belong to the LLM Council. The private
     // developer is deliberately outside this boundary and keeps its own
     // independent commissioning pass; rules fallback is disabled so a
@@ -1329,6 +1334,7 @@ export class GovernanceSystem {
     this.staleReplies = 0;
     this.cacheHits = 0;
     this.activeSittingId = null;
+    this.lastCompletedSittingId = null;
     this.activeResponseId = null;
     // A request identity complements the town epoch. It prevents an older
     // promise from clearing state after a replacement request starts.
@@ -1343,6 +1349,7 @@ export class GovernanceSystem {
     // measured before/after state and is fed back as evidence, never as a new
     // rule or a hidden reward signal.
     this.learning = new CouncilLearning();
+    this.cabinet?.reset();
     // Congestion is accumulated continuously between sittings. A Council
     // should see the traffic it experienced over the whole interval, not only
     // the frame on which its meeting happened.
@@ -1714,6 +1721,9 @@ export class GovernanceSystem {
       directLine,
       `Build times: ${buildTimesLine()}`,
       `Warnings: ${eco && eco.warnings.length ? eco.warnings.join(', ') : 'none'}`,
+      this.cabinet?.enabled
+        ? `Cabinet: ${this.cabinet.departments.map((department) => department.id).join(', ')} · up to ${this.cabinet.motionsPerSitting} motions · Mayor approval gate${this.cabinet.lastReview ? ` · last approved ${this.cabinet.lastReview.approved.length}, rejected ${this.cabinet.lastReview.rejected.length}, deferred ${this.cabinet.lastReview.deferred.length}` : ''}`
+        : '',
       last ? `Last decision: ${last.intent} (${last.status}) ${last.detail || ''}` : 'Last decision: none yet',
       `Reply with one line: INTENT: <ACTION>`
     ]
@@ -1725,6 +1735,7 @@ export class GovernanceSystem {
     const t = this.town;
     const parsed = parseIntent(text);
     const learningBefore = measureCouncilState(t);
+    const motion = this.activeMotion;
     const decision = {
       day: t.clockDay || 0,
       source,
@@ -1736,7 +1747,13 @@ export class GovernanceSystem {
       cost: 0,
       _ledgerStart: t.economy?.ledger?.length || 0,
       _learningBefore: learningBefore,
-      raw: String(text || '').slice(0, 240)
+      raw: String(text || '').slice(0, 240),
+      ...(motion ? {
+        motionId: motion.id,
+        department: motion.department,
+        departmentLabel: motion.departmentLabel,
+        mayor: 'approved'
+      } : {})
     };
 
     if (!parsed.intent || !actionFor(parsed.intent)) {
@@ -2153,6 +2170,32 @@ export class GovernanceSystem {
     const decision = this.enact(reply, 'test');
     this.forcedRequests = (this.forcedRequests || 0) + 1;
     if (decision) decision.forced = true;
+    return decision;
+  }
+
+  recordMayorMotion(motion, status, detail) {
+    const parsed = motion?.intent
+      ? { intent: motion.intent, confidence: 1, how: 'cabinet' }
+      : parseIntent(motion?.raw || '');
+    const decision = {
+      day: this.town.clockDay || 0,
+      source: 'llm',
+      actor: 'Mayor',
+      intent: parsed.intent,
+      confidence: parsed.confidence,
+      how: parsed.how,
+      status,
+      detail: `Mayor ${status === 'mayor_deferred' ? 'deferred' : 'rejected'} — ${detail || 'motion did not pass the approval gate'}`,
+      cost: 0,
+      motionId: motion?.id || null,
+      department: motion?.department || null,
+      departmentLabel: motion?.departmentLabel || null,
+      mayor: status === 'mayor_deferred' ? 'deferred' : 'rejected',
+      raw: String(motion?.raw || '').slice(0, 240),
+      _ledgerStart: this.town.economy?.ledger?.length || 0,
+      _learningBefore: measureCouncilState(this.town)
+    };
+    this.record(decision);
     return decision;
   }
 
@@ -2711,6 +2754,7 @@ export class GovernanceSystem {
    *     own motion is never silently replaced (see `substitute()`).
    */
   async ask() {
+    if (this.cabinet?.enabled) return this.askCabinet();
     if (this.pending) return { status: 'busy' };
     if (!this.enabled) return { status: 'disabled' };
     this.activeResponseId = null;
@@ -2841,6 +2885,142 @@ export class GovernanceSystem {
     }
   }
 
+  /**
+   * Cabinet sitting: one provider response yields up to one motion per
+   * department, then the Mayor filters duplicates and hard sequencing
+   * conflicts before each approved motion enters the normal enact() boundary.
+   * A plain one-line INTENT remains valid for older providers and tests.
+   */
+  async askCabinet() {
+    if (this.pending) return { status: 'busy' };
+    if (!this.enabled) return { status: 'disabled' };
+    this.activeResponseId = null;
+    const started = Date.now();
+    const epoch = this.epoch;
+    const requestId = ++this.requestSeq;
+    this.activeRequestId = requestId;
+    const isCurrent = () => this.epoch === epoch && this.activeRequestId === requestId;
+    let finalDecision = null;
+    let correction = '';
+    try {
+      this.pending = true;
+      const sittingId = this.activeSittingId && this.activeSittingId !== this.lastCompletedSittingId
+        ? this.activeSittingId
+        : `cabinet-${++this.sittingSeq}`;
+      this.activeSittingId = sittingId;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const reply = await this.provider.complete({
+          endpoint: this.endpoint,
+          model: this.model,
+          temperature: this.temperature,
+          maxTokens: 600,
+          signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
+          messages: [
+            // The following Cabinet contract is the later, more specific
+            // system instruction. Keeping the common prompt unchanged keeps
+            // the combined provider input inside the 4,000-token contract.
+            { role: 'system', content: systemPrompt(this.town) },
+            { role: 'system', content: this.cabinet.prompt() },
+            { role: 'user', content: `${this.report()}${correction ? `\n\n${correction}` : ''}` }
+          ],
+          town: this.town,
+          sittingId
+        });
+        if (!isCurrent()) {
+          this.staleReplies = (this.staleReplies || 0) + 1;
+          return { status: 'stale', intent: null, detail: 'the town was regenerated before the Cabinet reply arrived' };
+        }
+        const data = reply?.raw || {};
+        const text = reply?.text || '';
+        this.available = true;
+        this.lastError = null;
+        this.lastReply = text;
+        this.cabinet.lastReply = text;
+        this.cabinet.lastSittingId = sittingId;
+        this.modelUsed = reply?.model || data.model || this.model || this.provider?.id || 'unknown';
+        this.activeResponseId = `response-${++this.responseSeq}`;
+        this.consecutiveFailures = 0;
+        this.rulesOnly = false;
+        this.llmCalls++;
+
+        const motions = this.cabinet.parse(text);
+        this.cabinet.lastMotions = motions;
+        const review = this.cabinet.mayor.review(motions, { requiredAction: this.requiredAction });
+        this.cabinet.lastReview = review;
+        for (const motion of [...review.rejected, ...review.deferred]) {
+          this.recordMayorMotion(motion, motion.status, motion.mayorReason);
+        }
+
+        const execution = [];
+        let blocked = null;
+        for (const motion of review.approved) {
+          this.activeMotion = motion;
+          let decision;
+          try {
+            decision = this.enact(motion.raw, 'llm');
+          } finally {
+            this.activeMotion = null;
+          }
+          decision.motionId = motion.id;
+          decision.department = motion.department;
+          decision.departmentLabel = motion.departmentLabel;
+          decision.mayor = 'approved';
+          execution.push(decision);
+          if (decision.status === 'blocked' && decision.requiredAction) {
+            blocked = decision;
+            break;
+          }
+        }
+        this.cabinet.lastExecution = execution;
+        finalDecision = execution[execution.length - 1]
+          || ((review.rejected.length || review.deferred.length) ? this.lastDecision : null);
+        if (blocked && attempt === 0) {
+          correction = `CORRECTION: the Mayor's approved motion was blocked by a hard sequencing constraint. Choose exactly ${blocked.requiredAction} now; return one JSON motion or one INTENT line and do not repeat ${blocked.intent}.`;
+          continue;
+        }
+        break;
+      }
+      finalDecision ||= {
+        day: this.town.clockDay || 0,
+        source: 'llm',
+        intent: 'NO_ACTION',
+        status: 'noop',
+        detail: 'Mayor approved no executable Cabinet motion',
+        cost: 0,
+        raw: ''
+      };
+      finalDecision.ms = Date.now() - started;
+      return finalDecision;
+    } catch (err) {
+      if (!isCurrent()) {
+        this.staleReplies = (this.staleReplies || 0) + 1;
+        return { status: 'stale', intent: null, detail: 'the Cabinet sitting was superseded before it completed' };
+      }
+      const aborted =
+        (err && (err.name === 'TimeoutError' || err.name === 'AbortError')) ||
+        /timed out|abort/i.test(String((err && err.message) || err));
+      this.available = false;
+      this.lastAborted = !!aborted;
+      this.lastError = aborted ? `no reply within ${ASK_TIMEOUT_MS}ms` : String((err && err.message) || err);
+      this.consecutiveFailures++;
+      if (!aborted && this.provider?.kind === 'openai-compatible' && this.endpoint.startsWith('http') && !this.proxied) {
+        this.proxied = true;
+        this.endpoint = DEFAULT_ENDPOINT;
+        this.pending = false;
+        this.activeRequestId = null;
+        return this.askCabinet();
+      }
+      return { status: 'error', intent: null, detail: `${this.lastError} — Cabinet-only mode took no automatic action` };
+    } finally {
+      if (isCurrent()) {
+        this.pending = false;
+        this.activeRequestId = null;
+        this.activeMotion = null;
+        this.lastCompletedSittingId = this.activeSittingId;
+      }
+    }
+  }
+
   /** Stable signature of what would change a sitting's options (no rng). */
   situationKey() {
     const t = this.town;
@@ -2955,6 +3135,7 @@ export class GovernanceSystem {
       pending: this.pending,
       requiredAction: this.requiredAction,
       blockedRemedyAttempts: this.blockedRemedyAttempts || 0,
+      cabinet: this.cabinet?.stats() || null,
       lastError: this.lastError,
       cycles: this.cycles,
       llmCalls: this.llmCalls,

@@ -103,6 +103,7 @@ function applySettingsToRuntime({ speed = false, camera = false, population = fa
     const nextSittings = settings.councilSittingsPerDay;
     if (town.governance.sittingsPerDay !== nextSittings) town.governance.lastSlot = -1;
     town.governance.sittingsPerDay = nextSittings;
+    town.governance.cabinet.motionsPerSitting = settings.cabinetMotionsPerSitting;
     town.governance.temperature = settings.councilTemperature;
     town.governance.auto = settings.autoCouncil;
   }
@@ -152,6 +153,10 @@ function renderSettings() {
         <label class="settings-row settings-item" data-setting-search="council sittings meetings cadence decisions per day schedule">
           <span><b>Council sittings per day</b><small>How many scheduled decision windows the Council gets</small></span>
           <input id="setting-council-sittings" type="number" min="1" max="12" step="1" value="${settings.councilSittingsPerDay}" />
+        </label>
+        <label class="settings-row settings-item" data-setting-search="cabinet motions ministers mayor approvals decisions per sitting">
+          <span><b>Cabinet motions per sitting</b><small>Maximum minister proposals the Mayor can approve (1–5)</small></span>
+          <input id="setting-cabinet-motions" type="number" min="1" max="5" step="1" value="${settings.cabinetMotionsPerSitting}" />
         </label>
         <label class="settings-row settings-item" data-setting-search="average congestion road planning street extension traffic gate threshold">
           <span><b>Average congestion gate</b><small>Average congestion required before road planning responds</small></span>
@@ -261,6 +266,12 @@ function renderSettings() {
   councilSittings.addEventListener('change', () => {
     const next = updateSettings({ councilSittingsPerDay: councilSittings.value });
     councilSittings.value = String(next.councilSittingsPerDay);
+    applySettingsToRuntime();
+  });
+  const cabinetMotions = document.getElementById('setting-cabinet-motions');
+  cabinetMotions.addEventListener('change', () => {
+    const next = updateSettings({ cabinetMotionsPerSitting: cabinetMotions.value });
+    cabinetMotions.value = String(next.cabinetMotionsPerSitting);
     applySettingsToRuntime();
   });
   const congestionThreshold = document.getElementById('setting-congestion-threshold');

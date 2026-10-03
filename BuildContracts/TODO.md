@@ -20,6 +20,7 @@ Updated 2026-10-03 after the dynamic-market and build-duration audit.
 - [x] Extracted seasons and weather modifiers from `src/simulation/weather.js` into versioned `src/data/weather.json` while preserving deterministic seeded behavior.
 - [x] Added `npm run test:speed` to exercise every ribbon speed button, active-state synchronisation, pause, exact Clock scaling through 100×, Settings persistence, and page-error safety.
 - [x] Fixed the recurring bus deadlock at station approaches: transit stops now avoid junctions and one-cell station-bay clearances, stale routes are invalidated after rebuilds, and stationary blockers yield to a held bus. Added `npm run test:bus-stuck` for the seeded 180-day transit regression.
+- [x] Added the modular five-department Cabinet and Mayor approval gate. Cabinet motions are configured in `src/data/cabinet.json`, validated by department remit, capped at five per sitting, executed sequentially through the existing Council boundary, and covered by `npm run test:cabinet`.
 
 ## Hardcode extraction queue
 
