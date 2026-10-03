@@ -1111,8 +1111,19 @@ export class Town {
     if (this.resources?.ownsCell(x, y)) return null;
     const cols = Math.max(1, Math.round(opts.footprint?.cols || 1));
     const rows = Math.max(1, Math.round(opts.footprint?.rows || 1));
-    const cells = [];
-    for (let dy = 0; dy < rows; dy++) for (let dx = 0; dx < cols; dx++) cells.push([x + dx, y + dy]);
+    // Growth keeps `x,y` as the street-facing parcel anchor so the building
+    // inherits that parcel's setback and budget tier. A multi-cell project may
+    // therefore have an anchor inside the reserved block rather than at its
+    // top-left corner. Carry the exact reserved cells through to the final
+    // mutation instead of reconstructing a shifted rectangle from the anchor.
+    const explicitCells = Array.isArray(opts.footprintCells) && opts.footprintCells.length
+      ? opts.footprintCells.map(([cx, cy]) => [Math.round(cx), Math.round(cy)])
+      : null;
+    const cells = explicitCells || [];
+    if (!explicitCells) {
+      for (let dy = 0; dy < rows; dy++) for (let dx = 0; dx < cols; dx++) cells.push([x + dx, y + dy]);
+    }
+    if (cells.length !== cols * rows || !cells.some(([cx, cy]) => cx === x && cy === y)) return null;
     // Hoisted out of the per-cell loop. `hasNetworkAccess` defaults `comps` to
     // `roadComponents(g)`, which allocates a fresh w*h label array and re-labels
     // every road component on every call — nine allocations and nine full-grid
@@ -1160,7 +1171,7 @@ export class Town {
     // Construction replaces whatever decoration stood on its cell — timber
     // from felled trees goes to the storehouse.
     for (const [cx, cy] of cells) this.clearProps(cx, cy);
-    const rec = createBuilding(this, x, y, zone, { rng: this.rng.fork(x * 73 + y), ...opts });
+    const rec = createBuilding(this, x, y, zone, { rng: this.rng.fork(x * 73 + y), ...opts, footprintCells: cells });
     if (!rec) return null;
     this.rebuildAll();
     return rec;

@@ -757,6 +757,7 @@ function landmarkPlan(town, lm, opts = {}) {
     !!c &&
     town.placeBuilding(c[0], c[1], lm.zone, {
       footprint: plan.footprint || { cols: minSize[0], rows: minSize[1] },
+      footprintCells: plan.cells?.length > 1 ? plan.cells : undefined,
       acquire: true,
       floors: lm.floors,
       subtype: lm.id,
@@ -811,6 +812,7 @@ export function planFor(town, type, opts = {}) {
           !!c &&
           !!town.placeBuilding(c[0], c[1], ZONE.COMMERCIAL, {
             footprint: fp,
+            footprintCells: plan.cells?.length > 1 ? plan.cells : undefined,
             acquire: !!opts.acquire,
             kind: 'office',
             floors,
@@ -834,6 +836,7 @@ export function planFor(town, type, opts = {}) {
             !!c &&
             town.placeBuilding(c[0], c[1], ZONE.COMMERCIAL, {
               footprint: fp,
+              footprintCells: plan.cells?.length > 1 ? plan.cells : undefined,
               acquire: !!opts.acquire,
               name: opts.name || null
             })
@@ -884,6 +887,7 @@ export function planFor(town, type, opts = {}) {
           !!c &&
           town.placeBuilding(c[0], c[1], ZONE.COMMERCIAL, {
             footprint: plan.footprint || undefined,
+            footprintCells: plan.cells?.length > 1 ? plan.cells : undefined,
             acquire: !!opts.acquire,
             capacityPerFloor: plan.capacity || undefined,
             name: opts.name || null
@@ -961,6 +965,7 @@ export function planFor(town, type, opts = {}) {
           !!c &&
           town.placeBuilding(c[0], c[1], ZONE.CIVIC, {
             footprint: plan.footprint || undefined,
+            footprintCells: plan.cells?.length > 1 ? plan.cells : undefined,
             acquire: !!opts.acquire,
             facility: facility || undefined,
             blockId: facilityBlock?.id || undefined,
@@ -1016,6 +1021,7 @@ export function planFor(town, type, opts = {}) {
           !!c &&
           town.placeBuilding(c[0], c[1], ZONE.INDUSTRIAL, {
             footprint: plan.footprint || undefined,
+            footprintCells: plan.cells?.length > 1 ? plan.cells : undefined,
             acquire: !!opts.acquire,
             factory: def.id,
             factoryModules: def.modules || [],
@@ -1474,6 +1480,7 @@ export function planFor(town, type, opts = {}) {
         !!c &&
         town.placeBuilding(c[0], c[1], zoneZ, {
           footprint: plan.footprint && plan.footprint.cols * plan.footprint.rows > 1 ? plan.footprint : undefined,
+          footprintCells: plan.cells?.length > 1 ? plan.cells : undefined,
           overrides,
           facility,
           kind: block?.id === 'office.lobby' ? 'office' : undefined,

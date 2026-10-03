@@ -89,6 +89,7 @@ This specification defines the shared construction vocabulary and the progressio
 28b. The founding road frame shall use a 22–24 by 19–21 cell envelope with sparse occupancy and open land around it for future expansion. Junction marking passes shall not paint a second full zebra set into a neighbouring junction approach.
 
 28c. Factory progression shall be campus-aware. A single vacant industrial frontage cell shall not make `BUILD_FACTORY` feasible when the selected factory footprint cannot fit on acquired serviced land. In that case `ACQUIRE_LAND` shall be ranked first, survey a contiguous frontier patch large enough for the factory footprint and access, and only then expose `BUILD_FACTORY`; a blocked model request must report `ACQUIRE_LAND first` rather than silently retrying a partial lot.
+28d. A multi-cell construction plan shall preserve both its road-facing parcel anchor and its exact reserved footprint cells through project start and completion. The executor shall place the building on the reserved cells, derive its centre and ownership from that block, and roll back only on a real site mutation. A factory campus that starts successfully shall therefore complete without shifting one or more cells beyond its reservation.
 
 ### Progression matrix
 

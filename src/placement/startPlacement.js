@@ -385,8 +385,18 @@ export function createBuilding(town, x, y, zone = null, opts = {}) {
   // path untouched.
   const cols = Math.max(1, Math.round(opts.footprint?.cols || 1));
   const rows = Math.max(1, Math.round(opts.footprint?.rows || 1));
-  const cells = [];
-  for (let dy = 0; dy < rows; dy++) for (let dx = 0; dx < cols; dx++) cells.push([x + dx, y + dy]);
+  // The frontage anchor is intentionally not always the top-left cell: growth
+  // chooses a parcel-facing cell within a reserved block so setback and budget
+  // metadata come from the right parcel. Use the reservation's exact cells for
+  // geometry and ownership while retaining `x,y` as the logical anchor.
+  const explicitCells = Array.isArray(opts.footprintCells) && opts.footprintCells.length
+    ? opts.footprintCells.map(([cx, cy]) => [Math.round(cx), Math.round(cy)])
+    : null;
+  const cells = explicitCells || [];
+  if (!explicitCells) {
+    for (let dy = 0; dy < rows; dy++) for (let dx = 0; dx < cols; dx++) cells.push([x + dx, y + dy]);
+  }
+  if (cells.length !== cols * rows || !cells.some(([cx, cy]) => cx === x && cy === y)) return null;
   const isBig = cells.length > 1;
 
   for (const [cx, cy] of cells) {
@@ -416,7 +426,10 @@ export function createBuilding(town, x, y, zone = null, opts = {}) {
   const idx = g.idx(x, y);
   const z = zone || g.zone[idx] || ZONE.RESIDENTIAL;
   const center = isBig
-    ? g.cellToWorld(x + (cols - 1) / 2, y + (rows - 1) / 2)
+    ? g.cellToWorld(
+        (Math.min(...cells.map(([cx]) => cx)) + Math.max(...cells.map(([cx]) => cx))) / 2,
+        (Math.min(...cells.map(([, cy]) => cy)) + Math.max(...cells.map(([, cy]) => cy))) / 2
+      )
     : g.cellToWorld(x, y);
 
   let params;

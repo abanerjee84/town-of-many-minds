@@ -65,6 +65,13 @@ const result = await page.evaluate(() => {
   const acquired = t.growth.landAcquisitionCells(plan);
   if (acquired?.length) t.perimeter.acquire(acquired, { charge: false, reason: 'factory-site regression land' });
   const applied = !!t.growth.apply(plan);
+  // A factory must survive the full executor path, not merely enter the
+  // project ledger. Run the clock past its build hours so a frontage anchor
+  // cannot silently shift the reserved multi-cell campus at completion.
+  if (applied) t.growth.update(1e7);
+  const projectStates = [...t.growth.projectStates.values()]
+    .filter((entry) => entry.projectId === plan.projectId)
+    .map((entry) => entry.state);
   return {
     applied,
     beforeRoads,
@@ -84,6 +91,8 @@ const result = await page.evaluate(() => {
       status: blockedFactoryFallback?.status || null,
       substituted: blockedFactoryFallback?.substituted?.intent || null
     },
+    completedFactories: t.buildings.filter((b) => b.kind === 'factory').length,
+    projectStates,
     lastBlock: t.growth.lastBlock,
     queued: t.growth.projects.length
   };
@@ -93,7 +102,7 @@ if (errors.length) throw new Error(`page errors: ${errors.join('; ')}`);
 if (!result.surveyRoadsUnchanged) {
   throw new Error(`factory survey paved roads during preview: ${JSON.stringify(result)}`);
 }
-if (!result.applied || result.footprintArea < 9 || result.lastBlock) {
+if (!result.applied || result.completedFactories < 1 || result.projectStates.includes('FAILED_ROLLED_BACK') || result.footprintArea < 9 || result.lastBlock) {
   throw new Error(`factory site regression failed: ${JSON.stringify(result)}`);
 }
 const landIndex = result.frontierRanked.indexOf('land');
