@@ -218,6 +218,11 @@ const MIN_ENERGY_SITES = 3;
 const MAX_FARMS = 4;
 /** Phase 14 — one pump covers the founding fleet; a third covers a big one. */
 const MAX_FUEL_SITES = 3;
+// Growth caps are deliberately above the founding mix.  The founding plan is
+// small, but a metropolis must be able to add real production campuses after
+// its original yards are full; otherwise a dry store can never be repaired by
+// acquiring another serviced frontier block.
+const MAX_GROWTH_SITES = { energy: 12, food: 12, fuel: 8 };
 const MAX_SITE_LEVEL = 3;
 /** Treasury cost to raise a resource's site level — level × this. */
 const UPGRADE_COST = { water: 90000, energy: 70000, food: 60000, fuel: 50000 };
@@ -885,6 +890,37 @@ export class ResourceSystem {
    * along the map edge, a dozen turbines no two of them near each other.
    */
   placeSite(g, rng, bounds, kind, opts = {}) {
+    const placement = this.findSitePlacement(g, rng, bounds, kind, opts);
+    if (!placement) return false;
+    const { cells, spur } = placement;
+    if (!carveRoad(g, spur, this.townRef)) return false;
+    this.claim(cells);
+    for (const [cx, cy] of cells) {
+      g.setKind(cx, cy, CELL_KIND.LOT);
+      g.zone[g.idx(cx, cy)] = null;
+    }
+    this.sites.push({
+      id: this.townRef?.nextEntityId ? this.townRef.nextEntityId('resource') : `resource-${kind}-${this.sites.length + 1}`,
+      kind,
+      cells,
+      spur,
+      work: SITE_WORK[kind] || null,
+      // Pumps are public-facing civic infrastructure in the land-use
+      // model. They remain resource producers for fuel accounting, but are
+      // never classified as industrial works or pushed to the remote rim.
+      planningClass: kind === 'gas' ? 'civic' : 'resource',
+      publicFacing: kind === 'gas',
+      facility: kind === 'gas' ? 'fuel-station' : null,
+      face: faceToRoad(g, cells),
+      ownerType: 'government',
+      ownerId: 'government',
+      fixedCapital: opts.fixedCapital || 0
+    });
+    return true;
+  }
+
+  /** Read-only half of placeSite(), shared by the land-shortage gate. */
+  findSitePlacement(g, rng, bounds, kind, opts = {}) {
     const cluster = opts.cluster || null;
     const gap = opts.gap ?? (cluster ? cluster.gap : SITE_GAP);
     // Agriculture sites at their tier-1 yard (every new site starts at level
@@ -896,16 +932,22 @@ export class ResourceSystem {
     // for the first of a kind, which then sits by the ordinary far-outskirts
     // rule and becomes the seed the rest gather around.
     const anchor = cluster ? this.clusterAnchor(cluster.of) : null;
+    const scoreRng = rng && typeof rng.float === 'function' ? rng : { float: () => 0 };
+    const perimeter = this.townRef?.perimeter;
     const cands = [];
     g.forEach((x, y, grid) => {
       if (!ground(grid, x, y, bounds)) return;
       if (grid.kindAt(x, y) !== CELL_KIND.EMPTY) return;
+      // A producer footprint cannot become legal if its anchor is already
+      // outside the purchased belt.  Filtering seeds here avoids building and
+      // surveying thousands of impossible rectangles on the 100×100 plate.
+      if (perimeter?.acquired?.size && !perimeter.isAcquired(x, y)) return;
       if (this.tooClose(x, y, gap)) return;
       const score = anchor
-        ? CLUSTER_PULL - chebyshev(x, y, anchor) + rng.float(0, 3)
+        ? CLUSTER_PULL - chebyshev(x, y, anchor) + scoreRng.float(0, 3)
         : kind === 'gas'
-          ? -Math.max(0, depthOf(x, y, bounds)) * 2 + rng.float(0, 6)
-          : (opts.compact ? -reachOf(x, y, bounds, MAX_SPUR) * 2 : reachOf(x, y, bounds, MAX_SPUR) * 2) + rng.float(0, 6);
+          ? -Math.max(0, depthOf(x, y, bounds)) * 2 + scoreRng.float(0, 6)
+          : (opts.compact ? -reachOf(x, y, bounds, MAX_SPUR) * 2 : reachOf(x, y, bounds, MAX_SPUR) * 2) + scoreRng.float(0, 6);
       cands.push([x, y, score]);
     });
     cands.sort((a, b) => b[2] - a[2]);
@@ -913,40 +955,22 @@ export class ResourceSystem {
       const cells = growFootprint(g, x, y, need, bounds, ground);
       if (!cells) continue;
       if (cells.some(([cx, cy]) => this.tooClose(cx, cy, gap))) continue;
+      // Reject frontier footprints before running the comparatively expensive
+      // building-setback and shortest-spur surveys.  Resource growth is only
+      // allowed on acquired land; on the 100×100 plate this early filter turns
+      // a full-map shortage probe from thousands of BFS attempts into a small
+      // scan of the owned belt.
+      if (perimeter?.acquired?.size && cells.some(([cx, cy]) => !perimeter.isAcquired(cx, cy))) continue;
       // Resource planning runs after the founding buildings. Keep production
       // and storage yards away from ordinary homes, shops and civic buildings
       // instead of creating a nuisance beside an already occupied lot.
       if (resourceSiteBuildingConflict(this.townRef, cells, kind)) continue;
       const spur = spurPath(g, cells);
       if (!spur) continue;
-      const perimeter = this.townRef?.perimeter;
       if (perimeter?.acquired?.size && [...cells, ...spur].some(([cx, cy]) => !perimeter.isAcquired(cx, cy))) continue;
-      this.claim(cells);
-      if (!carveRoad(g, spur, this.townRef)) continue;
-      for (const [cx, cy] of cells) {
-        g.setKind(cx, cy, CELL_KIND.LOT);
-        g.zone[g.idx(cx, cy)] = null;
-      }
-      this.sites.push({
-        id: this.townRef?.nextEntityId ? this.townRef.nextEntityId('resource') : `resource-${kind}-${this.sites.length + 1}`,
-        kind,
-        cells,
-        spur,
-        work: SITE_WORK[kind] || null,
-        // Pumps are public-facing civic infrastructure in the land-use
-        // model. They remain resource producers for fuel accounting, but are
-        // never classified as industrial works or pushed to the remote rim.
-        planningClass: kind === 'gas' ? 'civic' : 'resource',
-        publicFacing: kind === 'gas',
-        facility: kind === 'gas' ? 'fuel-station' : null,
-        face: faceToRoad(g, cells),
-        ownerType: 'government',
-        ownerId: 'government',
-        fixedCapital: opts.fixedCapital || 0
-      });
-      return true;
+      return { cells, spur };
     }
-    return false;
+    return null;
   }
 
   /**
@@ -1096,6 +1120,86 @@ export class ResourceSystem {
     if (!site) return 0;
     const lvl = site.level || 1;
     return lvl >= MAX_SITE_LEVEL ? 0 : UPGRADE_COST[resource] * lvl;
+  }
+
+  /**
+   * Capacity, rather than staffing, is the reason to commission another
+   * producer.  `growSites()` uses the same test; exposing it lets the growth
+   * planner decide whether frontier land is a real prerequisite instead of
+   * treating a one-cell empty lot as enough for a 7×4 farm.
+   */
+  producerCapacityShortfall(resource) {
+    if (!['energy', 'food', 'fuel'].includes(resource)) return false;
+    const row = this.stats()?.types?.[resource];
+    if (!row) return false;
+    return (this.ratedProduction()[resource] || 0) < (row.demand || 0) * SURPLUS;
+  }
+
+  /**
+   * Survey the live acquired land with the exact producer footprint, spacing,
+   * building setback and access-spur rules used by `growSites()`.  This is a
+   * read-only probe: no cells, roads, trees or random state are changed.
+   * `null` therefore means the current acquired parcel is genuinely exhausted
+   * for this resource, even if `vacantAcquiredPlots(1)` still reports a tiny
+   * leftover lot.
+   */
+  producerSiteRoom(resource, options = {}) {
+    const kinds = resource === 'food'
+      ? ['farm', 'husbandry', 'poultry']
+      : resource === 'energy'
+        ? ['windmill', 'solar']
+        : resource === 'fuel'
+          ? ['gas']
+          : [];
+    const max = MAX_GROWTH_SITES[resource] || 0;
+    if (!kinds.length || !this.townRef?.grid || !max) return null;
+    if (this.sites.filter((s) => SITE_RESOURCE[s.kind] === resource && !STOREHOUSE[s.kind]).length >= max) return null;
+    const g = this.townRef.grid;
+    const perimeter = this.townRef.perimeter;
+    // The probe is cached because ranked() may ask several times per sitting,
+    // but the cache must move when a tier expands a yard or a wing changes a
+    // building's protected footprint. Counts alone were stale after an
+    // in-place upgrade and could claim that a farm still fit.
+    const siteShape = this.sites
+      .map((s) => `${s.kind}:${s.level || 1}:${s.cells?.length || 0}`)
+      .join(',');
+    const buildingShape = (this.townRef.buildings || [])
+      .map((b) => `${b.kind || ''}:${b.floors || 1}:${b.footprint?.length || 1}`)
+      .join(',');
+    const perimeterShape = perimeter
+      ? `${perimeter.acquired?.size || 0}:${perimeter.minX},${perimeter.minY},${perimeter.maxX},${perimeter.maxY}`
+      : 'none';
+    const cacheKey = [
+      resource,
+      this.townRef.clockDay || 0,
+      g.roadCount || 0,
+      siteShape,
+      buildingShape,
+      perimeterShape
+    ].join('|');
+    if (!options.uncached && this._producerRoomCache?.key === cacheKey) return this._producerRoomCache.value;
+    const bounds = coreBounds(g);
+    if (!bounds) {
+      if (!options.uncached) this._producerRoomCache = { key: cacheKey, value: null };
+      return null;
+    }
+    for (const kind of kinds) {
+      const cluster = kind === 'windmill' ? WIND_FARM : null;
+      for (const gap of GAP_LADDER) {
+        const placement = this.findSitePlacement(g, null, bounds, kind, {
+          ...(cluster ? { cluster } : {}),
+          gap,
+          compact: true
+        });
+        if (placement) {
+          const value = { kind, cells: placement.cells, spur: placement.spur };
+          if (!options.uncached) this._producerRoomCache = { key: cacheKey, value };
+          return value;
+        }
+      }
+    }
+    if (!options.uncached) this._producerRoomCache = { key: cacheKey, value: null };
+    return null;
   }
 
   /**
@@ -1694,7 +1798,7 @@ export class ResourceSystem {
 
     if (shortOn('energy')) {
       const sites = prod('energy');
-      if (sites.length < MAX_ENERGY_SITES) {
+      if (sites.length < MAX_GROWTH_SITES.energy) {
         const next = sites.length % 2 === 0 ? 'windmill' : 'solar';
         if (sited(next)) {
           // The spur and yard changed roads and lots: rebuildStatic refreshes
@@ -1708,7 +1812,7 @@ export class ResourceSystem {
     }
     if (shortOn('food')) {
       const sites = prod('food');
-      if (sites.length < MAX_FARMS) {
+      if (sites.length < MAX_GROWTH_SITES.food) {
         const cycle = ['farm', 'husbandry', 'poultry'];
         const next = cycle[sites.length % cycle.length];
         if (sited(next)) {
@@ -1721,7 +1825,7 @@ export class ResourceSystem {
     // from the producing set the way the pure storehouses are.
     if (shortOn('fuel')) {
       const sites = prod('fuel');
-      if (sites.length < MAX_FUEL_SITES && sited('gas')) {
+      if (sites.length < MAX_GROWTH_SITES.fuel && sited('gas')) {
         this.townRef.rebuildStatic();
         announceSite('gas', 'fuel');
       }

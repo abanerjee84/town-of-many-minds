@@ -4,6 +4,8 @@ Updated 2026-10-03 after the industrial-chain and hospitality-economy audit.
 
 ## Completed
 
+- [x] Resource growth now treats a dry primary-resource store as a capacity emergency. It distinguishes capacity shortfalls from understaffing, surveys the exact acquired-land producer footprint and access spur, and ranks frontier acquisition before housing or cosmetic progression when a 7×4 food yard no longer fits. Food growth caps now leave headroom for a 1,000-resident town. The governance boundary blocks an LLM housing/progression request during that emergency and substitutes the measured `UPGRADE_RESOURCE` or `ACQUIRE_LAND` action; a resource upgrade with no eligible site becomes the land prerequisite. `npm run test:resource-land` covers the dry-food → frontier acquisition → new-farm path on seed 1337.
+
 - [x] Shared immutable catalogue covers 78 blocks across housing, commerce, civic, industry, resources, utilities, roads, public space, and props.
 - [x] Catalogue rows have stable IDs, kit/family labels, footprints, module roles, bills of materials, labour hours, and audit coverage.
 - [x] HouseKit supports accessible entrances, balconies, solar roofs, planted roofs, deterministic rebuilds, and inspection metadata.

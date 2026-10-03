@@ -126,6 +126,10 @@ function resourcePlanFailure(town, params = {}) {
   const producers = sites.filter((site) => !storageOnly.has(site.kind));
   if (!producers.length) return `${label} has storage but no upgradeable production site`;
   if (producers.every((site) => (site.level || 1) >= 3)) return `all ${label.toLowerCase()} production sites are at the level 3 cap`;
+  if (resources.producerCapacityShortfall?.(resource)) {
+    if (town.growth?.resourceLandNeed?.() === resource) return `${label} capacity is short and no acquired producer footprint fits — ACQUIRE_LAND first`;
+    if (resources.producerSiteRoom?.(resource)) return `${label} capacity is short — a new producer can be sited on acquired land`;
+  }
   return `no ${label.toLowerCase()} production site is currently upgradeable`;
 }
 
@@ -1828,6 +1832,27 @@ export class GovernanceSystem {
     }
 
     const type = actionFor(parsed.intent)?.planType;
+    // A dry primary resource is a safety-critical capacity signal. An LLM can
+    // still be creative about the remedy, but it cannot spend the sitting on
+    // a housing floor, shop polish or a landmark while the next producer has
+    // no legal footprint. The rules fallback then chooses the measured
+    // UPGRADE_RESOURCE or ACQUIRE_LAND plan and records the model's blocked
+    // motion for learning.
+    const resourceEmergency = source === 'llm'
+      ? t.growth?.resourceEmergency?.()
+      : null;
+    if (resourceEmergency && resourceEmergency.kind !== 'site') {
+      const sameResource = !parsed.params?.resource || parsed.params.resource === resourceEmergency.resource;
+      const allowed = parsed.intent === 'TRADE_BUY' || parsed.intent === 'HIRE_WORKERS' ||
+        (resourceEmergency.kind === 'land' && parsed.intent === 'ACQUIRE_LAND') ||
+        (resourceEmergency.kind === 'upgrade' && parsed.intent === 'UPGRADE_RESOURCE' && sameResource);
+      if (!allowed) {
+        decision.status = 'blocked';
+        decision.detail = `${resourceEmergency.resource} capacity emergency — ${resourceEmergency.intent} takes priority over ${parsed.intent}`;
+        this.record(decision);
+        return this.fallback ? this.substitute(decision) : decision;
+      }
+    }
     const plan = type ? planFor(t, type, parsed.params) : null;
     if (!plan) {
       decision.detail =
@@ -1839,6 +1864,21 @@ export class GovernanceSystem {
             ? resourcePlanFailure(t, parsed.params)
           : NULL_PLAN_DETAIL[parsed.intent] || 'no procedure for that action';
       this.record(decision);
+      // A dry resource without an upgradeable site is a land prerequisite, not
+      // a dead-end UPGRADE_RESOURCE loop. This mirrors the factory
+      // prerequisite substitution below and lets the next sitting acquire a
+      // complete producer footprint plus access spur.
+      if (parsed.intent === 'UPGRADE_RESOURCE' && t.growth.resourceLandNeed?.(parsed.params?.resource || null)) {
+        const acquisition = this.enact('INTENT: ACQUIRE_LAND', 'rules');
+        acquisition.substituted = {
+          intent: decision.intent,
+          status: decision.status,
+          detail: decision.detail,
+          confidence: decision.confidence,
+          how: decision.how
+        };
+        return acquisition;
+      }
       return decision;
     }
     plan.origin = source === 'llm' ? 'LLM' : source === 'test' ? 'TEST' : 'RULE';

@@ -1123,7 +1123,9 @@ export function planFor(town, type, opts = {}) {
       // than six arbitrary frontier cells. The old fallback could acquire
       // tiles beside a building or resource spur with no road-facing parcel,
       // leaving DEVELOP_HOUSING blocked on the very next sitting.
-      if (growthInputs && housingNeedsBuild(growthInputs.pop, growthInputs.capacity, growthInputs.pressure) &&
+      if (growth.resourceLandNeed?.()) {
+        target = growth.resourceLandPlan(growth.resourceLandNeed());
+      } else if (growthInputs && housingNeedsBuild(growthInputs.pop, growthInputs.capacity, growthInputs.pressure) &&
         !growth.findCell('house')) {
         target = planFor(town, 'house');
       } else if (growth.factoryLandNeeded?.()) {
@@ -1888,6 +1890,63 @@ export class GrowthSystem {
     const perimeter = this.town.perimeter;
     const g = this.town.grid;
     if (!perimeter || !targetPlan) return null;
+
+    // Resource yards are not buildings and therefore do not have a parcel
+    // frontage to validate through siteForFootprint().  Survey a projected
+    // contiguous frontier block with the resource kit's exact 7×4 yard and
+    // access-spur rules instead.  This prevents ACQUIRE_LAND from buying six
+    // unrelated cells while the next farm still cannot be placed.
+    if (targetPlan.type === 'resource' && targetPlan.resource && this.town.resources?.producerSiteRoom) {
+      const original = perimeter.acquired;
+      const originalSet = new Set(original);
+      const entries = targetPlan.footprintCandidates || [[7, 4], [4, 7]];
+      // The perimeter list is already ordered by road frontage.  Surveying
+      // every one of its 240 fallback cells would repeat a full resource-yard
+      // scan hundreds of times; the first serviced belt is enough to choose a
+      // contiguous purchase, with the ordinary perimeter fallback handling a
+      // genuinely unusual blocked edge.
+      const frontier = perimeter.frontierCells(64);
+      const blocked = (x, y) => !g.inBounds(x, y) ||
+        (g.kindAt(x, y) !== CELL_KIND.EMPTY && g.kindAt(x, y) !== CELL_KIND.LOT) ||
+        g.isWater(x, y) || this.town.buildingAt(x, y) || this.town.resources.ownsCell(x, y);
+      let surveys = 0;
+      for (const entry of entries) {
+        const dims = Array.isArray(entry) ? { cols: entry[0], rows: entry[1] } : entry;
+        if (!dims?.cols || !dims?.rows) continue;
+        for (const [fx, fy] of frontier) {
+          for (let oy = 0; oy < dims.rows; oy++) {
+            for (let ox = 0; ox < dims.cols; ox++) {
+              if (++surveys > 96) break;
+              const x0 = fx - ox;
+              const y0 = fy - oy;
+              const cells = [];
+              let ok = true;
+              for (let y = y0; y < y0 + dims.rows && ok; y++) {
+                for (let x = x0; x < x0 + dims.cols; x++) {
+                  if (blocked(x, y)) { ok = false; break; }
+                  cells.push([x, y]);
+                }
+              }
+              if (!ok || !cells.length) continue;
+              perimeter.acquired = new Set([...originalSet, ...cells.map(([x, y]) => perimeter.key(x, y))]);
+              const room = this.town.resources.producerSiteRoom(targetPlan.resource, { uncached: true });
+              perimeter.acquired = original;
+              if (!room) continue;
+              const all = [...room.cells, ...(room.spur || [])];
+              if (!all.length || !all.every(([x, y]) => perimeter.isAcquired(x, y) || cells.some(([cx, cy]) => cx === x && cy === y))) continue;
+              const fresh = [...new Map(all.map(([x, y]) => [perimeter.key(x, y), [x, y]])).values()];
+              if (fresh.some(([x, y]) => !originalSet.has(perimeter.key(x, y)))) return fresh;
+            }
+            if (surveys > 96) break;
+          }
+          if (surveys > 96) break;
+        }
+        if (surveys > 96) break;
+      }
+      perimeter.acquired = original;
+      return null;
+    }
+
     const entries = targetPlan.footprintCandidates || (targetPlan.footprint ? [targetPlan.footprint] : []);
     const dims = entries.map((entry) => Array.isArray(entry)
       ? { cols: entry[0], rows: entry[1] }
@@ -1956,6 +2015,52 @@ export class GrowthSystem {
   }
 
   /**
+   * Return the first primary-resource emergency that needs Council action.
+   * `kind` distinguishes a capacity upgrade from a frontier purchase; a
+   * staffed site with an empty store is not allowed to masquerade as a land
+   * shortage, while a full rated yard with no legal footprint is.
+   */
+  resourceEmergency(resourceHint = null) {
+    const rs = this.town.resources;
+    if (!rs?.stats || !rs.producerCapacityShortfall || !rs.producerSiteRoom) return null;
+    const strained = rs.stats().strained || [];
+    const candidates = resourceHint ? [resourceHint] : strained;
+    for (const resource of candidates) {
+      if (!['energy', 'food', 'fuel'].includes(resource) || !strained.includes(resource)) continue;
+      if (!rs.producerCapacityShortfall(resource)) continue;
+      if (this.projects.some((project) => project.plan?.type === 'resource' && project.plan?.resource === resource)) continue;
+      if (rs.upgradeCost?.(resource) > 0) {
+        return { resource, kind: 'upgrade', intent: 'UPGRADE_RESOURCE' };
+      }
+      if (rs.producerSiteRoom(resource)) {
+        // The day-boundary resource pass will commission this legal site. It
+        // is a production emergency, but not a reason to buy unrelated land.
+        return { resource, kind: 'site', intent: 'BUILD_SITE' };
+      }
+      return { resource, kind: 'land', intent: 'ACQUIRE_LAND' };
+    }
+    return null;
+  }
+
+  resourceLandNeed(resourceHint = null) {
+    const emergency = this.resourceEmergency(resourceHint);
+    return emergency?.kind === 'land' ? emergency.resource : null;
+  }
+
+  resourceLandPlan(resource) {
+    if (!resource) return null;
+    const footprintCandidates = resource === 'food' ? [[7, 4], [4, 7]] : [[2, 2], [3, 2]];
+    return {
+      type: 'resource',
+      resource,
+      footprintCandidates,
+      label: `A ${resource} production yard needs a frontier block`,
+      cost: 0,
+      need: 1
+    };
+  }
+
+  /**
    * The land order must carry the same target that made it necessary. A
    * factory is a campus, so a single vacant frontage cell is not enough to
    * make BUILD_FACTORY feasible; the survey needs to find the complete
@@ -1985,12 +2090,13 @@ export class GrowthSystem {
         !this.town.buildings.some((b) => b.facility === 'university' || b.subtype === 'campus') &&
         !hasSitedFootprint('civic', { facility: 'university' }));
     const worksNeed = this.factoryLandNeeded();
+    const resourceNeed = this.resourceLandNeed();
     const vacant = this.vacantAcquiredPlots(1);
     // A spare one-cell plot does not satisfy a missing factory or campus
     // footprint. Those progression shortages must be allowed to buy a
     // contiguous frontier patch even while smaller plots remain.
-    if (vacant > 0 && !worksNeed && !educationNeed) return false;
-    return housingPressure || !!strainedProduct || !!firstWorksDeficit || civicDemand || educationNeed || worksNeed;
+    if (vacant > 0 && !worksNeed && !educationNeed && !resourceNeed) return false;
+    return housingPressure || !!strainedProduct || !!firstWorksDeficit || civicDemand || educationNeed || worksNeed || !!resourceNeed;
   }
 
   /**
@@ -2266,6 +2372,7 @@ export class GrowthSystem {
   ranked() {
     const s = this.inputs();
     const eco = s.economy;
+    const resourceEmergency = this.resourceEmergency?.() || null;
     if (!eco) return [];
     // `eco` is stats() — a PERCENT. The jobs gates read the fraction instead,
     // so the planner and the warning thresholds in EconomySystem compare like
@@ -2296,13 +2403,18 @@ export class GrowthSystem {
         const congestionPriority = type === 'road' && congestion > roadCongestionGate()
           ? 100 + Math.min(40, Math.max(0, (congestion - roadCongestionGate()) * 100))
           : 0;
+        const primaryResourcePriority =
+          (type === 'land' && resourceEmergency?.kind === 'land') ||
+          (type === 'resource' && resourceEmergency?.kind === 'upgrade')
+            ? 20
+            : 0;
         out.push({
           type,
           need,
           // Once the first town cohort exists, earned progression competes
           // with ordinary civic infill. This keeps long runs from repeatedly
           // selecting new one-storey shells while floors/wings wait forever.
-          score: band + Math.min(1, need) + (earnedProgression ? 4 : 0) + (heightPriority ? 6 : 0) + (roadEmergency ? 20 : 0) + congestionPriority,
+          score: band + Math.min(1, need) + (earnedProgression ? 4 : 0) + (heightPriority ? 6 : 0) + (roadEmergency ? 20 : 0) + congestionPriority + primaryResourcePriority,
           opts,
           amenity
         });
@@ -2319,7 +2431,14 @@ export class GrowthSystem {
     const rs = this.town.resources && this.town.resources.stats
       ? this.town.resources.stats()
       : null;
-    if (rs && rs.strained && rs.strained.length) add('resource', 1, { resource: rs.strained[0] });
+    if (rs && rs.strained && rs.strained.length) {
+      const resourceTarget = rs.strained.find((resource) =>
+        resource === 'water' || rs.producerCapacityShortfall?.(resource)
+      );
+      if (resourceTarget && (resourceTarget === 'water' || rs.upgradeCost?.(resourceTarget) > 0)) {
+        add('resource', 1, { resource: resourceTarget });
+      }
+    }
     if (housingNeedsBuild(s.pop, s.capacity, s.pressure) && this.findCell('house'))
       add('house', (s.pressure - HOUSE_PRESSURE_GATE) / (1 - HOUSE_PRESSURE_GATE));
     if (unemployment > UNEMPLOYMENT_GATE) {
@@ -2639,10 +2758,15 @@ export class GrowthSystem {
       case 'resource': {
         const rs = this.town.resources;
         if (!rs || !rs.stats) return false;
-        // Wanted while any primary resource is strained AND still upgradeable.
+        // Wanted while a primary resource is strained, capacity-short, and
+        // still upgradeable. A staffed site that merely lacks workers is a
+        // HIRE_WORKERS problem; raising its tier burns capital without adding
+        // effective output.
         return rs
           .stats()
-          .strained.some((k) => rs.upgradeCost(k) > 0);
+          .strained.some((k) =>
+            (k === 'water' || rs.producerCapacityShortfall?.(k)) && rs.upgradeCost(k) > 0
+          );
       }
       case 'upgrade': {
         // Either filler timing (comfortable town, spare crews) or a facility
@@ -2740,6 +2864,7 @@ export class GrowthSystem {
       case 'footway':
         return 'no landlocked parcel needs a path';
       case 'land':
+        if (this.resourceLandNeed()) return 'primary resource capacity is short and no legal producer footprint fits inside acquired land';
         if (this.vacantAcquiredPlots(1) >= 1) return 'acquired land still has usable serviced plots';
         if ((s.pressure || 0) < 0.9 && !this.town.industry?.missingConstructionProduct?.()) return 'housing and material pressure are below the land-shortage gate';
         return 'the town has no unacquired frontier tiles or the reserve is too low';

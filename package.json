@@ -13,6 +13,7 @@
     "test:soak": "node scripts/_simulation_soak_check.mjs",
     "test:glow": "node scripts/_glow_regression.mjs",
     "test:resources": "node scripts/_resource_feedback_check.mjs",
+    "test:resource-land": "node scripts/_resource_land_regression.mjs",
     "test:footway": "node scripts/_footway_check.mjs",
     "test:council": "node scripts/_council_provider_check.mjs",
     "test:council-cadence": "node scripts/_council_cadence_check.mjs",

@@ -61,6 +61,7 @@ const result = await page.evaluate(async () => {
     timeoutStatus: timeoutResult.status,
     timeoutPending: g.pending,
     cadenceCalls,
+    sittingsPerDay: g.sittingsPerDay,
     pending: g.pending,
     calls,
     staleReplies: g.stats().staleReplies
@@ -76,7 +77,10 @@ const checks = [
   ['fresh reply enacted', result.freshStatus === 'noop'],
   ['pending released', result.pending === false],
   ['timeout returns error', result.timeoutStatus === 'error' && result.timeoutPending === false],
-  ['request cadence bounded', result.cadenceCalls > 0 && result.cadenceCalls <= 3],
+  // Cadence is user-configurable (the documented default is two sittings per
+  // day), so the three-day smoke must scale its upper bound with the live
+  // setting instead of retaining the retired one-sitting assumption.
+  ['request cadence bounded', result.cadenceCalls > 0 && result.cadenceCalls <= 3 * (result.sittingsPerDay || 1)],
   ['page errors', pageErrors.length === 0]
 ];
 for (const [name, ok] of checks) console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`);
