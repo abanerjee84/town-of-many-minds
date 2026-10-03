@@ -543,3 +543,5 @@ window.constructionBlockStats = constructionBlockStats;
 window.auditConstructionBlocks = auditConstructionBlocks;
 window.constructionBlockDemand = constructionBlockDemand;
 window.constructionPalette = (opts = {}) => constructionPalette(town, opts);
+window.KIT_REGISTRY = town.kits;
+window.kitCompatibility = () => town.kits?.compatibilityReport?.() || null;

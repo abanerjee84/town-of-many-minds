@@ -41,6 +41,7 @@ import { planConnectedRoad, splitsNetwork, hasNetworkAccess, planFootway } from 
 import { agriculturalSetbackConflict, resourceSetbackConflict, educationCampusConflict } from '../placement/siteRules.js';
 import { events } from '../core/events.js';
 import { exportIntegrityState, importIntegrityState } from './integrityState.js';
+import { BUILTIN_KIT_REGISTRY } from '../kits/kitRuntime.js';
 
 export const GRID_W = EXTENT.w;
 export const GRID_H = EXTENT.h;
@@ -119,6 +120,10 @@ export class Town {
     this.perimeter = new PerimeterSystem(this);
     this.transport = new PublicTransportSystem(this);
     this.society = new SocietySystem(this);
+    // Kit registry is the compatibility boundary for the gradual plugin
+    // migration. Existing systems keep their public APIs while ownership,
+    // catalogue rows, intent routes, and versions become discoverable here.
+    this.kits = BUILTIN_KIT_REGISTRY;
     // Phase 15 — schemes, statutes and jurisdiction. One interpreter, read by
     // economy, lifecycle, pedestrians, growth and the resources.
     this.policy = new PolicySystem();
@@ -145,6 +150,7 @@ export class Town {
       ? Number(seed)
       : seed;
     this.seed = normalizedSeed;
+    this.kits?.invalidateContext?.(this);
     this.entityIds = { building: 1, household: 1 };
     this.rng = makeRng(normalizedSeed);
     this.forest.reset(normalizedSeed);
@@ -743,9 +749,11 @@ export class Town {
     this.weather?.update(clock);
     this.traffic.runShared(dt, clock);
     this.streetGlow?.update(dt);
-    this.transport?.update(dt, clock);
-    this.society?.update(dt, clock);
-    this.forest?.update(clock);
+    // Registered kits own their declared update hooks. This is the first
+    // runtime migration away from a hand-maintained Town update list; the
+    // transport, society, and forest adapters above remain available through
+    // their existing public systems for compatibility.
+    this.kits?.invoke('updateHour', this, { dt, clock });
   }
 
   randomRoadCell(rng = this.rng) {
@@ -1521,6 +1529,7 @@ export class Town {
       resourceStress: resourceStats ? resourceStress(resourceStats) : null,
       policy: this.policy ? this.policy.stats() : null,
       research: this.research ? this.research.stats() : null,
+      kits: this.kits ? this.kits.compatibilityReport() : null,
       publicSpace: publicSpaceStats(this),
       pipeline: this.pipelineSummary || null,
       validation: this.validation || null,

@@ -18,34 +18,20 @@
  * one means. `INTENTS_SUBSET_FAMILIES` below is derived from `INTENTS` so that
  * table cannot drift again.
  */
-const project = {
-  DEVELOP_HOUSING: 'house', OPEN_SHOP: 'shop', BUILD_OFFICE: 'office', TIERUP: 'tierup',
-  BUILD_LANDMARK: 'landmark', EXPAND_LANDMARK: 'wing', BUILD_FACTORY: 'factory',
-  BUILD_CIVIC: 'civic', EXPAND_CLINIC: 'civic', EXTEND_STREET: 'road',
-  EXTEND_FOOTWAY: 'footway', UPGRADE_ROAD: 'roadup', BUILD_BRIDGE: 'bridge',
-  PARK_LAND: 'park', PAVE_PLAZA: 'plaza', ADD_PARKING: 'parking',
-  EXPAND_POWER: 'power', EXPAND_WATER: 'water', EXPAND_SEWAGE: 'sewage',
-  UPGRADE_RESOURCE: 'resource', PLANT_TREES: 'prop-tree', INSTALL_LAMP: 'prop-lamp',
-  UPGRADE_BUILDING: 'upgrade', RENOVATE: 'renovate', WING: 'wing',
-  IMAGINE_ARCHETYPE: 'archetype', BUILD_DISTRICT: 'district',
-  REZONE: 'rezone', UPZONE: 'upzone', CLEAR_LOT: 'clear', ANNEX_EDGE: 'annex',
-  ACQUIRE_LAND: 'land', BUILD_TRANSIT: 'civic', RESTRUCTURE_BUILDING: 'restructure'
-};
-const direct = [
-  'RAISE_TAX', 'CUT_TAX', 'KEEP_TAX', 'HIRE_WORKERS', 'ATTRACT_SETTLERS',
-  'FUND_INNOVATION', 'TRADE_BUY', 'TRADE_SELL', 'SET_ASIDE_RESERVE',
-  'BOND_ISSUE', 'SUBSIDY', 'SLASH_SPENDING', 'HOST_EVENT',
-  'DECLARE_EMERGENCY', 'DISPATCH_UNITS', 'STUDY_ROAD', 'STUDY_ECONOMY',
-  'STUDY_DEMOGRAPHICS', 'STUDY_TRAFFIC', 'STUDY_INCIDENTS',
-  'ENACT_SCHEME', 'END_SCHEME', 'PASS_LAW', 'REPEAL_LAW', 'NO_ACTION'
-];
+import { BUILTIN_KIT_REGISTRY } from '../kits/kitRuntime.js';
 
-export const ACTION_REGISTRY = Object.freeze({
-  ...Object.fromEntries(Object.entries(project).map(([intent, planType]) =>
-    [intent, Object.freeze({ intent, kind: 'project', planType })])),
-  ...Object.fromEntries(direct.map((intent) =>
-    [intent, Object.freeze({ intent, kind: 'direct' })]))
-});
+// The action vocabulary is derived from the same manifests used by Town. This
+// keeps parser, prompt, report, and executor metadata on one ownership map.
+const KIT_ACTION_REGISTRY = BUILTIN_KIT_REGISTRY;
+const KIT_ROUTES = KIT_ACTION_REGISTRY.compatibilityReport().intentRoutes;
+
+export const ACTION_REGISTRY = Object.freeze(Object.fromEntries(
+  Object.entries(KIT_ROUTES).map(([intent, planType]) => [intent, Object.freeze({
+    intent,
+    kind: planType ? 'project' : 'direct',
+    ...(planType ? { planType } : {})
+  })])
+));
 export const INTENTS = Object.freeze(Object.keys(ACTION_REGISTRY));
 export const PLAN_TYPE = Object.freeze(Object.fromEntries(
   Object.values(ACTION_REGISTRY).filter((action) => action.kind === 'project').map((action) => [action.intent, action.planType])

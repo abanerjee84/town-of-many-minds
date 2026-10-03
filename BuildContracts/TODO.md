@@ -25,10 +25,12 @@ Updated 2026-10-03 after the dynamic-market and build-duration audit.
 - [x] P0: civic facility catalogue, construction family bills, and module premiums now load from versioned JSON adapters; public APIs remain unchanged.
 - [x] P1 partial: resource placement, vehicle catalogue, fleet finance/service ratios, and public-transport growth thresholds now load from versioned JSON adapters.
 - [ ] P1 remaining: extract utility coefficients, society, and incidents into versioned JSON adapters.
-- [ ] P1 architecture: introduce a versioned `KitRegistry` and manifest contract; migrate built-in kits behind registry adapters without changing seeded behavior.
-- [ ] P1 architecture: define narrow `KitContext`, shared `BuildingContract`/`ProjectContract`/`DemandSignal`/`KitStats` schemas, and transactional mutation services.
-- [ ] P1 architecture: route Council intents, palette entries, evidence, save/restore, and lifecycle hooks through registered kit capabilities.
-- [ ] P1 architecture: add a fixture kit and compatibility report regression covering registration, rollback, serialization, optional-kit absence, and renderer replacement.
+- [x] P1 architecture phase 1: introduced a versioned `KitRegistry` and manifest contract, registered 17 built-in domains, and preserved seeded behavior through adapters.
+- [x] P1 architecture phase 1: added narrow `KitContext`, immutable `BuildingContract`/`ProjectContract`/`DemandSignal`/`KitStats` schemas, and a transaction boundary.
+- [x] P1 architecture phase 1: derived all 59 Council intent routes from manifest ownership, exposed compatibility metadata, and migrated transport/society/forest update hooks.
+- [x] P1 architecture phase 1: integrity exports now carry kit compatibility signatures and reject mismatched kit sets before applying a save overlay.
+- [x] P1 architecture phase 1: added a fixture-kit registry regression covering registration, dependency cycles, read-only snapshots, hook dispatch, and rollback.
+- [ ] P1 architecture remaining: route construction-palette entries, full kit serialization/restore hooks, and renderer replacement through registered capabilities.
 - [ ] P2: extract world/theme, citizen content, and research/learning rules after replay fixtures are in place.
 
 ## Next measurable work

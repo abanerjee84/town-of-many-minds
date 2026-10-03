@@ -5,6 +5,12 @@ export const INTEGRITY_STATE_VERSION = 2;
 const siteKey = (site) => site.id || `${site.kind}:${(site.cells || []).map((cell) => cell.join(',')).join(';')}`;
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
+function kitSignature(report) {
+  return (report?.kits || [])
+    .map((kit) => `${kit.id}@${kit.version}:api${kit.apiVersion}:ctx${kit.contextApiVersion}`)
+    .sort();
+}
+
 /** Stable identity for a vehicle across ordinary rebuilds (P-F08): spawn order
  * and uid are not stable, but type, unit, home pad and driver name are. */
 function vehicleKey(v) {
@@ -130,6 +136,7 @@ export function exportIntegrityState(town) {
     } : null,
     // P-F08: driver/vehicle/trip/fuel survive the integrity overlay too.
     transport: exportTransport(town),
+    kitCompatibility: town.kits?.compatibilityReport?.() || null,
     ok: true
   };
 }
@@ -146,6 +153,12 @@ export function importIntegrityState(town, saved = {}) {
   }
   if (saved.seed != null && town.seed != null && saved.seed !== town.seed) {
     return { ok: false, reason: 'seed_mismatch', saveSeed: saved.seed, townSeed: town.seed };
+  }
+  if (saved.kitCompatibility) {
+    const current = town.kits?.compatibilityReport?.() || null;
+    if (!current || JSON.stringify(kitSignature(saved.kitCompatibility)) !== JSON.stringify(kitSignature(current))) {
+      return { ok: false, reason: 'kit_compatibility_mismatch', saved: kitSignature(saved.kitCompatibility), current: kitSignature(current) };
+    }
   }
   const owners = new Map((saved.ownership || []).map((row) => [row.id, row]));
   for (const building of town.buildings || []) {
