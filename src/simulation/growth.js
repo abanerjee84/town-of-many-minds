@@ -2567,7 +2567,10 @@ export class GrowthSystem {
     // When an acquired campus is missing, land is the prerequisite for the
     // actual factory/civic build. Keep ACQUIRE_LAND ahead of the blocked
     // BUILD_FACTORY request instead of letting the model retry a partial lot.
-    if (crewsFree && this.landNeeded()) add('land', 15.1, undefined, false);
+    // Frontier acquisition is a ledger/finance operation, not a crew lane.
+    // Keep it visible while buildings are under construction so the next
+    // campus can be prepared before those crews finish.
+    if (eco.treasury >= BUILD_FLOOR && this.landNeeded()) add('land', 15.1, undefined, false);
     if (crewsFree && this.town.buildings.some((b) => b.house && b.facility !== 'townhall' && (b.kind === 'civic' ? civicHasVerticalHeadroom(b) : b.floors < MAX_FLOORS))) {
       add('restructure', 0.16, undefined, true);
     }
@@ -2722,7 +2725,9 @@ export class GrowthSystem {
         // Land use is council discretion: always orderable, never invented.
         return true;
       case 'land':
-        return this.landNeeded() && this.projects.length < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR;
+        // ACQUIRE_LAND is instantaneous and does not reserve a construction
+        // crew. The exhaustion/frontier checks remain the actual gate.
+        return this.landNeeded() && eco.treasury >= BUILD_FLOOR;
       case 'restructure':
         return this.projects.length < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR && !!this.town.buildings.some((b) => b.house && b.facility !== 'townhall' && (b.kind === 'civic' ? civicHasVerticalHeadroom(b) : b.floors < MAX_FLOORS));
       case 'road':
@@ -4487,7 +4492,10 @@ export class GrowthSystem {
   }
 
   quote(plan) {
-    if (this.projects.length >= MAX_ACTIVE) return { ok: false, reason: 'crew cap reached' };
+    // Land is an instantaneous purchase and does not consume a construction
+    // crew. Keeping it behind MAX_ACTIVE made a valid frontier prerequisite
+    // disappear whenever two unrelated buildings were under construction.
+    if (this.projects.length >= MAX_ACTIVE && plan?.type !== 'land') return { ok: false, reason: 'crew cap reached' };
     const rngState = this.rng.getState();
     const previousBlock = this.lastBlock;
     try {

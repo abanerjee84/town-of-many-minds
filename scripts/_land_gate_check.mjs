@@ -24,6 +24,9 @@ const result = await page.evaluate(() => {
   // of buildings in a geometry test.
   const forcedBounds = t.perimeter.stats().bounds;
   t.growth.vacantAcquiredPlots = () => 0;
+  // Land purchase is instantaneous and must remain available even while the
+  // two construction slots are occupied by unrelated work.
+  t.growth.projects = [{ plan: { type: 'house' } }, { plan: { type: 'upgrade' } }];
   const acquiredBefore = new Set(t.perimeter.acquired);
   const first = window.forceCouncilRequest('INTENT: ACQUIRE_LAND');
   t.growth.vacantAcquiredPlots = originalVacant;
@@ -54,7 +57,7 @@ if (result.first.status !== 'done' || !result.added.length || result.added.some(
 )) {
   throw new Error(`exhausted acquisition did not stay on frontier land: ${JSON.stringify(result)}`);
 }
-if (result.second.status !== 'rejected' || result.second.detail !== 'acquired serviced land is not exhausted, or no unacquired frontier tiles remain, or the reserve is too low') {
+if (result.second.status !== 'rejected' || result.second.detail !== 'acquired land still has usable serviced plots') {
   throw new Error(`ACQUIRE_LAND bypassed the exhaustion gate: ${JSON.stringify(result)}`);
 }
 if (result.afterSecond.expansions !== result.afterFirst.expansions || result.afterSecond.acquired !== result.afterFirst.acquired) {

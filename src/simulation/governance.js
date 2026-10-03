@@ -1860,6 +1860,8 @@ export class GovernanceSystem {
           ? parsed.params?.to
             ? `no corridor can be raised to ${XS_CLASS_LABEL[parsed.params.to] || parsed.params.to}`
             : 'every corridor is already a boulevard'
+          : parsed.intent === 'ACQUIRE_LAND'
+            ? t.growth?.unwantedWhy?.('land') || NULL_PLAN_DETAIL[parsed.intent]
           : parsed.intent === 'UPGRADE_RESOURCE'
             ? resourcePlanFailure(t, parsed.params)
           : NULL_PLAN_DETAIL[parsed.intent] || 'no procedure for that action';
@@ -1921,7 +1923,8 @@ export class GovernanceSystem {
     // sources drive scripted scenarios and bypass this).
     if (
       (source === 'llm' || source === 'rules' || source === 'test') &&
-      t.growth.projects.length >= MAX_ACTIVE
+      t.growth.projects.length >= MAX_ACTIVE &&
+      plan.type !== 'land'
     ) {
       decision.status = 'noop';
       decision.detail = `building paused — ${t.growth.projects.length} projects already underway`;
