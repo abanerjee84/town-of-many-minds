@@ -33,7 +33,8 @@ Updated 2026-10-03 after the dynamic-market and build-duration audit.
 - [x] P1 architecture phase 2: construction palette entries are sourced from the registry catalogue with legacy fallback, including facility filters and explicit unavailable quote capability reasons.
 - [x] P1 architecture phase 2: kit serialization/restore hooks run in dependency order, carry API/context compatibility, and are included in integrity save overlays with a named restore failure.
 - [x] P1 architecture phase 2: Town create/reset/generate/hour/day lifecycle calls are dispatched through registered hooks, and `Town.stats()` exposes contract-shaped `KitStats` rows.
-- [ ] P1 architecture remaining: replace specialist Three.js builders with renderer capabilities that consume stable build contracts and return disposable scene metadata.
+- [x] P1 architecture phase 2: added a registry renderer boundary and disposable `RendererContract`; fixture kits can replace their renderer while preserving capacity, staffing, production, and inspection metadata.
+- [ ] P1 architecture remaining: migrate built-in specialist Three.js builders to registered renderer capabilities without changing seeded geometry or accounting.
 - [ ] P2: extract world/theme, citizen content, and research/learning rules after replay fixtures are in place.
 
 ## Next measurable work

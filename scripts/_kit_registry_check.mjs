@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { KitRegistry } from '../src/kits/kitRegistry.js';
 import { registerBuiltinKits } from '../src/kits/builtinManifests.js';
-import { buildingContract, projectContract, demandSignal, resourceFlow, serviceCoverage, vehicleAssignment, kitStats } from '../src/kits/kitContracts.js';
+import { buildingContract, projectContract, demandSignal, resourceFlow, serviceCoverage, vehicleAssignment, kitStats, rendererContract } from '../src/kits/kitContracts.js';
 import { importIntegrityState } from '../src/simulation/integrityState.js';
 
 const registry = registerBuiltinKits(new KitRegistry());
@@ -49,6 +49,7 @@ assert.equal(demandSignal({ producer: 'fixture', kind: 'housing', value: 2 }).pr
 assert.equal(resourceFlow({ producer: 'fixture', resource: 'steel', amount: 3 }).contractVersion, 1);
 assert.equal(serviceCoverage({ producer: 'fixture', kind: 'clinic', capacity: 4 }).served, 0);
 assert.equal(vehicleAssignment({ producer: 'fixture', vehicleId: 'v-1', role: 'bus' }).role, 'bus');
+assert.equal(rendererContract({ kitId: 'fixture', buildingId: 'b-1', capacity: 6 }).capacity, 6);
 assert.equal(kitStats({ kitId: 'fixture', values: { ok: true } }).values.ok, true);
 let mutable = 1;
 const tx = context.services.transaction({
@@ -71,7 +72,8 @@ fixture.register({
   capabilities: { build: true }, hooks: {
     stats: () => ({ ok: true }),
     serialize: () => ({ marker: 'fixture-state' }),
-    restore: ({ state }) => { restoredMarker = state?.marker || null; return { restored: restoredMarker }; }
+    restore: ({ state }) => { restoredMarker = state?.marker || null; return { restored: restoredMarker }; },
+    render: ({ building }) => ({ inspection: { capacity: building.capacity }, capacity: building.capacity, staffing: 2 })
   }
 });
 assert.deepEqual(fixture.validate().order, ['fixture.base', 'fixture.demo']);
@@ -81,6 +83,12 @@ const fixtureState = fixture.serialize({ seed: 1337, buildings: [], pedestrians:
 assert.equal(fixtureState.kits['fixture.demo'].marker, 'fixture-state');
 assert.equal(fixture.restore({ seed: 1337, buildings: [], pedestrians: {}, grid: {} }, fixtureState).ok, true);
 assert.equal(restoredMarker, 'fixture-state');
+const rendered = fixture.render({ seed: 1337, buildings: [], pedestrians: {}, grid: {} }, 'fixture.demo', {
+  id: 'b-1', kind: 'fixture', floors: 2, capacity: 6, footprint: [[1, 1]]
+});
+assert.equal(rendered.ok, true);
+assert.equal(rendered.result.inspection.capacity, 6);
+assert.equal(rendered.result.staffing, 2);
 assert.throws(() => fixture.register({ id: 'fixture.demo', version: '1.0.0', apiVersion: 1 }), /already registered/);
 
 const hookCalls = { transport: 0, society: 0, forest: 0 };

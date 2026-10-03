@@ -123,6 +123,23 @@ export function vehicleAssignment(record = {}) {
   });
 }
 
+/** Renderer boundary: scene nodes stay owned by the renderer and are never
+ * deep-frozen, while inspection/accounting metadata remains serializable. */
+export function rendererContract(record = {}) {
+  if (!record.buildingId) throw new Error('renderer contract requires a buildingId');
+  return Object.freeze({
+    contractVersion: KIT_CONTRACT_VERSION,
+    kitId: String(record.kitId || 'unknown'),
+    buildingId: String(record.buildingId),
+    scene: record.scene || null,
+    inspection: serializable(record.inspection || {}),
+    capacity: Math.max(0, finite(record.capacity)),
+    staffing: Math.max(0, finite(record.staffing)),
+    production: serializable(record.production || {}),
+    dispose: typeof record.dispose === 'function' ? record.dispose : null
+  });
+}
+
 export function kitStats(record = {}) {
   return freeze({
     contractVersion: KIT_CONTRACT_VERSION,

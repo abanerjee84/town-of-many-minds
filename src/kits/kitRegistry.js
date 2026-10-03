@@ -1,8 +1,8 @@
 import { createKitContext, KIT_CONTEXT_API_VERSION } from './kitContext.js';
-import { catalogueContract, kitStats } from './kitContracts.js';
+import { buildingContract, catalogueContract, kitStats, rendererContract } from './kitContracts.js';
 
 export const KIT_API_VERSION = 1;
-const HOOK_NAMES = Object.freeze(['create', 'reset', 'generate', 'updateHour', 'updateDay', 'stats', 'serialize', 'restore', 'dispose']);
+const HOOK_NAMES = Object.freeze(['create', 'reset', 'generate', 'updateHour', 'updateDay', 'stats', 'serialize', 'restore', 'render', 'dispose']);
 const ID_RE = /^[a-z][a-z0-9._-]*$/;
 const INTENT_RE = /^[A-Z][A-Z0-9_]*$/;
 const SCHEMA_RE = /^[0-9]+(?:\.[0-9]+){0,2}$/;
@@ -204,7 +204,8 @@ export class KitRegistry {
         planTypes: kit.planTypes,
         routes: kit.routes,
         catalogueIds: Object.freeze(kit.catalogue.map((row) => row.id)),
-        capabilities: Object.freeze(Object.keys(kit.capabilities).sort())
+        capabilities: Object.freeze(Object.keys(kit.capabilities).sort()),
+        hooks: Object.freeze(Object.keys(kit.hooks).sort())
       }))),
       intentRoutes: Object.freeze(Object.fromEntries([...this._intentOwners.entries()].sort((a, b) => a[0].localeCompare(b[0])))),
       intentPlanTypes: Object.freeze(Object.fromEntries(this.list()
@@ -265,6 +266,35 @@ export class KitRegistry {
       return [manifest.id, kitStats({ kitId: manifest.id, values })];
     })));
   }
+
+  /** Invoke a kit-local renderer using a stable building contract. Three.js
+   * objects may be returned in `scene`; serializable inspection metadata is
+   * kept separate and an explicit disposer is carried with the result. */
+  render(town, kitId, building, options = {}) {
+    const manifest = this.get(kitId);
+    if (!manifest) return { ok: false, reason: 'unknown_kit', kitId };
+    const fn = manifest.hooks.render;
+    if (!fn) return { ok: false, reason: 'renderer_unavailable', kitId };
+    if (!building?.id) return { ok: false, reason: 'building_contract_required', kitId };
+    try {
+      const context = this.contextFor(town, manifest.id);
+      const result = fn({
+        context,
+        town,
+        building: buildingContract({ ...building, kitId: manifest.id }),
+        options
+      });
+      return { ok: true, kitId, result: rendererContract({
+        kitId: manifest.id,
+        buildingId: building.id,
+        ...(result || {})
+      }) };
+    } catch (error) {
+      return { ok: false, reason: error?.message || String(error), kitId };
+    }
+  }
+
+  dispose(town) { return this.invoke('dispose', town); }
 
   /** Serializable lifecycle state owned by registered kits. Hooks are optional;
    * an absent hook is represented explicitly so optional kits remain observable. */

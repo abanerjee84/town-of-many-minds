@@ -226,6 +226,13 @@ export class Town {
     this.generate(seed);
   }
 
+  /** Give registered kits one disposal boundary before the scene is torn down. */
+  dispose() {
+    this.kits?.dispose?.(this);
+    this.clearTown();
+    this.scene?.remove?.(this.root);
+  }
+
   /** Stable monotonic identities; never derived from an array position. */
   nextEntityId(kind) {
     const value = this.entityIds[kind] || 1;
