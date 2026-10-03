@@ -1,7 +1,29 @@
-import { CONSTRUCTION_BLOCKS } from './constructionBlocks.js';
+import { CONSTRUCTION_BLOCKS, constructionBlock, constructionBlockDemand, constructionBlockQuote } from './constructionBlocks.js';
 import { publicSpaceStats } from './publicspace/publicKit.js';
+import { buildHouse } from './houses/houseKit.js';
 
 const rowsFor = (kit) => CONSTRUCTION_BLOCKS.filter((row) => row.kit === kit);
+const catalogueOperations = {
+  quote: ({ id, town, area }) => constructionBlockQuote(id, { town, area }),
+  demand: ({ id, town }) => constructionBlockDemand(id, town),
+  inspect: ({ id }) => constructionBlock(id)
+};
+
+function buildingRenderer({ building, options = {} }) {
+  const scene = buildHouse(options.params || {});
+  return {
+    scene,
+    inspection: {
+      kind: building.kind,
+      floors: scene.floors,
+      footprint: building.footprint || [],
+      modules: scene.modules.map((module) => module.kind)
+    },
+    capacity: scene.capacity,
+    staffing: Number(options.staffing) || 0,
+    production: options.production || {}
+  };
+}
 
 function simpleStats(systemName) {
   return ({ town }) => town[systemName]?.stats?.() || null;
@@ -27,14 +49,19 @@ export function registerBuiltinKits(registry) {
       routes: { DEVELOP_HOUSING: 'house', OPEN_SHOP: 'shop', BUILD_OFFICE: 'office', TIERUP: 'tierup', UPGRADE_BUILDING: 'upgrade', RENOVATE: 'renovate', WING: 'wing', RESTRUCTURE_BUILDING: 'restructure' },
       planTypes: ['house', 'shop', 'office', 'tierup', 'upgrade', 'renovate', 'wing', 'restructure'],
       capabilities: { catalogue: true, builder: true, quote: true, placement: true, build: true, upgrade: true, staffing: true },
-      hooks: { stats: ({ town }) => ({ buildings: (town.buildings || []).filter((b) => b.kind === 'house' || b.purpose === 'commercial').length }) }
+      operations: catalogueOperations,
+      hooks: {
+        render: buildingRenderer,
+        stats: ({ town }) => ({ buildings: (town.buildings || []).filter((b) => b.kind === 'house' || b.purpose === 'commercial').length })
+      }
     },
     {
       id: 'industry', version: '1.0.0', apiVersion: 1, domains: ['industry'],
       catalogueSchemaVersion: '1', catalogue: rowsFor('industry'), zones: ['industrial'],
       routes: { BUILD_FACTORY: 'factory' }, planTypes: ['factory'],
       capabilities: { production: true, staffing: true, catalogue: true, builder: true, quote: true, placement: true, build: true },
-      hooks: { stats: simpleStats('industry') }
+      operations: catalogueOperations,
+      hooks: { render: buildingRenderer, stats: simpleStats('industry') }
     },
     {
       id: 'civic', version: '1.0.0', apiVersion: 1, domains: ['civic'],
@@ -43,7 +70,8 @@ export function registerBuiltinKits(registry) {
       routes: { BUILD_CIVIC: 'civic', EXPAND_CLINIC: 'civic', BUILD_LANDMARK: 'landmark', EXPAND_LANDMARK: 'wing' },
       planTypes: ['civic', 'landmark', 'wing'],
       capabilities: { catalogue: true, builder: true, quote: true, placement: true, build: true, upgrade: true, serviceDemand: true },
-      hooks: { stats: ({ town }) => ({ facilities: [...(town.civicIndex?.values?.() || [])] }) }
+      operations: catalogueOperations,
+      hooks: { render: buildingRenderer, stats: ({ town }) => ({ facilities: [...(town.civicIndex?.values?.() || [])] }) }
     },
     {
       id: 'resources', version: '1.0.0', apiVersion: 1, domains: ['resource'],
@@ -51,6 +79,7 @@ export function registerBuiltinKits(registry) {
       catalogue: rowsFor('resources'),
       routes: { UPGRADE_RESOURCE: 'resource' }, planTypes: ['resource'],
       capabilities: { catalogue: true, builder: true, quote: true, placement: true, production: true, storage: true },
+      operations: catalogueOperations,
       hooks: { stats: simpleStats('resources') }
     },
     {
@@ -59,6 +88,7 @@ export function registerBuiltinKits(registry) {
       catalogue: rowsFor('utilities'),
       routes: { EXPAND_POWER: 'power', EXPAND_WATER: 'water', EXPAND_SEWAGE: 'sewage' }, planTypes: ['power', 'water', 'sewage'],
       capabilities: { catalogue: true, builder: true, quote: true, placement: true, networks: true },
+      operations: catalogueOperations,
       hooks: { stats: simpleStats('utilities') }
     },
     {
@@ -68,6 +98,7 @@ export function registerBuiltinKits(registry) {
       routes: { EXTEND_STREET: 'road', EXTEND_FOOTWAY: 'footway', UPGRADE_ROAD: 'roadup', BUILD_BRIDGE: 'bridge', ADD_PARKING: 'parking' },
       planTypes: ['road', 'footway', 'roadup', 'bridge', 'parking'],
       capabilities: { catalogue: true, builder: true, quote: true, placement: true, planning: true },
+      operations: catalogueOperations,
       hooks: { stats: ({ town }) => town.roadKit?.stats || null }
     },
     {
@@ -76,6 +107,7 @@ export function registerBuiltinKits(registry) {
       catalogue: rowsFor('publicspace'),
       routes: { PARK_LAND: 'park', PAVE_PLAZA: 'plaza' }, planTypes: ['park', 'plaza'],
       capabilities: { catalogue: true, builder: true, quote: true, placement: true },
+      operations: catalogueOperations,
       hooks: { stats: ({ town }) => publicSpaceStats(town) }
     },
     {
@@ -83,7 +115,8 @@ export function registerBuiltinKits(registry) {
       catalogueSchemaVersion: '1', zones: ['public', 'mobility'],
       catalogue: rowsFor('props'),
       routes: { PLANT_TREES: 'prop-tree', INSTALL_LAMP: 'prop-lamp' }, planTypes: ['prop-tree', 'prop-lamp'],
-      capabilities: { catalogue: true, builder: true, quote: true, placement: true }
+      capabilities: { catalogue: true, builder: true, quote: true, placement: true },
+      operations: catalogueOperations
     },
     {
       id: 'vehicles', version: '1.0.0', apiVersion: 1, domains: ['transport', 'emergency'],

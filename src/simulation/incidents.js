@@ -6,6 +6,7 @@
  */
 import * as THREE from 'three';
 import { events } from '../core/events.js';
+import rules from '../data/incidentRules.json' with { type: 'json' };
 
 const KIND_UNIT = { medical: 'Ambulance', fire: 'Fire', police: 'Police' };
 const KIND_TYPE = { medical: 'ambulance', fire: 'fire', police: 'police' };
@@ -18,10 +19,12 @@ const KIND_TYPE = { medical: 'ambulance', fire: 'fire', police: 'police' };
  */
 const TIMEOUTS = {
   unassigned: (grace) => grace,
-  orphaned: () => 60,
-  assigned: () => 300,
-  enroute: () => 900
+  orphaned: () => rules.timeouts.orphaned,
+  assigned: () => rules.timeouts.assigned,
+  enroute: () => rules.timeouts.enroute
 };
+
+const window = (kind, table) => rules[table]?.[kind] || [0, 0];
 
 function streetOf(town, cell) {
   const info = town.roadKit?.cellInfo?.get(`${cell[0]},${cell[1]}`);
@@ -61,7 +64,7 @@ export class IncidentBoard {
     this.group.name = 'incidents';
     this.list = [];
     this.seq = 1;
-    this.next = { medical: this.rng.float(30, 60), fire: this.rng.float(80, 150), police: this.rng.float(45, 90) };
+    this.next = Object.fromEntries(Object.keys(rules.spawnWindows).map((kind) => [kind, this.rng.float(...window(kind, 'spawnWindows'))]));
     this.flames = null;
     this.flameFor = null;
     this.blink = 0;
@@ -77,7 +80,7 @@ export class IncidentBoard {
     this.emergency = false;
     this.dropFlames();
     this.seq = 1;
-    this.next = { medical: this.rng.float(30, 60), fire: this.rng.float(80, 150), police: this.rng.float(45, 90) };
+    this.next = Object.fromEntries(Object.keys(rules.spawnWindows).map((kind) => [kind, this.rng.float(...window(kind, 'spawnWindows'))]));
   }
 
   resetRng(rng) {
@@ -104,8 +107,7 @@ export class IncidentBoard {
       if (kind === 'medical') this.raiseMedical();
       else if (kind === 'fire') this.raiseFire();
       else this.raisePolice();
-      this.next[kind] =
-        kind === 'medical' ? this.rng.float(50, 110) : kind === 'fire' ? this.rng.float(120, 240) : this.rng.float(60, 130);
+      this.next[kind] = this.rng.float(...window(kind, 'respawnWindows'));
     }
 
     this.blink += dt;
@@ -119,7 +121,7 @@ export class IncidentBoard {
     let dropped = false;
     // An emergency declaration doubles the grace period before an unanswered
     // call is dropped, and the declaration lifts itself once the town is calm.
-    const grace = this.emergency ? 200 : 100;
+    const grace = this.emergency ? rules.timeouts.emergencyGrace : rules.timeouts.defaultGrace;
     for (const i of this.list) {
       i.age += dt;
       const state = this.ageState(i);
@@ -297,7 +299,7 @@ export class IncidentBoard {
   onScene(agent, rng) {
     const inc = agent.incident;
     agent.incident = null;
-    if (!inc) return rng.float(6, 12);
+    if (!inc) return rng.float(...rules.sceneWindows.resolved.police);
     const live = this.list.includes(inc);
     if (live) this.list = this.list.filter((i) => i !== inc);
     if (this.flameFor === inc) this.dropFlames();
@@ -307,15 +309,17 @@ export class IncidentBoard {
     if (!live) {
       inc.cancelled = true;
       if (inc.takenBy === agent) inc.takenBy = null;
-      return inc.kind === 'fire' ? rng.float(6, 10) : rng.float(3, 6);
+      const range = inc.kind === 'fire' ? rules.sceneWindows.cancelled.fire : rules.sceneWindows.cancelled.other;
+      return rng.float(...range);
     }
     if (inc.sceneText) events.emit('log', { text: inc.sceneText });
-    return inc.kind === 'fire' ? rng.float(14, 24) : inc.kind === 'medical' ? rng.float(9, 16) : rng.float(6, 12);
+    const range = rules.sceneWindows.resolved[inc.kind] || rules.sceneWindows.resolved.police;
+    return rng.float(...range);
   }
 
   onClear(agent, rng) {
     const inc = agent.lastIncident;
-    if (inc?.clearText && !inc.cancelled && rng.chance(0.7)) events.emit('log', { kind: 'event', text: inc.clearText });
+    if (inc?.clearText && !inc.cancelled && rng.chance(rules.clearChance)) events.emit('log', { kind: 'event', text: inc.clearText });
     agent.lastIncident = null;
   }
 

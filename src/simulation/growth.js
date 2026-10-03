@@ -915,8 +915,11 @@ export function planFor(town, type, opts = {}) {
       const publicReserve = town.economy?.requiredPublicReserve?.(47000) || 0;
       const governmentAffordable = !town.economy || town.economy.treasury >= publicReserve + dynamicCost(town, 'civic', cells);
       const financingSector = facility || !governmentAffordable ? 'developer' : undefined;
+      const registryBill = facilityBlock
+        ? town.kits?.catalogueQuote?.(facilityBlock.id, town, { area: cells })
+        : null;
       const bill = facilityBlock
-        ? constructionBlockQuote(facilityBlock.id, { area: cells, town })
+        ? (registryBill ?? constructionBlockQuote(facilityBlock.id, { area: cells, town }))
         : null;
       const plan = {
         type: 'civic',
@@ -1461,7 +1464,12 @@ export function planFor(town, type, opts = {}) {
           : [[1, 1], [2, 1], [2, 2], [3, 2]];
       if (opts.size) bits.push(`${opts.size.cols}x${opts.size.rows}`);
       const area = sizes[0][0] * sizes[0][1];
-      const bill = block ? constructionBlockQuote(block.id, { area, town }) : null;
+      const registryBill = block
+        ? town.kits?.catalogueQuote?.(block.id, town, { area })
+        : null;
+      const bill = block
+        ? (registryBill ?? constructionBlockQuote(block.id, { area, town }))
+        : null;
       const plan = {
         type: 'archetype',
         blockId: block?.id || null,
@@ -3512,6 +3520,11 @@ export class GrowthSystem {
    * Returns { cell, cells } with `cell` as the block anchor, or null.
    */
   findFootprintSite(plan) {
+    // Site surveys are read-only. Candidate scoring uses seeded jitter to
+    // break ties, but querying a plan must not advance the live growth stream
+    // or make a later transit/factory site depend on an unrelated land probe.
+    const rngState = this.rng.getState();
+    try {
     const fp = plan.footprint;
     if (!fp) return null;
     const cols = Math.max(1, Math.round(fp.cols || 1));
@@ -3638,6 +3651,9 @@ export class GrowthSystem {
       }
     }
     return best;
+    } finally {
+      this.rng.setState(rngState);
+    }
   }
 
   /**

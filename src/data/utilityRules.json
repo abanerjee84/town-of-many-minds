@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "expansionCost": {
+    "power": { "priceKey": "utility.power", "fallback": 42000 },
+    "water": { "priceKey": "utility.water", "fallback": 26000 },
+    "sewage": { "priceKey": "utility.sewage", "fallback": 31000 }
+  },
+  "ratings": { "power": 2600, "water": 460, "sewage": 340 },
+  "edgePatterns": { "power": { "modulus": 3, "skip": 2 }, "water": { "modulus": 3, "skip": 1 }, "sewage": { "modulus": 3, "skip": 0 } },
+  "capacity": { "expansionRatio": 0.5 },
+  "demand": {
+    "power": { "commercialBase": 12, "commercialCapacity": 0.7, "civicBase": 22, "civicCapacity": 0.5, "otherBase": 4, "otherCapacity": 1.1 },
+    "water": { "perResident": 1.5, "perShop": 7 },
+    "sewage": { "perResident": 1.3, "perShop": 5 }
+  }
+}

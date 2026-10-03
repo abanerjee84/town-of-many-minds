@@ -3,6 +3,7 @@ import { buildingContract, catalogueContract, kitStats, rendererContract } from 
 
 export const KIT_API_VERSION = 1;
 const HOOK_NAMES = Object.freeze(['create', 'reset', 'generate', 'updateHour', 'updateDay', 'stats', 'serialize', 'restore', 'render', 'dispose']);
+const OPERATION_NAMES = Object.freeze(['quote', 'demand', 'place', 'build', 'upgrade', 'inspect']);
 const ID_RE = /^[a-z][a-z0-9._-]*$/;
 const INTENT_RE = /^[A-Z][A-Z0-9_]*$/;
 const SCHEMA_RE = /^[0-9]+(?:\.[0-9]+){0,2}$/;
@@ -11,6 +12,27 @@ function freezeData(value) {
   if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
   for (const child of Object.values(value)) freezeData(child);
   return Object.freeze(value);
+}
+
+// Kit state is a persistence boundary, so hooks must not be able to leak a
+// Three.js object, typed array, bigint, or circular reference into an
+// integrity save. Keep the conversion local to the registry so individual
+// kits can return ordinary JS state without importing a serializer.
+function serializableState(value, seen = new WeakSet()) {
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'bigint') return value.toString();
+  if (typeof value !== 'object') return typeof value === 'function' ? undefined : value;
+  if (seen.has(value)) return '[Circular]';
+  seen.add(value);
+  let result;
+  if (value instanceof Date) result = value.toISOString();
+  else if (ArrayBuffer.isView(value)) result = Array.from(value, (entry) => serializableState(entry, seen));
+  else if (Array.isArray(value)) result = value.map((entry) => serializableState(entry, seen));
+  else result = Object.fromEntries(Object.entries(value)
+    .filter(([, entry]) => typeof entry !== 'function' && typeof entry !== 'symbol')
+    .map(([key, entry]) => [key, serializableState(entry, seen)]));
+  seen.delete(value);
+  return result;
 }
 
 function catalogueRows(manifest) {
@@ -64,6 +86,13 @@ function normalizeManifest(raw) {
   for (const hook of raw.requiredHooks || []) {
     if (!HOOK_NAMES.includes(hook) || !hooks[hook]) throw new Error(`kit ${id} requires missing hook ${hook}`);
   }
+  const operations = {};
+  for (const operation of OPERATION_NAMES) {
+    if (raw.operations?.[operation] !== undefined && typeof raw.operations[operation] !== 'function') {
+      throw new Error(`kit ${id} operation ${operation} must be a function`);
+    }
+    if (raw.operations?.[operation]) operations[operation] = raw.operations[operation];
+  }
   const capabilities = { ...(raw.capabilities || {}) };
   if (raw.catalogue?.length) {
     const required = ['builder', 'quote', 'placement'];
@@ -88,7 +117,8 @@ function normalizeManifest(raw) {
     routes: freezeData(routes),
     capabilities: freezeData(capabilities),
     catalogue: Object.freeze(catalogueRows({ ...raw, id })),
-    hooks: Object.freeze(hooks)
+    hooks: Object.freeze(hooks),
+    operations: Object.freeze(operations)
   });
 }
 
@@ -214,7 +244,8 @@ export class KitRegistry {
         routes: kit.routes,
         catalogueIds: Object.freeze(kit.catalogue.map((row) => row.id)),
         capabilities: Object.freeze(Object.keys(kit.capabilities).sort()),
-        hooks: Object.freeze(Object.keys(kit.hooks).sort())
+        hooks: Object.freeze(Object.keys(kit.hooks).sort()),
+        operations: Object.freeze(Object.keys(kit.operations).sort())
       }))),
       intentRoutes: Object.freeze(Object.fromEntries([...this._intentOwners.entries()].sort((a, b) => a[0].localeCompare(b[0])))),
       intentPlanTypes: Object.freeze(Object.fromEntries(this.list()
@@ -276,6 +307,36 @@ export class KitRegistry {
     })));
   }
 
+  invokeCapability(name, kitId, town, payload = {}) {
+    if (!OPERATION_NAMES.includes(name)) return { ok: false, reason: 'unknown_capability', capability: name };
+    const manifest = this.get(kitId);
+    if (!manifest) return { ok: false, reason: 'unknown_kit', kitId };
+    const fn = manifest.operations[name];
+    if (!fn) return { ok: false, reason: 'capability_unavailable', capability: name, kitId };
+    try {
+      const context = this.contextFor(town, manifest.id);
+      return { ok: true, kitId, capability: name, value: fn({ context, town, ...payload }) };
+    } catch (error) {
+      return { ok: false, reason: error?.message || String(error), capability: name, kitId };
+    }
+  }
+
+  catalogueOperation(name, id, town, payload = {}) {
+    const kitId = this.ownerOfCatalogue(id);
+    if (!kitId) return { ok: false, reason: 'unknown_catalogue', id };
+    return this.invokeCapability(name, kitId, town, { id, ...payload });
+  }
+
+  catalogueQuote(id, town, payload = {}) {
+    const result = this.catalogueOperation('quote', id, town, payload);
+    return result.ok ? result.value : null;
+  }
+
+  catalogueDemand(id, town, payload = {}) {
+    const result = this.catalogueOperation('demand', id, town, payload);
+    return result.ok ? result.value : null;
+  }
+
   /** Invoke a kit-local renderer using a stable building contract. Three.js
    * objects may be returned in `scene`; serializable inspection metadata is
    * kept separate and an explicit disposer is carried with the result. */
@@ -312,7 +373,7 @@ export class KitRegistry {
     for (const manifest of this.order()) {
       const fn = manifest.hooks.serialize;
       const context = fn ? this.contextFor(town, manifest.id) : null;
-      kits[manifest.id] = fn ? fn({ context, town }) : null;
+      kits[manifest.id] = fn ? serializableState(fn({ context, town })) : null;
     }
     return Object.freeze({
       apiVersion: this.apiVersion,

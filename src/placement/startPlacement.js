@@ -681,7 +681,23 @@ export function createBuilding(town, x, y, zone = null, opts = {}) {
   // street sign; shop/civic already show it as signText).
   if (opts.name && params.name == null) params.name = opts.name;
 
-  const house = buildHouse(params);
+  // Building geometry is requested through the registry so a kit can replace
+  // its renderer without changing the simulation record. The direct builder is
+  // retained as a compatibility fallback for older/custom Town instances.
+  const rendererKit = z === ZONE.INDUSTRIAL ? 'industry' : z === ZONE.CIVIC ? 'civic' : 'houses';
+  const rendered = town.kits?.render?.(town, rendererKit, {
+    id: `preview-${x}-${y}`,
+    kind,
+    zone: z,
+    cell: [x, y],
+    footprint: isBig ? cells : [[x, y]],
+    floors: params.floors,
+    capacity: params.capacity || 0,
+    blockId: params.blockId || null
+  }, { params });
+  const house = rendered?.ok && rendered.result?.scene
+    ? rendered.result.scene
+    : buildHouse(params);
   let setback = parcel && parcel.buildable ? parcel.setback : 0.2;
   if (willGarage) setback = 1.45;
   const porchExt = params.porch ? 1.0 : 0.0;

@@ -1,7 +1,8 @@
 import { events } from '../core/events.js';
 import { needsAverage } from '../kits/citizens/citizenProfile.js';
+import rules from '../data/societyRules.json' with { type: 'json' };
 
-const NAMES = ['Northbank', 'Civic Quarter', 'East Fields', 'West End', 'South Market', 'Station Ward', 'Riverside', 'Foundry Ward', 'Garden Quarter'];
+const NAMES = rules.neighbourhoodNames;
 const clamp = (n, a = 0, b = 1) => Math.max(a, Math.min(b, n));
 
 /** Neighbourhood, safety, justice, mood, approval and election ledger. */
@@ -16,12 +17,12 @@ export class SocietySystem {
     this.neighbourhoods = new Map();
     this.crimes = [];
     this.cases = [];
-    this.laws = [{ id: 'public-order', label: 'Public order code', active: true, effect: 0.04 }];
+    this.laws = [{ ...rules.law }];
     this.elections = [];
     this.mayor = null;
-    this.approvalRate = 0.5;
-    this.lastDay = -1;
-    this.lastElectionDay = 0;
+    this.approvalRate = rules.defaults.approval;
+    this.lastDay = rules.defaults.lastDay;
+    this.lastElectionDay = rules.defaults.lastElectionDay;
     this.seq = 1;
     this.lastDemolition = null;
   }
@@ -37,7 +38,7 @@ export class SocietySystem {
     const rows = new Map();
     for (const b of this.town.buildings || []) {
       const id = this.neighbourhoodId(b.cell);
-      if (!rows.has(id)) rows.set(id, { id, name: NAMES[rows.size % NAMES.length], cells: [], population: 0, mood: 0.5, crime: 0, safety: 1, approval: 0.5 });
+      if (!rows.has(id)) rows.set(id, { id, name: NAMES[rows.size % NAMES.length], cells: [], population: 0, mood: rules.defaults.mood, crime: 0, safety: rules.defaults.safety, approval: rules.defaults.approval });
       rows.get(id).cells.push(b.cell);
     }
     for (const c of this.town.pedestrians?.citizens || []) {
@@ -51,7 +52,7 @@ export class SocietySystem {
   syncLaws() {
     const statutes = this.town.policy?.laws;
     if (!Array.isArray(statutes)) return;
-    const publicOrder = this.laws.find((l) => l.id === 'public-order') || { id: 'public-order', label: 'Public order code', active: true, effect: 0.04 };
+    const publicOrder = this.laws.find((l) => l.id === rules.law.id) || { ...rules.law };
     this.laws = [publicOrder, ...statutes.map((l) => ({
       id: l.id, label: l.label, active: true, effect: Number(l.effects?.moodTarget || 0)
     }))];
@@ -65,12 +66,14 @@ export class SocietySystem {
     const needs = needsAverage(c.p);
     const transport = this.town.transport?.stats?.() || {};
     const safety = row?.safety ?? 0.75;
-    const services = clamp(0.45 + (this.town.buildings.filter((b) => b.kind === 'civic').length / Math.max(1, (this.town.pedestrians?.citizens?.length || 1) / 10)) * 0.12);
-    const economy = clamp(0.45 + (c.p.employmentStatus === 'employed' ? 0.2 : -0.12) + (eco.unemployment < 12 ? 0.08 : -0.08));
-    const belonging = clamp(0.42 + (c.p.preferences?.community || 0) * 0.25 + (c.p.relationships?.friends?.length || 0) * 0.02);
-    const transit = transport.ready ? clamp(0.35 + transport.coverage * 0.5) : 0.35;
+    const m = rules.mood;
+    const services = clamp(m.servicesBase + (this.town.buildings.filter((b) => b.kind === 'civic').length / Math.max(1, (this.town.pedestrians?.citizens?.length || 1) / 10)) * m.servicesPerCivicPerTenResidents);
+    const economy = clamp(m.servicesBase + (c.p.employmentStatus === 'employed' ? m.employmentBonus : m.unemploymentPenalty) + (eco.unemployment < m.lowUnemploymentThreshold ? m.lowUnemploymentBonus : m.highUnemploymentPenalty));
+    const belonging = clamp(m.belongingBase + (c.p.preferences?.community || 0) * m.communityWeight + (c.p.relationships?.friends?.length || 0) * m.friendWeight);
+    const transit = transport.ready ? clamp(m.transitReadyBase + transport.coverage * m.transitCoverageWeight) : m.transitReadyBase;
     const weatherMood = this.town.weather?.currentModifiers?.().moodDelta || 0;
-    const overall = clamp(needs * 0.24 + safety * 0.22 + services * 0.16 + economy * 0.16 + belonging * 0.12 + transit * 0.1 + (c.p.optimism || 0) * 0.08 + weatherMood);
+    const w = m.overallWeights;
+    const overall = clamp(needs * w.needs + safety * w.safety + services * w.services + economy * w.economy + belonging * w.belonging + transit * w.transport + (c.p.optimism || 0) * w.optimism + weatherMood);
     return { overall, safety, services, economy, belonging, transport: transit, needs };
   }
 
@@ -78,11 +81,11 @@ export class SocietySystem {
     if (!this.neighbourhoods.size) this.rebuild();
     for (const row of this.neighbourhoods.values()) {
       const residents = (this.town.pedestrians?.citizens || []).filter((c) => this.rowForCitizen(c) === row);
-      row.mood = residents.length ? residents.reduce((s, c) => s + (c.p.mood?.overall ?? c.mood ?? 0.5), 0) / residents.length : 0.5;
-      const crime = this.crimes.filter((x) => x.neighbourhood === row.id && x.day >= (this.lastDay - 6)).length;
+      row.mood = residents.length ? residents.reduce((s, c) => s + (c.p.mood?.overall ?? c.mood ?? rules.defaults.mood), 0) / residents.length : rules.defaults.mood;
+      const crime = this.crimes.filter((x) => x.neighbourhood === row.id && x.day >= (this.lastDay - rules.retention.crimeLookbackDays)).length;
       row.crime = crime;
-      row.safety = clamp(0.86 - crime * 0.07 + (this.laws.some((l) => l.id === 'public-order' && l.active) ? 0.04 : 0));
-      row.approval = clamp(row.mood * 0.65 + row.safety * 0.35);
+      row.safety = clamp(rules.mood.rowSafetyBase - crime * rules.mood.crimeSafetyPenalty + (this.laws.some((l) => l.id === rules.law.id && l.active) ? rules.mood.publicOrderBonus : 0));
+      row.approval = clamp(row.mood * rules.mood.rowApprovalMood + row.safety * rules.mood.rowApprovalSafety);
     }
     for (const c of this.town.pedestrians?.citizens || []) {
       c.p.mood = this.moodProfile(c);
@@ -94,10 +97,11 @@ export class SocietySystem {
     const rows = [...this.neighbourhoods.values()].filter((r) => r.population > 0);
     if (!rows.length) return null;
     const eco = this.town.economy?.stats?.() || {};
-    const risk = clamp(0.12 + (eco.unemployment || 0) / 100 * 0.5 + (1 - this.town.pedestrians.averageMood()) * 0.35 - (this.town.traffic?.mobilityStats?.().congestion || 0) * 0.08);
-    if (!this.rng.chance(Math.min(0.55, risk * 0.16))) return null;
+    const c = rules.crime;
+    const risk = clamp(c.baseRisk + (eco.unemployment || 0) / 100 * c.unemploymentWeight + (1 - this.town.pedestrians.averageMood()) * c.lowMoodWeight - (this.town.traffic?.mobilityStats?.().congestion || 0) * c.congestionRelief);
+    if (!this.rng.chance(Math.min(c.spawnCap, risk * c.spawnScale))) return null;
     const row = rows[this.rng.int(0, rows.length - 1)];
-    const crime = { id: `crime-${this.seq++}`, day, kind: this.rng.chance(0.55) ? 'theft' : 'disturbance', severity: this.rng.chance(0.2) ? 2 : 1, neighbourhood: row.id, status: 'reported', resolvedDay: null, incident: null };
+    const crime = { id: `crime-${this.seq++}`, day, kind: this.rng.chance(c.theftChance) ? 'theft' : 'disturbance', severity: this.rng.chance(c.severeChance) ? 2 : 1, neighbourhood: row.id, status: 'reported', resolvedDay: null, incident: null };
     this.crimes.push(crime);
     const cell = row.cells[0] || this.town.randomRoadCell(this.rng);
     const road = cell ? this.town.nearestRoadCell(cell[0], cell[1]) : null;
@@ -119,21 +123,22 @@ export class SocietySystem {
         this.cases.push({ ...crime, court: court ? 'courthouse' : 'police caution' });
       }
     }
-    if (this.crimes.length > 80) this.crimes.splice(0, this.crimes.length - 80);
-    if (this.cases.length > 80) this.cases.splice(0, this.cases.length - 80);
+    if (this.crimes.length > rules.retention.crimeCases) this.crimes.splice(0, this.crimes.length - rules.retention.crimeCases);
+    if (this.cases.length > rules.retention.crimeCases) this.cases.splice(0, this.cases.length - rules.retention.crimeCases);
   }
 
   runElection(day) {
-    if (day - this.lastElectionDay < 30) return null;
+    const e = rules.election;
+    if (day - this.lastElectionDay < e.cadenceDays) return null;
     const adults = (this.town.pedestrians?.citizens || []).filter((c) => c.p.age >= 18);
     if (!adults.length) return null;
-    const pool = adults.slice().sort((a, b) => ((b.p.optimism + b.p.intelligence) - (a.p.optimism + a.p.intelligence))).slice(0, 3);
+    const pool = adults.slice().sort((a, b) => ((b.p.optimism + b.p.intelligence) - (a.p.optimism + a.p.intelligence))).slice(0, e.candidateCount);
     const votes = pool.map((c) => ({ candidate: c.p.name, votes: 0, platform: c.p.preferences?.community > 0.65 ? 'neighbourhoods' : c.p.traits?.conscientiousness > 0.6 ? 'order' : 'growth' }));
     for (const voter of adults) {
       let best = 0; let score = -Infinity;
       for (let i = 0; i < pool.length; i++) {
         const candidate = pool[i].p;
-        const s = candidate.intelligence * 0.25 + candidate.optimism * 0.25 + candidate.traits.conscientiousness * 0.2 + candidate.traits.sociability * 0.15 + this.rng.float(-0.12, 0.12);
+      const s = candidate.intelligence * e.intelligenceWeight + candidate.optimism * e.optimismWeight + candidate.traits.conscientiousness * e.conscientiousnessWeight + candidate.traits.sociability * e.sociabilityWeight + this.rng.float(-e.noise, e.noise);
         if (s > score) { score = s; best = i; }
       }
       votes[best].votes++;
@@ -143,7 +148,7 @@ export class SocietySystem {
     this.lastElectionDay = day;
     const result = { day, winner: this.mayor, votes, turnout: adults.length };
     this.elections.push(result);
-    if (this.elections.length > 12) this.elections.shift();
+    if (this.elections.length > rules.retention.elections) this.elections.shift();
     events.emit('log', { kind: 'event', text: `${this.mayor} wins the town election.` });
     return result;
   }
@@ -157,7 +162,7 @@ export class SocietySystem {
     this.resolveCases(clock.day);
     this.updateMoods();
     const all = [...this.neighbourhoods.values()];
-    this.approvalRate = all.length ? clamp(all.reduce((s, r) => s + r.approval, 0) / all.length) : 0.5;
+    this.approvalRate = all.length ? clamp(all.reduce((s, r) => s + r.approval, 0) / all.length) : rules.defaults.approval;
     this.runElection(clock.day);
   }
 
@@ -175,7 +180,7 @@ export class SocietySystem {
       crimes: { open: this.crimes.filter((c) => c.status !== 'resolved').length, reported: this.crimes.length, resolved: this.crimes.filter((c) => c.status === 'resolved').length, backlog: this.crimes.filter((c) => c.status === 'backlog').length },
       laws: this.laws.filter((l) => l.active).map((l) => l.id),
       elections: this.elections.slice(-4),
-      mood: this.town.pedestrians?.citizens?.length ? this.town.pedestrians.citizens.reduce((s, c) => s + c.mood, 0) / this.town.pedestrians.citizens.length : 0.5,
+      mood: this.town.pedestrians?.citizens?.length ? this.town.pedestrians.citizens.reduce((s, c) => s + c.mood, 0) / this.town.pedestrians.citizens.length : rules.defaults.mood,
       weather: this.town.weather?.stats?.() || null,
       lastDemolition: this.lastDemolition
     };

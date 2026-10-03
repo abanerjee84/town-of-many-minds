@@ -3,12 +3,11 @@ import { CELL_KIND } from '../../core/config.js';
 import { box, cyl, cone, buildMesh } from '../geometry.js';
 import { events } from '../../core/events.js';
 import { basePrice, quotePrice } from '../../simulation/priceChart.js';
+import rules from '../../data/utilityRules.json' with { type: 'json' };
 
-const EXPANSION_COST = Object.freeze({
-  power: basePrice('utility.power', 42000),
-  water: basePrice('utility.water', 26000),
-  sewage: basePrice('utility.sewage', 31000)
-});
+const EXPANSION_COST = Object.freeze(Object.fromEntries(
+  Object.entries(rules.expansionCost).map(([kind, row]) => [kind, basePrice(row.priceKey, row.fallback)])
+));
 
 export const UTILITY = {
   POWER: 'power',
@@ -34,32 +33,27 @@ const PLANT_LABEL = {
   sewage: 'Sewage plant'
 };
 
-const RATING = {
-  power: 2600,
-  water: 460,
-  sewage: 340
-};
+const RATING = Object.freeze({ ...rules.ratings });
 
 function inSet(kind, i) {
-  if (kind === UTILITY.POWER) return i % 3 !== 2;
-  if (kind === UTILITY.WATER) return i % 3 !== 1;
-  return i % 3 !== 0;
+  const pattern = rules.edgePatterns[kind] || { modulus: 3, skip: 0 };
+  return i % pattern.modulus !== pattern.skip;
 }
 
 function demandOf(town, kind) {
+  const demand = rules.demand[kind];
   if (kind === UTILITY.POWER) {
     let d = 0;
     for (const b of town.buildings) {
-      d += b.purpose === 'commercial' ? 12 + b.capacity * 0.7
-        : b.purpose === 'civic' ? 22 + b.capacity * 0.5
-        : 4 + b.capacity * 1.1;
+      d += b.purpose === 'commercial' ? demand.commercialBase + b.capacity * demand.commercialCapacity
+        : b.purpose === 'civic' ? demand.civicBase + b.capacity * demand.civicCapacity
+        : demand.otherBase + b.capacity * demand.otherCapacity;
     }
     return Math.round(d);
   }
   const pop = town.pedestrians?.citizens?.length || 0;
   const shops = town.buildings.filter((b) => b.purpose === 'commercial').length;
-  if (kind === UTILITY.WATER) return Math.round(pop * 1.5 + shops * 7);
-  return Math.round(pop * 1.3 + shops * 5);
+  return Math.round(pop * demand.perResident + shops * demand.perShop);
 }
 
 function nearestRoadNode(graph, gx, gy) {
@@ -144,7 +138,7 @@ export class UtilitySystem {
         plant: site ? { x: site[0], y: site[1] } : null,
         plantNode: site ? nearestRoadNode(graph, site[0], site[1]) : null,
         edgeIds: [],
-        capacity: RATING[kind] + (this.expansionLevels[kind] || 0) * Math.round(RATING[kind] * 0.5),
+        capacity: RATING[kind] + (this.expansionLevels[kind] || 0) * Math.round(RATING[kind] * rules.capacity.expansionRatio),
         expanded: this.expansionLevels[kind] || 0,
         demand: demandOf(town, kind),
         coverage: 0,
@@ -368,7 +362,7 @@ export class UtilitySystem {
     const n = this.networks[kind];
     if (!n) return false;
     this.expansionLevels[kind] = (this.expansionLevels[kind] || 0) + 1;
-    n.capacity += Math.round(RATING[kind] * 0.5);
+    n.capacity += Math.round(RATING[kind] * rules.capacity.expansionRatio);
     n.expanded = this.expansionLevels[kind];
     n.saturated = n.demand > n.capacity;
     // An expansion installs conductors along the reachable road network as

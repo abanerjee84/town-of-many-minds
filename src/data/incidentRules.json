@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "timeouts": { "defaultGrace": 100, "emergencyGrace": 200, "orphaned": 60, "assigned": 300, "enroute": 900 },
+  "spawnWindows": { "medical": [30, 60], "fire": [80, 150], "police": [45, 90] },
+  "respawnWindows": { "medical": [50, 110], "fire": [120, 240], "police": [60, 130] },
+  "sceneWindows": {
+    "cancelled": { "fire": [6, 10], "other": [3, 6] },
+    "resolved": { "fire": [14, 24], "medical": [9, 16], "police": [6, 12] }
+  },
+  "clearChance": 0.7
+}

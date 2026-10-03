@@ -24,7 +24,7 @@ Updated 2026-10-03 after the dynamic-market and build-duration audit.
 - [x] P0: extract industry catalog, growth gates, economy rules, lifecycle rules, construction blocks, and resource placement rules into versioned JSON adapters while preserving the public APIs.
 - [x] P0: civic facility catalogue, construction family bills, and module premiums now load from versioned JSON adapters; public APIs remain unchanged.
 - [x] P1 partial: resource placement, vehicle catalogue, fleet finance/service ratios, and public-transport growth thresholds now load from versioned JSON adapters.
-- [ ] P1 remaining: extract utility coefficients, society, and incidents into versioned JSON adapters.
+- [x] P1: utility coefficients, society/mood/election tuning, and incident timing/response windows now load from versioned `src/data/utilityRules.json`, `src/data/societyRules.json`, and `src/data/incidentRules.json` adapters.
 - [x] P1 architecture phase 1: introduced a versioned `KitRegistry` and manifest contract, registered 17 built-in domains, and preserved seeded behavior through adapters.
 - [x] P1 architecture phase 1: added narrow `KitContext`, immutable `BuildingContract`/`ProjectContract`/`DemandSignal`/`ResourceFlow`/`ServiceCoverage`/`VehicleAssignment`/`KitStats` schemas, and a transaction boundary.
 - [x] P1 architecture phase 1: derived all 59 Council intent routes from manifest ownership, exposed owner and plan-type compatibility metadata, and migrated transport/society/forest update hooks.
@@ -35,7 +35,11 @@ Updated 2026-10-03 after the dynamic-market and build-duration audit.
 - [x] P1 architecture phase 2: Town create/reset/generate/hour/day lifecycle calls are dispatched through registered hooks, and `Town.stats()` exposes contract-shaped `KitStats` rows.
 - [x] P1 architecture phase 2: added a registry renderer boundary and disposable `RendererContract`; fixture kits can replace their renderer while preserving capacity, staffing, production, and inspection metadata.
 - [x] P1 architecture phase 2: catalogue registration now requires declared builder, quote, placement, and plan-type capabilities; invalid registrations are retained in the compatibility report with actionable reasons.
-- [ ] P1 architecture remaining: migrate built-in specialist Three.js builders to registered renderer capabilities without changing seeded geometry or accounting.
+- [x] P1 architecture phase 2: housing, industry, and civic building creation now requests geometry through registered renderer hooks and falls back to the legacy builder for custom Town instances; capacity and accounting remain record-owned.
+- [x] P1 architecture phase 2: registry-owned catalogue quote, demand, and inspection operations now back the construction palette and growth planner, with compatibility fallbacks for older Town instances.
+- [x] P1 architecture phase 2: kit serialization sanitizes typed arrays, bigint values, functions, dates, and circular references before integrity snapshots are frozen.
+- [x] P1 architecture phase 2: footprint surveys restore the growth RNG after scoring, so a read-only land or site probe cannot change the next transit, civic, or factory placement.
+- [ ] P1 architecture remaining: migrate specialist road, resource, utility, public-space, prop, and vehicle scene builders to their own registered renderer hooks without changing seeded geometry or accounting.
 - [ ] P2: extract world/theme, citizen content, and research/learning rules after replay fixtures are in place.
 
 ## Next measurable work

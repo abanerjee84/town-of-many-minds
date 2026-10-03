@@ -17,6 +17,7 @@ assert.equal(registry.resolveIntent('IMAGINE_ARCHETYPE')?.kitId, 'construction')
 assert(report.intentRoutes.BUILD_FACTORY === 'industry');
 assert(report.intentPlanTypes.UPGRADE_RESOURCE === 'resource');
 assert(report.catalogueRoutes['industry.steelworks'] === 'industry');
+assert(report.kits.find((kit) => kit.id === 'civic')?.operations.includes('quote'));
 
 const town = {
   seed: 1337,
@@ -43,6 +44,9 @@ assert.equal(context.read.buildings()[0].id, 'b-1');
 assert.throws(() => context.read.buildings().push({ id: 'mutate' }), TypeError);
 assert.equal(context.read.grid.isRoad(2, 3), true);
 assert.equal(context.read.acquired(3, 3), true);
+assert.equal(registry.catalogueQuote('civic.college', town, { area: 6 })?.blockId, 'civic.college');
+assert.equal(registry.catalogueOperation('inspect', 'civic.college', town).value.facility, 'college');
+assert.equal(registry.catalogueDemand('civic.college', town), true);
 assert.equal(buildingContract({ id: 'b-1', kind: 'house', floors: 2 }).contractVersion, 1);
 assert.equal(projectContract({ projectId: 'p-1', kitId: 'houses', cost: 10 }).status, 'planned');
 assert.equal(demandSignal({ producer: 'fixture', kind: 'housing', value: 2 }).priority, 0);
@@ -71,7 +75,11 @@ fixture.register({
   intents: ['TEST_FIXTURE'], planTypes: ['fixture'], catalogue: [{ id: 'fixture.demo.block', footprint: [2, 1] }],
   capabilities: { builder: true, quote: true, placement: true, build: true }, hooks: {
     stats: () => ({ ok: true }),
-    serialize: () => ({ marker: 'fixture-state' }),
+    serialize: () => {
+      const state = { marker: 'fixture-state', bytes: new Uint8Array([1, 2]) };
+      state.circular = state;
+      return state;
+    },
     restore: ({ state }) => { restoredMarker = state?.marker || null; return { restored: restoredMarker }; },
     render: ({ building }) => ({ inspection: { capacity: building.capacity }, capacity: building.capacity, staffing: 2 })
   }
@@ -81,6 +89,8 @@ assert.equal(fixture.resolveIntent('TEST_FIXTURE').kitId, 'fixture.demo');
 assert.deepEqual(fixture.stats({}), { 'fixture.base': null, 'fixture.demo': { ok: true } });
 const fixtureState = fixture.serialize({ seed: 1337, buildings: [], pedestrians: {}, grid: {} });
 assert.equal(fixtureState.kits['fixture.demo'].marker, 'fixture-state');
+assert.deepEqual(fixtureState.kits['fixture.demo'].bytes, [1, 2]);
+assert.equal(fixtureState.kits['fixture.demo'].circular, '[Circular]');
 assert.equal(fixture.restore({ seed: 1337, buildings: [], pedestrians: {}, grid: {} }, fixtureState).ok, true);
 assert.equal(restoredMarker, 'fixture-state');
 const rendered = fixture.render({ seed: 1337, buildings: [], pedestrians: {}, grid: {} }, 'fixture.demo', {

@@ -33,7 +33,8 @@ const result = await page.evaluate(() => {
   const transitSite = transitPlan ? t.growth.findFootprintSite(transitPlan) : null;
   const transitBuilding = transitSite
     ? t.placeBuilding(transitSite.cell[0], transitSite.cell[1], 'civic', {
-        footprint: transitPlan.footprint, facility: 'transit', blockId: transitPlan.blockId
+        footprint: transitPlan.footprint, footprintCells: transitSite.cells,
+        facility: 'transit', blockId: transitPlan.blockId
       })
     : null;
   if (transitBuilding) {
@@ -48,7 +49,8 @@ const result = await page.evaluate(() => {
   const recyclingSite = recyclingPlan ? t.growth.findFootprintSite(recyclingPlan) : null;
   const recycling = recyclingSite
     ? t.placeBuilding(recyclingSite.cell[0], recyclingSite.cell[1], 'civic', {
-        footprint: recyclingPlan.footprint, facility: 'recycling', blockId: recyclingPlan.blockId
+        footprint: recyclingPlan.footprint, footprintCells: recyclingSite.cells,
+        facility: 'recycling', blockId: recyclingPlan.blockId
       })
     : null;
   if (recycling) t.expandBuilding(recycling, { floors: 1 });

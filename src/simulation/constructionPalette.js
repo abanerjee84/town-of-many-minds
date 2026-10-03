@@ -51,12 +51,14 @@ export function constructionPalette(town, opts = {}) {
     : {};
   const catalogue = town?.kits?.catalogue?.(filter) || listConstructionBlocks(filter);
   const rows = catalogue.map((block) => {
-    const quote = constructionBlockQuote(block.id, { town });
+    const registryQuote = town?.kits?.catalogueQuote?.(block.id, town);
+    const quote = registryQuote ?? constructionBlockQuote(block.id, { town });
     const mapZone = opts.zone || null;
     const zoneOk = !mapZone || ZONE_FOR_FAMILY[block.family] === mapZone;
     const footprint = hasFootprint(town, block, mapZone);
     const affordable = !!quote && quote.cost <= cash;
-    const demanded = constructionBlockDemand(block.id, town);
+    const registryDemand = town?.kits?.catalogueDemand?.(block.id, town);
+    const demanded = registryDemand ?? constructionBlockDemand(block.id, town);
     const reason = !zoneOk ? 'zone filter' : !quote ? 'quote capability unavailable' : !demanded ? 'demand gate not met' : !footprint ? 'no connected footprint' : !affordable ? 'below runway' : '';
     return { ...block, quote, available: !reason, reason };
   });

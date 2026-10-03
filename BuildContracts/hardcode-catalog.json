@@ -150,7 +150,7 @@
       "target": "src/data/resourceRules.json and src/data/utilityRules.json",
       "priority": "P1",
       "reason": "Production, capacity, staffing, and utility demand should be scenario-tunable and shared by audits.",
-      "status": "resource placement externalized; utility coefficients remain"
+      "status": "externalized in this pass"
     },
     {
       "id": "resource-placement",
@@ -236,7 +236,8 @@
       ],
       "target": "src/data/societyRules.json and src/data/incidentRules.json",
       "priority": "P1",
-      "reason": "Safety, mood, justice, elections, and service response are policy-facing simulation parameters."
+      "reason": "Safety, mood, justice, elections, and service response are policy-facing simulation parameters.",
+      "status": "externalized in this pass"
     },
     {
       "id": "road-planning",

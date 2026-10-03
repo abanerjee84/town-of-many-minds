@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "neighbourhoodNames": ["Northbank", "Civic Quarter", "East Fields", "West End", "South Market", "Station Ward", "Riverside", "Foundry Ward", "Garden Quarter"],
+  "defaults": { "approval": 0.5, "mood": 0.5, "safety": 1, "lastDay": -1, "lastElectionDay": 0 },
+  "law": { "id": "public-order", "label": "Public order code", "active": true, "effect": 0.04 },
+  "mood": {
+    "servicesBase": 0.45,
+    "servicesPerCivicPerTenResidents": 0.12,
+    "employmentBonus": 0.2,
+    "unemploymentPenalty": -0.12,
+    "lowUnemploymentThreshold": 12,
+    "lowUnemploymentBonus": 0.08,
+    "highUnemploymentPenalty": -0.08,
+    "belongingBase": 0.42,
+    "communityWeight": 0.25,
+    "friendWeight": 0.02,
+    "transitReadyBase": 0.35,
+    "transitCoverageWeight": 0.5,
+    "overallWeights": { "needs": 0.24, "safety": 0.22, "services": 0.16, "economy": 0.16, "belonging": 0.12, "transport": 0.1, "optimism": 0.08 },
+    "rowSafetyBase": 0.86,
+    "crimeSafetyPenalty": 0.07,
+    "publicOrderBonus": 0.04,
+    "rowApprovalMood": 0.65,
+    "rowApprovalSafety": 0.35
+  },
+  "crime": { "baseRisk": 0.12, "unemploymentWeight": 0.5, "lowMoodWeight": 0.35, "congestionRelief": 0.08, "spawnScale": 0.16, "spawnCap": 0.55, "theftChance": 0.55, "severeChance": 0.2 },
+  "election": { "cadenceDays": 30, "candidateCount": 3, "intelligenceWeight": 0.25, "optimismWeight": 0.25, "conscientiousnessWeight": 0.2, "sociabilityWeight": 0.15, "noise": 0.12, "communityThreshold": 0.65 },
+  "retention": { "crimeCases": 80, "elections": 12, "crimeLookbackDays": 6 }
+}
