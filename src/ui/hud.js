@@ -418,12 +418,16 @@ export class Hud {
               `<div class="c-row multi"><div class="c-line">` +
               `<span class="c-time">${esc(r.t)}</span>` +
               `<span class="c-actor ${actorCls}">${esc(r.actor)}</span>` +
-              `<span class="c-intent${r.source === 'rules' ? ' muted' : ''}">${esc(r.departmentLabel ? `${r.departmentLabel} · ${r.action}` : r.action)}</span>` +
+              // Keep the actionable intent on the first line. The department
+              // is supporting context and belongs below the explanation so a
+              // narrow council card never hides the thing the Council chose.
+              `<span class="c-intent${r.source === 'rules' ? ' muted' : ''}" title="Intent: ${esc(r.action)}">${esc(r.action)}</span>` +
               `<span class="c-status ${esc(r.status)}">${esc(r.status)}</span>` +
               (r.sub ? `<span class="c-sub" title="the council asked for this; the planner answered instead">↩ ${esc(r.sub)}</span>` : '') +
               (r.cost ? `<span class="c-cost">$${Math.round(r.cost).toLocaleString('en-US')}</span>` : '') +
               `</div>` +
               (why ? `<div class="c-why">${esc(why.length > 160 ? why.slice(0, 160) + '…' : why)}</div>` : '') +
+              (r.departmentLabel ? `<div class="c-department">${esc(r.departmentLabel)}</div>` : '') +
               `</div>`
             );
           })
