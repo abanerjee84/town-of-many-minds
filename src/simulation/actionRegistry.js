@@ -23,7 +23,7 @@ import { BUILTIN_KIT_REGISTRY } from '../kits/kitRuntime.js';
 // The action vocabulary is derived from the same manifests used by Town. This
 // keeps parser, prompt, report, and executor metadata on one ownership map.
 const KIT_ACTION_REGISTRY = BUILTIN_KIT_REGISTRY;
-const KIT_ROUTES = KIT_ACTION_REGISTRY.compatibilityReport().intentRoutes;
+const KIT_ROUTES = KIT_ACTION_REGISTRY.compatibilityReport().intentPlanTypes;
 
 export const ACTION_REGISTRY = Object.freeze(Object.fromEntries(
   Object.entries(KIT_ROUTES).map(([intent, planType]) => [intent, Object.freeze({

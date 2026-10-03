@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { KitRegistry } from '../src/kits/kitRegistry.js';
 import { registerBuiltinKits } from '../src/kits/builtinManifests.js';
-import { buildingContract, projectContract, demandSignal, kitStats } from '../src/kits/kitContracts.js';
+import { buildingContract, projectContract, demandSignal, resourceFlow, serviceCoverage, vehicleAssignment, kitStats } from '../src/kits/kitContracts.js';
 import { importIntegrityState } from '../src/simulation/integrityState.js';
 
 const registry = registerBuiltinKits(new KitRegistry());
@@ -9,11 +9,14 @@ const report = registry.compatibilityReport();
 assert.equal(report.valid, true);
 assert(report.kits.length >= 14, `expected built-in kits, got ${report.kits.length}`);
 assert.equal(registry.ownerOfCatalogue('civic.college'), 'civic');
+assert.equal(registry.ownerOfCatalogue('industry.steelworks'), 'industry');
+assert.equal(registry.catalogue({ kit: 'industry' }).length >= 10, true);
 assert.equal(registry.resolveIntent('BUILD_TRANSIT')?.kitId, 'transport');
 assert.equal(registry.resolveIntent('EXTEND_STREET')?.kitId, 'roads');
 assert.equal(registry.resolveIntent('IMAGINE_ARCHETYPE')?.kitId, 'construction');
 assert(report.intentRoutes.BUILD_FACTORY === 'industry');
-assert(report.catalogueRoutes['industry.steelworks'] === 'houses');
+assert(report.intentPlanTypes.UPGRADE_RESOURCE === 'resource');
+assert(report.catalogueRoutes['industry.steelworks'] === 'industry');
 
 const town = {
   seed: 1337,
@@ -43,6 +46,9 @@ assert.equal(context.read.acquired(3, 3), true);
 assert.equal(buildingContract({ id: 'b-1', kind: 'house', floors: 2 }).contractVersion, 1);
 assert.equal(projectContract({ projectId: 'p-1', kitId: 'houses', cost: 10 }).status, 'planned');
 assert.equal(demandSignal({ producer: 'fixture', kind: 'housing', value: 2 }).priority, 0);
+assert.equal(resourceFlow({ producer: 'fixture', resource: 'steel', amount: 3 }).contractVersion, 1);
+assert.equal(serviceCoverage({ producer: 'fixture', kind: 'clinic', capacity: 4 }).served, 0);
+assert.equal(vehicleAssignment({ producer: 'fixture', vehicleId: 'v-1', role: 'bus' }).role, 'bus');
 assert.equal(kitStats({ kitId: 'fixture', values: { ok: true } }).values.ok, true);
 let mutable = 1;
 const tx = context.services.transaction({
@@ -58,14 +64,23 @@ assert.equal(mutable, 1);
 
 const fixture = new KitRegistry();
 fixture.register({ id: 'fixture.base', version: '1.0.0', apiVersion: 1, catalogue: [{ id: 'fixture.base.block', footprint: [1, 1] }] });
+let restoredMarker = null;
 fixture.register({
   id: 'fixture.demo', version: '1.0.0', apiVersion: 1, dependencies: ['fixture.base'],
   intents: ['TEST_FIXTURE'], planTypes: ['fixture'], catalogue: [{ id: 'fixture.demo.block', footprint: [2, 1] }],
-  capabilities: { build: true }, hooks: { stats: () => ({ ok: true }) }
+  capabilities: { build: true }, hooks: {
+    stats: () => ({ ok: true }),
+    serialize: () => ({ marker: 'fixture-state' }),
+    restore: ({ state }) => { restoredMarker = state?.marker || null; return { restored: restoredMarker }; }
+  }
 });
 assert.deepEqual(fixture.validate().order, ['fixture.base', 'fixture.demo']);
 assert.equal(fixture.resolveIntent('TEST_FIXTURE').kitId, 'fixture.demo');
 assert.deepEqual(fixture.stats({}), { 'fixture.base': null, 'fixture.demo': { ok: true } });
+const fixtureState = fixture.serialize({ seed: 1337, buildings: [], pedestrians: {}, grid: {} });
+assert.equal(fixtureState.kits['fixture.demo'].marker, 'fixture-state');
+assert.equal(fixture.restore({ seed: 1337, buildings: [], pedestrians: {}, grid: {} }, fixtureState).ok, true);
+assert.equal(restoredMarker, 'fixture-state');
 assert.throws(() => fixture.register({ id: 'fixture.demo', version: '1.0.0', apiVersion: 1 }), /already registered/);
 
 const hookCalls = { transport: 0, society: 0, forest: 0 };

@@ -7,6 +7,7 @@
  */
 export const KIT_CONTEXT_API_VERSION = 1;
 import { runKitTransaction } from './kitTransaction.js';
+import { events } from '../core/events.js';
 
 const freeze = (value) => {
   if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
@@ -57,12 +58,30 @@ export function createKitContext(town, { kitId = 'unknown', rng = null } = {}) {
     acquired: (x, y) => !!town.perimeter?.isAcquired?.(x, y),
     acquiredBounds: () => town.perimeter?.acquiredBounds?.() || null,
     roadCells: () => freeze((town.grid?.roadCells?.() || []).map((cell) => [...cell])),
+    roadAccess: (x, y) => {
+      const grid = town.grid;
+      return !!grid && [[1, 0], [-1, 0], [0, 1], [0, -1]]
+        .some(([dx, dy]) => grid.isRoad?.(x + dx, y + dy));
+    },
+    resources: () => freeze(town.resources?.stats?.() || {}),
+    economy: () => freeze({
+      treasury: Number(town.economy?.treasury) || 0,
+      reserve: Number(town.economy?.reserve) || 0,
+      debt: Number(town.economy?.debt) || 0
+    }),
     grid: safeGrid(town)
   };
   const services = {
     rng: random,
     nextEntityId: (kind) => town.nextEntityId?.(kind),
-    emit: (event, payload) => town.events?.emit?.(event, payload),
+    emit: (event, payload) => (town.events || events).emit?.(event, payload),
+    treasury: {
+      balance: () => Number(town.economy?.treasury) || 0,
+      transfer: ({ to = 'contractor', amount = 0, category = 'kit_transfer', metadata = {} } = {}) => {
+        if (!town.economy?.transfer) return { ok: false, reason: 'economy_unavailable' };
+        return town.economy.transfer({ from: 'government', to, amount, category, metadata });
+      }
+    },
     transaction: (options, mutate) => runKitTransaction(options, mutate)
   };
   return freeze({ apiVersion: KIT_CONTEXT_API_VERSION, kitId, read, services });

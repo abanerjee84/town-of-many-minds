@@ -46,15 +46,18 @@ export function constructionPalette(town, opts = {}) {
   const eco = town?.economy?.stats?.() || {};
   const reserve = Number(opts.reserve ?? eco.reserve ?? 0);
   const cash = Math.max(0, Number(eco.treasury || 0) - reserve);
-  const filter = opts.family || opts.kit ? { family: opts.family, kit: opts.kit } : {};
-  const rows = listConstructionBlocks(filter).map((block) => {
+  const filter = opts.family || opts.kit || opts.facility
+    ? { family: opts.family, kit: opts.kit, facility: opts.facility }
+    : {};
+  const catalogue = town?.kits?.catalogue?.(filter) || listConstructionBlocks(filter);
+  const rows = catalogue.map((block) => {
     const quote = constructionBlockQuote(block.id, { town });
     const mapZone = opts.zone || null;
     const zoneOk = !mapZone || ZONE_FOR_FAMILY[block.family] === mapZone;
     const footprint = hasFootprint(town, block, mapZone);
-    const affordable = quote.cost <= cash;
+    const affordable = !!quote && quote.cost <= cash;
     const demanded = constructionBlockDemand(block.id, town);
-    const reason = !zoneOk ? 'zone filter' : !demanded ? 'demand gate not met' : !footprint ? 'no connected footprint' : !affordable ? 'below runway' : '';
+    const reason = !zoneOk ? 'zone filter' : !quote ? 'quote capability unavailable' : !demanded ? 'demand gate not met' : !footprint ? 'no connected footprint' : !affordable ? 'below runway' : '';
     return { ...block, quote, available: !reason, reason };
   });
   const groups = {};

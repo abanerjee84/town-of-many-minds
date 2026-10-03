@@ -26,11 +26,14 @@ Updated 2026-10-03 after the dynamic-market and build-duration audit.
 - [x] P1 partial: resource placement, vehicle catalogue, fleet finance/service ratios, and public-transport growth thresholds now load from versioned JSON adapters.
 - [ ] P1 remaining: extract utility coefficients, society, and incidents into versioned JSON adapters.
 - [x] P1 architecture phase 1: introduced a versioned `KitRegistry` and manifest contract, registered 17 built-in domains, and preserved seeded behavior through adapters.
-- [x] P1 architecture phase 1: added narrow `KitContext`, immutable `BuildingContract`/`ProjectContract`/`DemandSignal`/`KitStats` schemas, and a transaction boundary.
-- [x] P1 architecture phase 1: derived all 59 Council intent routes from manifest ownership, exposed compatibility metadata, and migrated transport/society/forest update hooks.
+- [x] P1 architecture phase 1: added narrow `KitContext`, immutable `BuildingContract`/`ProjectContract`/`DemandSignal`/`ResourceFlow`/`ServiceCoverage`/`VehicleAssignment`/`KitStats` schemas, and a transaction boundary.
+- [x] P1 architecture phase 1: derived all 59 Council intent routes from manifest ownership, exposed owner and plan-type compatibility metadata, and migrated transport/society/forest update hooks.
 - [x] P1 architecture phase 1: integrity exports now carry kit compatibility signatures and reject mismatched kit sets before applying a save overlay.
 - [x] P1 architecture phase 1: added a fixture-kit registry regression covering registration, dependency cycles, read-only snapshots, hook dispatch, and rollback.
-- [ ] P1 architecture remaining: route construction-palette entries, full kit serialization/restore hooks, and renderer replacement through registered capabilities.
+- [x] P1 architecture phase 2: construction palette entries are sourced from the registry catalogue with legacy fallback, including facility filters and explicit unavailable quote capability reasons.
+- [x] P1 architecture phase 2: kit serialization/restore hooks run in dependency order, carry API/context compatibility, and are included in integrity save overlays with a named restore failure.
+- [x] P1 architecture phase 2: Town create/reset/generate/hour/day lifecycle calls are dispatched through registered hooks, and `Town.stats()` exposes contract-shaped `KitStats` rows.
+- [ ] P1 architecture remaining: replace specialist Three.js builders with renderer capabilities that consume stable build contracts and return disposable scene metadata.
 - [ ] P2: extract world/theme, citizen content, and research/learning rules after replay fixtures are in place.
 
 ## Next measurable work

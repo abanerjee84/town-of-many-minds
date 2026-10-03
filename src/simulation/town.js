@@ -138,6 +138,8 @@ export class Town {
       this.resources.group,
       this.incidents.group
     );
+    this._kitClockDay = null;
+    this.kits?.invoke?.('create', this, { clock: null });
   }
 
   generate(seed) {
@@ -151,6 +153,7 @@ export class Town {
       : seed;
     this.seed = normalizedSeed;
     this.kits?.invalidateContext?.(this);
+    this._kitClockDay = null;
     this.entityIds = { building: 1, household: 1 };
     this.rng = makeRng(normalizedSeed);
     this.forest.reset(normalizedSeed);
@@ -191,6 +194,7 @@ export class Town {
     this.policy.recompute();
     this.research.townRef = this;
     this.research.reset();
+    this.kits?.invoke?.('reset', this, { seed: normalizedSeed });
     placeInitialTown(this, this.rng);
     this.perimeter.seed();
     // Seed after the serviced envelope is known so the dense woodland hugs the
@@ -199,6 +203,7 @@ export class Town {
     this.society.rebuild();
     this.transport.rebuild();
     this.economy.rebuild();
+    this.kits?.invoke?.('generate', this, { seed: normalizedSeed });
     // Now that every founding citizen's opening cash has been reconciled against
     // the outside world, give each household a savings account — so a household
     // has deposits to spend on day one and "can I afford this?" is a real
@@ -749,6 +754,10 @@ export class Town {
     this.weather?.update(clock);
     this.traffic.runShared(dt, clock);
     this.streetGlow?.update(dt);
+    if (clock?.day != null && clock.day !== this._kitClockDay) {
+      this._kitClockDay = clock.day;
+      this.kits?.invoke?.('updateDay', this, { dt, clock });
+    }
     // Registered kits own their declared update hooks. This is the first
     // runtime migration away from a hand-maintained Town update list; the
     // transport, society, and forest adapters above remain available through
@@ -1530,6 +1539,7 @@ export class Town {
       policy: this.policy ? this.policy.stats() : null,
       research: this.research ? this.research.stats() : null,
       kits: this.kits ? this.kits.compatibilityReport() : null,
+      kitStats: this.kits?.kitStats?.(this) || null,
       publicSpace: publicSpaceStats(this),
       pipeline: this.pipelineSummary || null,
       validation: this.validation || null,

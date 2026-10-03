@@ -515,7 +515,7 @@
     },
     {
       "id": "industry.factory",
-      "kit": "houses",
+      "kit": "industry",
       "family": "industry",
       "label": "Factory shell",
       "footprint": [
@@ -530,7 +530,7 @@
     },
     {
       "id": "industry.sawmill",
-      "kit": "houses",
+      "kit": "industry",
       "family": "industry",
       "label": "Sawmill",
       "footprint": [
@@ -545,7 +545,7 @@
     },
     {
       "id": "industry.steelworks",
-      "kit": "houses",
+      "kit": "industry",
       "family": "industry",
       "label": "Steelworks",
       "footprint": [
@@ -561,7 +561,7 @@
     },
     {
       "id": "industry.cement",
-      "kit": "houses",
+      "kit": "industry",
       "family": "industry",
       "label": "Cement works",
       "footprint": [
@@ -577,7 +577,7 @@
     },
     {
       "id": "industry.goods",
-      "kit": "houses",
+      "kit": "industry",
       "family": "industry",
       "label": "Goods plant",
       "footprint": [
@@ -592,7 +592,7 @@
     },
     {
       "id": "industry.textile",
-      "kit": "houses",
+      "kit": "industry",
       "family": "industry",
       "label": "Textile mill",
       "footprint": [
@@ -607,7 +607,7 @@
     },
     {
       "id": "industry.software",
-      "kit": "houses",
+      "kit": "industry",
       "family": "industry",
       "label": "Software house",
       "footprint": [
@@ -622,7 +622,7 @@
     },
     {
       "id": "industry.furniture",
-      "kit": "houses",
+      "kit": "industry",
       "family": "industry",
       "label": "Furniture workshop",
       "footprint": [
@@ -637,7 +637,7 @@
     },
     {
       "id": "industry.quarry",
-      "kit": "houses",
+      "kit": "industry",
       "family": "industry",
       "label": "Aggregate quarry",
       "footprint": [
@@ -653,7 +653,7 @@
     },
     {
       "id": "industry.food-processing",
-      "kit": "houses",
+      "kit": "industry",
       "family": "industry",
       "label": "Food processor",
       "footprint": [
@@ -669,7 +669,7 @@
     },
     {
       "id": "industry.glassworks",
-      "kit": "houses",
+      "kit": "industry",
       "family": "industry",
       "label": "Glassworks",
       "footprint": [
@@ -685,7 +685,7 @@
     },
     {
       "id": "industry.chemicals",
-      "kit": "houses",
+      "kit": "industry",
       "family": "industry",
       "label": "Chemical plant",
       "footprint": [
@@ -701,7 +701,7 @@
     },
     {
       "id": "industry.paper",
-      "kit": "houses",
+      "kit": "industry",
       "family": "industry",
       "label": "Paper mill",
       "footprint": [
@@ -717,7 +717,7 @@
     },
     {
       "id": "industry.electronics",
-      "kit": "houses",
+      "kit": "industry",
       "family": "industry",
       "label": "Electronics plant",
       "footprint": [
@@ -733,7 +733,7 @@
     },
     {
       "id": "industry.machinery",
-      "kit": "houses",
+      "kit": "industry",
       "family": "industry",
       "label": "Machinery works",
       "footprint": [
@@ -749,7 +749,7 @@
     },
     {
       "id": "industry.refinery",
-      "kit": "houses",
+      "kit": "industry",
       "family": "industry",
       "label": "Fuel refinery",
       "footprint": [
@@ -765,7 +765,7 @@
     },
     {
       "id": "industry.polymers",
-      "kit": "houses",
+      "kit": "industry",
       "family": "industry",
       "label": "Polymer plant",
       "footprint": [
@@ -781,7 +781,7 @@
     },
     {
       "id": "industry.pharma",
-      "kit": "houses",
+      "kit": "industry",
       "family": "industry",
       "label": "Pharmaceutical plant",
       "footprint": [
@@ -797,7 +797,7 @@
     },
     {
       "id": "industry.batteries",
-      "kit": "houses",
+      "kit": "industry",
       "family": "industry",
       "label": "Battery plant",
       "footprint": [
@@ -813,7 +813,7 @@
     },
     {
       "id": "industry.estate",
-      "kit": "resources",
+      "kit": "industry",
       "family": "industry",
       "label": "Industrial estate",
       "footprint": [

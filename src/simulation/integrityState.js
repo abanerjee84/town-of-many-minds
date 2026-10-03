@@ -137,6 +137,7 @@ export function exportIntegrityState(town) {
     // P-F08: driver/vehicle/trip/fuel survive the integrity overlay too.
     transport: exportTransport(town),
     kitCompatibility: town.kits?.compatibilityReport?.() || null,
+    kitState: town.kits?.serialize?.(town) || null,
     ok: true
   };
 }
@@ -205,5 +206,9 @@ export function importIntegrityState(town, saved = {}) {
   }
   town.rebuildStatic?.();
   importTransport(town, saved.transport);
+  if (saved.kitState && town.kits?.restore) {
+    const restored = town.kits.restore(town, saved.kitState);
+    if (!restored.ok) return { ok: false, reason: 'kit_restore_failed', detail: restored };
+  }
   return { ok: true, town };
 }

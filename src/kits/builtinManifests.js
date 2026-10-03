@@ -16,11 +16,13 @@ export function registerBuiltinKits(registry) {
   const manifests = [
     {
       id: 'construction', version: '1.0.0', apiVersion: 1, domains: ['construction'],
+      catalogueSchemaVersion: '1',
       routes: { IMAGINE_ARCHETYPE: 'archetype' }, planTypes: ['archetype'],
       capabilities: { catalogue: true, quote: true, demand: true }
     },
     {
       id: 'houses', version: '1.0.0', apiVersion: 1, domains: ['housing', 'commerce'],
+      catalogueSchemaVersion: '1', zones: ['residential', 'commercial'],
       catalogue: rowsFor('houses'),
       routes: { DEVELOP_HOUSING: 'house', OPEN_SHOP: 'shop', BUILD_OFFICE: 'office', TIERUP: 'tierup', UPGRADE_BUILDING: 'upgrade', RENOVATE: 'renovate', WING: 'wing', RESTRUCTURE_BUILDING: 'restructure' },
       planTypes: ['house', 'shop', 'office', 'tierup', 'upgrade', 'renovate', 'wing', 'restructure'],
@@ -29,12 +31,14 @@ export function registerBuiltinKits(registry) {
     },
     {
       id: 'industry', version: '1.0.0', apiVersion: 1, domains: ['industry'],
+      catalogueSchemaVersion: '1', catalogue: rowsFor('industry'), zones: ['industrial'],
       routes: { BUILD_FACTORY: 'factory' }, planTypes: ['factory'],
       capabilities: { production: true, staffing: true, catalogue: true },
       hooks: { stats: simpleStats('industry') }
     },
     {
       id: 'civic', version: '1.0.0', apiVersion: 1, domains: ['civic'],
+      catalogueSchemaVersion: '1', zones: ['civic'],
       catalogue: rowsFor('civic'),
       routes: { BUILD_CIVIC: 'civic', EXPAND_CLINIC: 'civic', BUILD_LANDMARK: 'landmark', EXPAND_LANDMARK: 'wing' },
       planTypes: ['civic', 'landmark', 'wing'],
@@ -43,6 +47,7 @@ export function registerBuiltinKits(registry) {
     },
     {
       id: 'resources', version: '1.0.0', apiVersion: 1, domains: ['resource'],
+      catalogueSchemaVersion: '1', zones: ['resource'],
       catalogue: rowsFor('resources'),
       routes: { UPGRADE_RESOURCE: 'resource' }, planTypes: ['resource'],
       capabilities: { catalogue: true, production: true, storage: true, placement: true },
@@ -50,6 +55,7 @@ export function registerBuiltinKits(registry) {
     },
     {
       id: 'utilities', version: '1.0.0', apiVersion: 1, domains: ['utility'],
+      catalogueSchemaVersion: '1', zones: ['utility'],
       catalogue: rowsFor('utilities'),
       routes: { EXPAND_POWER: 'power', EXPAND_WATER: 'water', EXPAND_SEWAGE: 'sewage' }, planTypes: ['power', 'water', 'sewage'],
       capabilities: { catalogue: true, networks: true, placement: true },
@@ -57,6 +63,7 @@ export function registerBuiltinKits(registry) {
     },
     {
       id: 'roads', version: '1.0.0', apiVersion: 1, domains: ['mobility'],
+      catalogueSchemaVersion: '1', zones: ['mobility'],
       catalogue: rowsFor('roads'),
       routes: { EXTEND_STREET: 'road', EXTEND_FOOTWAY: 'footway', UPGRADE_ROAD: 'roadup', BUILD_BRIDGE: 'bridge', ADD_PARKING: 'parking' },
       planTypes: ['road', 'footway', 'roadup', 'bridge', 'parking'],
@@ -65,6 +72,7 @@ export function registerBuiltinKits(registry) {
     },
     {
       id: 'publicspace', version: '1.0.0', apiVersion: 1, domains: ['public'],
+      catalogueSchemaVersion: '1', zones: ['public'],
       catalogue: rowsFor('publicspace'),
       routes: { PARK_LAND: 'park', PAVE_PLAZA: 'plaza' }, planTypes: ['park', 'plaza'],
       capabilities: { catalogue: true, placement: true },
@@ -72,18 +80,21 @@ export function registerBuiltinKits(registry) {
     },
     {
       id: 'props', version: '1.0.0', apiVersion: 1, domains: ['public', 'mobility'],
+      catalogueSchemaVersion: '1', zones: ['public', 'mobility'],
       catalogue: rowsFor('props'),
       routes: { PLANT_TREES: 'prop-tree', INSTALL_LAMP: 'prop-lamp' }, planTypes: ['prop-tree', 'prop-lamp'],
       capabilities: { catalogue: true, placement: true }
     },
     {
       id: 'vehicles', version: '1.0.0', apiVersion: 1, domains: ['transport', 'emergency'],
+      catalogueSchemaVersion: '1',
       routes: { DISPATCH_UNITS: null }, planTypes: [],
       capabilities: { catalogue: true, fleet: true, procurement: true },
       hooks: { stats: simpleStats('vehicles') }
     },
     {
       id: 'transport', version: '1.0.0', apiVersion: 1, domains: ['transport'],
+      catalogueSchemaVersion: '1',
       routes: { BUILD_TRANSIT: 'civic' }, planTypes: ['civic'],
       capabilities: { routing: true, stops: true, fleet: true },
       hooks: {
@@ -93,12 +104,14 @@ export function registerBuiltinKits(registry) {
     },
     {
       id: 'perimeter', version: '1.0.0', apiVersion: 1, domains: ['land'],
+      catalogueSchemaVersion: '1',
       routes: { ACQUIRE_LAND: 'land', ANNEX_EDGE: 'annex' }, planTypes: ['land', 'annex'],
       capabilities: { survey: true, acquisition: true },
       hooks: { stats: simpleStats('perimeter') }
     },
     {
       id: 'governance', version: '1.0.0', apiVersion: 1, domains: ['council', 'policy', 'economy'],
+      catalogueSchemaVersion: '1',
       routes: Object.fromEntries([
         'RAISE_TAX', 'CUT_TAX', 'KEEP_TAX', 'HIRE_WORKERS', 'ATTRACT_SETTLERS', 'FUND_INNOVATION',
         'TRADE_BUY', 'TRADE_SELL', 'SET_ASIDE_RESERVE', 'BOND_ISSUE', 'SUBSIDY', 'SLASH_SPENDING',
@@ -111,12 +124,14 @@ export function registerBuiltinKits(registry) {
     },
     {
       id: 'planning', version: '1.0.0', apiVersion: 1, domains: ['planning', 'zoning'],
+      catalogueSchemaVersion: '1',
       routes: { BUILD_DISTRICT: 'district', REZONE: 'rezone', UPZONE: 'upzone', CLEAR_LOT: 'clear' },
       planTypes: ['district', 'rezone', 'upzone', 'clear'],
       capabilities: { zoning: true, districtPlanning: true, clearance: true }
     },
     {
       id: 'society', version: '1.0.0', apiVersion: 1, domains: ['society'],
+      catalogueSchemaVersion: '1',
       intents: [], planTypes: [], capabilities: { mood: true, crime: true, justice: true, elections: true },
       hooks: {
         updateHour: ({ town, dt, clock }) => town.society?.update(dt, clock),
@@ -125,11 +140,13 @@ export function registerBuiltinKits(registry) {
     },
     {
       id: 'forest', version: '1.0.0', apiVersion: 1, domains: ['ecology'],
+      catalogueSchemaVersion: '1',
       intents: [], planTypes: [], capabilities: { planting: true, deforestation: true, naturalFall: true },
       hooks: { updateHour: ({ town, clock }) => town.forest?.update(clock), stats: simpleStats('forest') }
     },
     {
       id: 'citizens', version: '1.0.0', apiVersion: 1, domains: ['citizens'],
+      catalogueSchemaVersion: '1',
       intents: [], planTypes: [], capabilities: { lifecycle: true, staffing: true, mood: true },
       hooks: { stats: simpleStats('lifecycle') }
     }

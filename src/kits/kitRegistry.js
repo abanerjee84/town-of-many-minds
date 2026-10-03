@@ -1,10 +1,11 @@
 import { createKitContext, KIT_CONTEXT_API_VERSION } from './kitContext.js';
-import { catalogueContract } from './kitContracts.js';
+import { catalogueContract, kitStats } from './kitContracts.js';
 
 export const KIT_API_VERSION = 1;
 const HOOK_NAMES = Object.freeze(['create', 'reset', 'generate', 'updateHour', 'updateDay', 'stats', 'serialize', 'restore', 'dispose']);
 const ID_RE = /^[a-z][a-z0-9._-]*$/;
 const INTENT_RE = /^[A-Z][A-Z0-9_]*$/;
+const SCHEMA_RE = /^[0-9]+(?:\.[0-9]+){0,2}$/;
 
 function freezeData(value) {
   if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
@@ -17,7 +18,15 @@ function catalogueRows(manifest) {
     if (!row || typeof row !== 'object' || typeof row.id !== 'string' || !ID_RE.test(row.id)) {
       throw new Error(`kit ${manifest.id} has an invalid catalogue row ID`);
     }
-    return catalogueContract({ ...row }, manifest.id);
+    const normalized = catalogueContract({
+      ...row,
+      kit: row.kit || manifest.id,
+      schemaVersion: row.schemaVersion || manifest.catalogueSchemaVersion
+    }, manifest.id);
+    if (normalized.kit !== manifest.id) {
+      throw new Error(`kit ${manifest.id} catalogue row ${normalized.id} is owned by ${normalized.kit}`);
+    }
+    return normalized;
   });
 }
 
@@ -26,9 +35,12 @@ function normalizeManifest(raw) {
   const id = String(raw.id || '');
   if (!ID_RE.test(id)) throw new Error(`invalid kit ID: ${id || '<empty>'}`);
   if (!raw.version || typeof raw.version !== 'string') throw new Error(`kit ${id} needs a semantic version`);
+  if (!SCHEMA_RE.test(String(raw.version))) throw new Error(`kit ${id} has an invalid semantic version ${raw.version}`);
   if (raw.apiVersion !== KIT_API_VERSION) throw new Error(`kit ${id} requires unsupported API version ${raw.apiVersion}`);
   const contextApiVersion = raw.contextApiVersion ?? KIT_CONTEXT_API_VERSION;
   if (contextApiVersion !== KIT_CONTEXT_API_VERSION) throw new Error(`kit ${id} requires unsupported context API version ${contextApiVersion}`);
+  const catalogueSchemaVersion = String(raw.catalogueSchemaVersion ?? raw.schemaVersion ?? '1');
+  if (!SCHEMA_RE.test(catalogueSchemaVersion)) throw new Error(`kit ${id} has an invalid catalogue schema version ${catalogueSchemaVersion}`);
   const declaredRoutes = raw.routes || Object.fromEntries((raw.intents || []).map((intent) => [intent, raw.planTypes?.[0] || null]));
   const intents = [...new Set([...Object.keys(declaredRoutes), ...(raw.intents || [])])];
   for (const intent of intents) if (typeof intent !== 'string' || !INTENT_RE.test(intent)) throw new Error(`kit ${id} has invalid intent ${intent}`);
@@ -48,13 +60,21 @@ function normalizeManifest(raw) {
     }
     if (raw.hooks?.[hook]) hooks[hook] = raw.hooks[hook];
   }
+  for (const hook of raw.requiredHooks || []) {
+    if (!HOOK_NAMES.includes(hook) || !hooks[hook]) throw new Error(`kit ${id} requires missing hook ${hook}`);
+  }
   return Object.freeze({
     id,
     version: raw.version,
     apiVersion: KIT_API_VERSION,
     contextApiVersion,
+    catalogueSchemaVersion,
     dependencies: Object.freeze(dependencies),
     domains: Object.freeze([...(raw.domains || [])]),
+    zones: Object.freeze([...(raw.zones || [])]),
+    facilities: Object.freeze([...(raw.facilities || [])]),
+    resources: Object.freeze([...(raw.resources || [])]),
+    vehicleRoles: Object.freeze([...(raw.vehicleRoles || [])]),
     intents: Object.freeze(intents),
     planTypes: Object.freeze([...(raw.planTypes || [])]),
     routes: freezeData(routes),
@@ -72,25 +92,35 @@ export class KitRegistry {
     this._catalogueOwners = new Map();
     this._compatibility = null;
     this._contexts = new WeakMap();
+    this._failedRegistrations = [];
   }
 
   register(rawManifest) {
-    const manifest = normalizeManifest(rawManifest);
-    if (manifest.apiVersion !== this.apiVersion) throw new Error(`kit ${manifest.id} API version mismatch`);
-    if (this._kits.has(manifest.id)) throw new Error(`kit ${manifest.id} is already registered`);
-    for (const intent of manifest.intents) {
-      const owner = this._intentOwners.get(intent);
-      if (owner) throw new Error(`intent ${intent} is claimed by both ${owner} and ${manifest.id}`);
+    let manifest = null;
+    try {
+      manifest = normalizeManifest(rawManifest);
+      if (manifest.apiVersion !== this.apiVersion) throw new Error(`kit ${manifest.id} API version mismatch`);
+      if (this._kits.has(manifest.id)) throw new Error(`kit ${manifest.id} is already registered`);
+      for (const intent of manifest.intents) {
+        const owner = this._intentOwners.get(intent);
+        if (owner) throw new Error(`intent ${intent} is claimed by both ${owner} and ${manifest.id}`);
+      }
+      for (const row of manifest.catalogue) {
+        const owner = this._catalogueOwners.get(row.id);
+        if (owner) throw new Error(`catalogue ID ${row.id} is claimed by both ${owner} and ${manifest.id}`);
+      }
+      this._kits.set(manifest.id, manifest);
+      for (const intent of manifest.intents) this._intentOwners.set(intent, manifest.id);
+      for (const row of manifest.catalogue) this._catalogueOwners.set(row.id, manifest.id);
+      this._compatibility = null;
+      return manifest;
+    } catch (error) {
+      this._failedRegistrations.push(Object.freeze({
+        id: rawManifest?.id ? String(rawManifest.id) : null,
+        reason: error?.message || String(error)
+      }));
+      throw error;
     }
-    for (const row of manifest.catalogue) {
-      const owner = this._catalogueOwners.get(row.id);
-      if (owner) throw new Error(`catalogue ID ${row.id} is claimed by both ${owner} and ${manifest.id}`);
-    }
-    this._kits.set(manifest.id, manifest);
-    for (const intent of manifest.intents) this._intentOwners.set(intent, manifest.id);
-    for (const row of manifest.catalogue) this._catalogueOwners.set(row.id, manifest.id);
-    this._compatibility = null;
-    return manifest;
   }
 
   unregister(id) {
@@ -108,6 +138,14 @@ export class KitRegistry {
   get(id) { return this._kits.get(String(id)) || null; }
   has(id) { return this._kits.has(String(id)); }
   list() { return [...this._kits.values()].sort((a, b) => a.id.localeCompare(b.id)); }
+
+  catalogue(filter = {}) {
+    return this.list().flatMap((kit) => kit.catalogue)
+      .filter((row) => (!filter.kit || row.kit === filter.kit)
+        && (!filter.family || row.family === filter.family)
+        && (!filter.facility || row.facility === filter.facility)
+        && (!filter.id || row.id === filter.id));
+  }
 
   resolveIntent(intent) {
     const kitId = this._intentOwners.get(String(intent));
@@ -155,8 +193,13 @@ export class KitRegistry {
         version: kit.version,
         apiVersion: kit.apiVersion,
         contextApiVersion: kit.contextApiVersion,
+        catalogueSchemaVersion: kit.catalogueSchemaVersion,
         dependencies: kit.dependencies,
         domains: kit.domains,
+        zones: kit.zones,
+        facilities: kit.facilities,
+        resources: kit.resources,
+        vehicleRoles: kit.vehicleRoles,
         intents: kit.intents,
         planTypes: kit.planTypes,
         routes: kit.routes,
@@ -164,7 +207,11 @@ export class KitRegistry {
         capabilities: Object.freeze(Object.keys(kit.capabilities).sort())
       }))),
       intentRoutes: Object.freeze(Object.fromEntries([...this._intentOwners.entries()].sort((a, b) => a[0].localeCompare(b[0])))),
-      catalogueRoutes: Object.freeze(Object.fromEntries([...this._catalogueOwners.entries()].sort((a, b) => a[0].localeCompare(b[0]))))
+      intentPlanTypes: Object.freeze(Object.fromEntries(this.list()
+        .flatMap((kit) => kit.intents.map((intent) => [intent, kit.routes[intent] ?? null]))
+        .sort((a, b) => a[0].localeCompare(b[0])))),
+      catalogueRoutes: Object.freeze(Object.fromEntries([...this._catalogueOwners.entries()].sort((a, b) => a[0].localeCompare(b[0])))),
+      failedRegistrations: Object.freeze(this._failedRegistrations.slice())
     });
     return this._compatibility;
   }
@@ -208,5 +255,62 @@ export class KitRegistry {
       const context = this.contextFor(town, manifest.id);
       return [manifest.id, fn({ context, town })];
     })));
+  }
+
+  kitStats(town) {
+    return Object.freeze(Object.fromEntries(this.order().map((manifest) => {
+      const fn = manifest.hooks.stats;
+      const context = fn ? this.contextFor(town, manifest.id) : null;
+      const values = fn ? fn({ context, town }) : null;
+      return [manifest.id, kitStats({ kitId: manifest.id, values })];
+    })));
+  }
+
+  /** Serializable lifecycle state owned by registered kits. Hooks are optional;
+   * an absent hook is represented explicitly so optional kits remain observable. */
+  serialize(town) {
+    const kits = {};
+    for (const manifest of this.order()) {
+      const fn = manifest.hooks.serialize;
+      const context = fn ? this.contextFor(town, manifest.id) : null;
+      kits[manifest.id] = fn ? fn({ context, town }) : null;
+    }
+    return Object.freeze({
+      apiVersion: this.apiVersion,
+      contextApiVersion: KIT_CONTEXT_API_VERSION,
+      compatibility: this.compatibilityReport(),
+      kits: freezeData(kits)
+    });
+  }
+
+  /** Restore kit-owned state only after the saved registry signature matches. */
+  restore(town, saved = {}) {
+    if (!saved || saved.apiVersion !== this.apiVersion || saved.contextApiVersion !== KIT_CONTEXT_API_VERSION) {
+      return { ok: false, reason: 'kit_api_mismatch' };
+    }
+    const savedSignature = (saved.compatibility?.kits || [])
+      .map((kit) => `${kit.id}@${kit.version}:api${kit.apiVersion}:ctx${kit.contextApiVersion}`)
+      .sort();
+    const currentSignature = this.compatibilityReport().kits
+      .map((kit) => `${kit.id}@${kit.version}:api${kit.apiVersion}:ctx${kit.contextApiVersion}`)
+      .sort();
+    if (JSON.stringify(savedSignature) !== JSON.stringify(currentSignature)) {
+      return { ok: false, reason: 'kit_compatibility_mismatch', saved: savedSignature, current: currentSignature };
+    }
+    const results = [];
+    try {
+      for (const manifest of this.order()) {
+        const fn = manifest.hooks.restore;
+        if (!fn) {
+          results.push({ kitId: manifest.id, available: false });
+          continue;
+        }
+        const context = this.contextFor(town, manifest.id);
+        results.push({ kitId: manifest.id, available: true, result: fn({ context, town, state: saved.kits?.[manifest.id] ?? null }) });
+      }
+      return { ok: true, results };
+    } catch (error) {
+      return { ok: false, reason: error?.message || String(error), results };
+    }
   }
 }

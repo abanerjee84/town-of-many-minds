@@ -9,6 +9,15 @@ const freeze = (value) => {
 
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 
+function serializable(value) {
+  if (ArrayBuffer.isView(value)) return Array.from(value, serializable);
+  if (Array.isArray(value)) return value.map(serializable);
+  if (!value || typeof value !== 'object') return value;
+  const out = {};
+  for (const [key, child] of Object.entries(value)) out[key] = serializable(child);
+  return out;
+}
+
 export function catalogueContract(row, owner = 'unknown') {
   if (!row || typeof row !== 'object' || typeof row.id !== 'string' || !row.id.trim()) {
     throw new Error(`kit ${owner} has an invalid catalogue row ID`);
@@ -70,11 +79,55 @@ export function demandSignal(record = {}) {
   });
 }
 
+export function resourceFlow(record = {}) {
+  if (!record.resource) throw new Error('resource flow requires a resource');
+  return freeze({
+    contractVersion: KIT_CONTRACT_VERSION,
+    producer: record.producer || 'unknown',
+    resource: String(record.resource),
+    amount: finite(record.amount),
+    unit: String(record.unit || 'units'),
+    from: record.from || null,
+    to: record.to || null,
+    entityId: record.entityId || null,
+    rollbackToken: record.rollbackToken || null
+  });
+}
+
+export function serviceCoverage(record = {}) {
+  if (!record.kind) throw new Error('service coverage requires a kind');
+  return freeze({
+    contractVersion: KIT_CONTRACT_VERSION,
+    producer: record.producer || 'unknown',
+    entityId: record.entityId || null,
+    kind: String(record.kind),
+    capacity: Math.max(0, finite(record.capacity)),
+    served: Math.max(0, finite(record.served)),
+    radius: Math.max(0, finite(record.radius)),
+    coverage: Math.max(0, Math.min(1, finite(record.coverage))),
+    rollbackToken: record.rollbackToken || null
+  });
+}
+
+export function vehicleAssignment(record = {}) {
+  if (!record.vehicleId) throw new Error('vehicle assignment requires a vehicleId');
+  return freeze({
+    contractVersion: KIT_CONTRACT_VERSION,
+    producer: record.producer || 'unknown',
+    vehicleId: String(record.vehicleId),
+    role: record.role || null,
+    routeId: record.routeId || null,
+    stationId: record.stationId || null,
+    ownerType: record.ownerType || null,
+    rollbackToken: record.rollbackToken || null
+  });
+}
+
 export function kitStats(record = {}) {
   return freeze({
     contractVersion: KIT_CONTRACT_VERSION,
     kitId: String(record.kitId || 'unknown'),
     generatedAt: record.generatedAt ?? null,
-    values: { ...(record.values || {}) }
+    values: serializable(record.values || {})
   });
 }
