@@ -462,6 +462,7 @@ export function buildHouse(params = {}) {
       addModule('blast-furnace', [w * 0.28, topY + 1.2, d * 0.13]);
       P('ore-yard', box(Math.min(2.2, w * 0.45), 0.18, Math.min(1.25, d * 0.3), 0x806d58, -w * 0.18, topY + 0.12, d * 0.26));
       addModule('ore-yard', [-w * 0.18, topY + 0.12, d * 0.26]);
+      addModule('stack', [-w * 0.3, topY + 1.3, -d * 0.2]);
     } else if (factoryType === 'cement') {
       for (const x of [-w * 0.28, 0, w * 0.28]) {
         P('silo', cyl(0.42, 0.52, 2.15, 0xd3d0c7, x, topY + 1.08, -d * 0.2, 12));
@@ -472,6 +473,8 @@ export function buildHouse(params = {}) {
       addModule('kiln-tower', [w * 0.25, topY + 1.4, d * 0.16]);
       P('conveyor', box(w * 0.48, 0.14, 0.22, 0x5d646b, 0, topY + 0.68, 0));
       addModule('conveyor', [0, topY + 0.68, 0]);
+      addModule('silo-bank', [0, topY + 1.08, -d * 0.2], { count: 3 });
+      addModule('stack', [-w * 0.3, topY + 1.3, -d * 0.2]);
     } else if (factoryType === 'sawmill' || factoryType === 'furniture') {
       const bayCount = factoryType === 'sawmill' ? 3 : 2;
       for (let i = 0; i < bayCount; i++) {
@@ -485,9 +488,11 @@ export function buildHouse(params = {}) {
         P('sawtooth-roof', boxEuler(Math.min(1.35, w * 0.2), 0.12, Math.min(d * 0.55, 2.1), roofColor, [x, topY + 0.38, -d * 0.02], [0.22, 0, 0]));
       }
       addModule('sawtooth-roof', [0, topY + 0.38, 0], { bays: bayCount });
+      if (factoryType === 'sawmill') addModule('dust-collector', [-w * 0.3, topY + 1.3, -d * 0.2]);
       if (factoryType === 'furniture') {
         P('showroom', box(Math.min(1.8, w * 0.35), 0.12, 0.22, 0x6b7580, w * 0.2, topY + 0.62, d / 2 + 0.08));
         addModule('showroom', [w * 0.2, topY + 0.62, d / 2 + 0.08]);
+        addModule('loading-dock', [0, 0.18, d / 2 + 0.28]);
       }
     } else if (factoryType === 'textile') {
       for (let i = 0; i < 4; i++) {
@@ -497,6 +502,7 @@ export function buildHouse(params = {}) {
       }
       addModule('sawtooth-roof', [0, topY + 0.42, 0], { bays: 4 });
       addModule('dye-tanks', [0, topY + 0.34, d * 0.24], { count: 4 });
+      addModule('delivery-bay', [0, 0.18, d / 2 + 0.28]);
     } else if (factoryType === 'software') {
       P('office-tower', box(Math.min(2.1, w * 0.36), Math.min(2.2, Math.max(1.3, floors * 0.22)), Math.min(1.6, d * 0.3), 0x5b7185, -w * 0.22, topY + 0.75, -d * 0.12));
       P('data-hall', box(Math.min(2.2, w * 0.4), 0.34, Math.min(1.7, d * 0.32), 0x3b4d5d, w * 0.18, topY + 0.2, d * 0.16));
@@ -504,6 +510,90 @@ export function buildHouse(params = {}) {
       addModule('office-tower', [-w * 0.22, topY + 0.75, -d * 0.12], { floors });
       addModule('data-hall', [w * 0.18, topY + 0.2, d * 0.16]);
       addModule('cooling-units', [w * 0.3, topY + 0.48, -d * 0.2]);
+    } else if (factoryType === 'quarry') {
+      P('crusher', box(Math.min(1.7, w * 0.3), 1.4, Math.min(1.5, d * 0.3), 0x777b77, -w * 0.18, topY + 0.7, 0));
+      P('aggregate-piles', sphere(Math.min(1.2, w * 0.22), 0x8d897d, w * 0.2, topY + 0.65, d * 0.2, 10, 6));
+      P('conveyor', box(Math.min(2.4, w * 0.52), 0.16, 0.28, 0x5d646b, 0, topY + 0.92, d * 0.16));
+      addModule('crusher', [-w * 0.18, topY + 0.7, 0]);
+      addModule('aggregate-piles', [w * 0.2, topY + 0.65, d * 0.2]);
+      addModule('conveyor', [0, topY + 0.92, d * 0.16]);
+      addModule('service-yard', [0, 0.14, -d / 2 - 0.28]);
+    } else if (factoryType === 'food-processing') {
+      P('processing-hall', box(Math.min(2.5, w * 0.52), 1.5, Math.min(1.8, d * 0.42), 0xd7c29b, -w * 0.08, topY + 0.75, 0));
+      P('cold-store', box(Math.min(1.25, w * 0.25), 1.75, Math.min(1.35, d * 0.3), 0xa9c8d1, w * 0.28, topY + 0.88, -d * 0.12));
+      P('silo-bank', cyl(0.42, 0.5, 1.75, 0xe3e0d4, -w * 0.28, topY + 0.88, d * 0.2, 12));
+      addModule('processing-hall', [-w * 0.08, topY + 0.75, 0]);
+      addModule('cold-store', [w * 0.28, topY + 0.88, -d * 0.12]);
+      addModule('silo-bank', [-w * 0.28, topY + 0.88, d * 0.2]);
+      addModule('loading-dock', [0, 0.18, d / 2 + 0.28]);
+    } else if (factoryType === 'glassworks') {
+      P('furnace', box(Math.min(1.3, w * 0.24), 2.1, Math.min(1.3, d * 0.24), 0x7c858e, -w * 0.2, topY + 1.05, d * 0.08));
+      P('annealing-hall', box(Math.min(2.25, w * 0.48), 0.9, Math.min(1.55, d * 0.35), 0x86a9ad, w * 0.12, topY + 0.45, -d * 0.16));
+      for (const x of [-w * 0.3, w * 0.3]) P('glass-tank', cyl(0.32, 0.4, 0.65, 0x75b6c1, x, topY + 0.35, d * 0.25, 10));
+      addModule('furnace', [-w * 0.2, topY + 1.05, d * 0.08]);
+      addModule('annealing-hall', [w * 0.12, topY + 0.45, -d * 0.16]);
+      addModule('glass-tanks', [0, topY + 0.35, d * 0.25], { count: 2 });
+      addModule('stack', [-w * 0.3, topY + 1.3, -d * 0.2]);
+    } else if (factoryType === 'chemicals' || factoryType === 'polymers') {
+      for (const x of [-w * 0.3, 0, w * 0.3]) {
+        P('reactor-tanks', cyl(0.38, 0.5, 1.85, factoryType === 'polymers' ? 0x668c8e : 0xb0a18c, x, topY + 0.92, -d * 0.08, 12));
+      }
+      P('pipe-rack', box(Math.min(2.7, w * 0.6), 0.34, 0.3, 0x6e7479, 0, topY + 1.9, d * 0.18));
+      P(factoryType === 'polymers' ? 'pellet-silos' : 'storage-tanks', cyl(0.48, 0.58, 1.3, 0xb3b8bd, w * 0.25, topY + 0.65, d * 0.25, 12));
+      P('flare-stack', cyl(0.12, 0.18, 2.8, 0x9c6a45, -w * 0.28, topY + 1.4, -d * 0.25, 10));
+      addModule('reactor-tanks', [0, topY + 0.92, -d * 0.08], { count: 3 });
+      addModule('pipe-rack', [0, topY + 1.9, d * 0.18]);
+      addModule(factoryType === 'polymers' ? 'pellet-silos' : 'storage-tanks', [w * 0.25, topY + 0.65, d * 0.25]);
+      addModule('flare-stack', [-w * 0.28, topY + 1.4, -d * 0.25]);
+    } else if (factoryType === 'paper') {
+      P('pulp-tanks', cyl(0.46, 0.58, 1.45, 0x9ca6a0, -w * 0.3, topY + 0.72, d * 0.22, 12));
+      P('paper-machine', box(Math.min(2.7, w * 0.58), 1.15, Math.min(1.5, d * 0.32), 0xc5c5bd, 0, topY + 0.58, -d * 0.08));
+      P('roll-store', cyl(0.42, 0.44, 0.8, 0xe2d5b7, w * 0.27, topY + 0.4, d * 0.22, 12));
+      addModule('pulp-tanks', [-w * 0.3, topY + 0.72, d * 0.22]);
+      addModule('paper-machine', [0, topY + 0.58, -d * 0.08]);
+      addModule('roll-store', [w * 0.27, topY + 0.4, d * 0.22]);
+      addModule('loading-dock', [0, 0.18, d / 2 + 0.28]);
+    } else if (factoryType === 'electronics') {
+      P('clean-room', box(Math.min(2.4, w * 0.5), 1.45, Math.min(1.55, d * 0.34), 0xb8d1d3, -w * 0.08, topY + 0.72, 0));
+      P('fab-hall', box(Math.min(1.5, w * 0.3), 2.2, Math.min(1.2, d * 0.26), 0x536b7d, w * 0.28, topY + 1.1, -d * 0.08));
+      P('cooling-units', box(0.7, 0.4, 0.7, 0x9aa1a9, -w * 0.28, topY + 0.45, d * 0.24));
+      addModule('clean-room', [-w * 0.08, topY + 0.72, 0]);
+      addModule('fab-hall', [w * 0.28, topY + 1.1, -d * 0.08]);
+      addModule('cooling-units', [-w * 0.28, topY + 0.45, d * 0.24]);
+      addModule('loading-dock', [0, 0.18, d / 2 + 0.28]);
+    } else if (factoryType === 'machinery') {
+      P('machine-hall', box(Math.min(2.7, w * 0.58), 1.7, Math.min(1.8, d * 0.42), 0x717d86, -w * 0.08, topY + 0.85, 0));
+      P('gantry-crane', box(Math.min(2.4, w * 0.5), 0.18, 0.24, 0xc38d46, 0, topY + 2.0, -d * 0.08));
+      P('parts-yard', box(Math.min(1.2, w * 0.24), 0.22, Math.min(1.25, d * 0.28), 0x806d58, w * 0.3, topY + 0.14, d * 0.23));
+      addModule('machine-hall', [-w * 0.08, topY + 0.85, 0]);
+      addModule('gantry-crane', [0, topY + 2.0, -d * 0.08]);
+      addModule('parts-yard', [w * 0.3, topY + 0.14, d * 0.23]);
+      addModule('loading-dock', [0, 0.18, d / 2 + 0.28]);
+    } else if (factoryType === 'refinery') {
+      P('distillation-tower', cyl(0.48, 0.62, 3.4, 0xb6bdc2, -w * 0.18, topY + 1.7, 0, 12));
+      P('storage-tanks', cyl(0.58, 0.7, 1.35, 0x9aa1a9, w * 0.25, topY + 0.68, d * 0.2, 12));
+      P('pipe-rack', box(Math.min(2.6, w * 0.56), 0.28, 0.3, 0x6e7479, 0, topY + 1.35, d * 0.22));
+      P('flare-stack', cyl(0.12, 0.18, 3.0, 0x9c6a45, w * 0.3, topY + 1.5, -d * 0.22, 10));
+      addModule('distillation-tower', [-w * 0.18, topY + 1.7, 0]);
+      addModule('storage-tanks', [w * 0.25, topY + 0.68, d * 0.2]);
+      addModule('pipe-rack', [0, topY + 1.35, d * 0.22]);
+      addModule('flare-stack', [w * 0.3, topY + 1.5, -d * 0.22]);
+    } else if (factoryType === 'pharma') {
+      P('clean-room', box(Math.min(2.3, w * 0.5), 1.65, Math.min(1.55, d * 0.34), 0xd2d9d8, -w * 0.1, topY + 0.82, 0));
+      P('sterile-tower', box(Math.min(1.25, w * 0.25), 2.7, Math.min(1.15, d * 0.24), 0x8daab7, w * 0.28, topY + 1.35, -d * 0.08));
+      P('batch-tanks', cyl(0.34, 0.42, 0.9, 0x93b5b6, -w * 0.28, topY + 0.45, d * 0.24, 12));
+      addModule('clean-room', [-w * 0.1, topY + 0.82, 0]);
+      addModule('sterile-tower', [w * 0.28, topY + 1.35, -d * 0.08]);
+      addModule('batch-tanks', [-w * 0.28, topY + 0.45, d * 0.24]);
+      addModule('loading-dock', [0, 0.18, d / 2 + 0.28]);
+    } else if (factoryType === 'batteries') {
+      P('cell-hall', box(Math.min(2.4, w * 0.52), 1.55, Math.min(1.55, d * 0.34), 0x657b87, -w * 0.08, topY + 0.78, 0));
+      P('electrolyte-tanks', cyl(0.42, 0.5, 1.25, 0x7d9d9f, w * 0.27, topY + 0.62, d * 0.2, 12));
+      for (const z of [-d * 0.18, d * 0.18]) P('battery-racks', box(Math.min(1.2, w * 0.25), 0.9, 0.22, 0x9ca8ad, -w * 0.28, topY + 0.45, z));
+      addModule('cell-hall', [-w * 0.08, topY + 0.78, 0]);
+      addModule('electrolyte-tanks', [w * 0.27, topY + 0.62, d * 0.2]);
+      addModule('battery-racks', [-w * 0.28, topY + 0.45, 0], { count: 2 });
+      addModule('loading-dock', [0, 0.18, d / 2 + 0.28]);
     } else {
       P('assembly-hall', box(Math.min(2.4, w * 0.48), 0.22, Math.min(1.3, d * 0.28), 0x65727d, 0, topY + 0.25, 0));
       P('loading-dock', box(Math.min(2.5, w * 0.52), 0.14, 0.5, 0x4b555e, 0, 0.18, d / 2 + 0.28));

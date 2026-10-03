@@ -1,6 +1,6 @@
 # TOMM construction and progression specification
 
-Updated 2026-10-03 after the tourism, hotel/resort, and hospitality-economy audit.
+Updated 2026-10-03 after the industrial-chain and hospitality-economy audit.
 
 ## Scope
 
@@ -92,6 +92,7 @@ This specification defines the shared construction vocabulary and the progressio
 28c. Factory progression shall be campus-aware. A single vacant industrial frontage cell shall not make `BUILD_FACTORY` feasible when the selected factory footprint cannot fit on acquired serviced land. In that case `ACQUIRE_LAND` shall be ranked first, survey a contiguous frontier patch large enough for the factory footprint and access, and only then expose `BUILD_FACTORY`; a blocked model request must report `ACQUIRE_LAND first` rather than silently retrying a partial lot.
 28d. A multi-cell construction plan shall preserve both its road-facing parcel anchor and its exact reserved footprint cells through project start and completion. The executor shall place the building on the reserved cells, derive its centre and ownership from that block, and roll back only on a real site mutation. A factory campus that starts successfully shall therefore complete without shifting one or more cells beyond its reservation.
 28e. Factory production shall be proportional to the built works' capacity. The rated output, input draw, working-capital requirement, full-capacity revenue, and current output readout shall use one capacity scale derived from footprint × floors. Staffing, utilities, payroll arrears, and input availability may reduce that rated output through a utilization factor, but a larger or taller factory may not produce at the same flat per-building rate as a smaller works. A staffed but under-recruited works may operate at a bounded 25% minimum labour utilization; an empty or payroll-arrears works remains stopped.
+28f. Industry shall support a connected second-ring commodity chain in the shared contractor/business inventory and economy ledger. The catalogue shall include aggregate quarrying, packaged-food processing, glass, chemicals, paper, electronics, machinery, refined fuel, polymers, medicine, and batteries, plus imported crude oil as a raw input. Each output shall have a stable price, capacity, initial stock, production rate, label, trade row, and factory type; each factory shall have an explicit input recipe, capacity-scaled production, staffing/utilities/capital gates, and a distinct construction block and HouseKit module silhouette. Food processors shall draw from the ResourceSystem food reserve, and refineries shall top up crude through the existing priced import path. Raw inputs shall not be selected as phantom local factory deficits or exported as production surplus.
 
 ### Progression matrix
 
@@ -104,7 +105,7 @@ This specification defines the shared construction vocabulary and the progressio
 | Waste | landfill exceeds the measured diversion gate | build recycling capacity, then expand it when waste load rises |
 | Resources | production, storage, or imports cannot cover demand | upgrade the strained site, add a site, or use the bounded import fallback |
 | Utilities and battery | generation, storage, distribution, or network coverage is the binding constraint | expand the named network or add battery storage only when storage is the limiting term |
-| Industry | construction or consumer material stock is short, or the town reaches 80 residents with no works campus | bootstrap the missing local producer, then consume peer inventory and export only surplus; each works uses a strict 3×3+ campus and a type-specific design |
+| Industry | construction or consumer material stock is short, or the town reaches 80 residents with no works campus | bootstrap the missing local producer, then consume peer inventory and export only surplus; each works uses a strict 3×3+ campus and a type-specific design; advanced factories consume named upstream commodities |
 | Tourism and hospitality | room capacity exists only when demand is positive; a resort also needs an established, highly occupied hotel base | build a typed hotel first, then a larger resort when demand and occupancy justify its land, materials, staffing, and operating cost |
 | Roads and mobility | measured congestion, trip benefit, disconnected components, parking pressure, or transit demand | extend/widen the measured corridor, bridge a reconnecting gap, or add demand-gated furniture |
 
@@ -190,6 +191,7 @@ The next social-system acceptance pass shall add a player-facing stop-placement 
 - The founding population remains stable at 30 until earned capacity changes the target; long probes must report the actual stage and progression milestones rather than treating a raw building count as a metropolis guarantee. A vertical/campus metropolis is recognized from population plus occupied `footprint × floors` area. The current seed-42 forced 2,200-day run reaches metropolis on day 1,823 and the first ten-storey building on day 2,153 with positive treasury and clean audits; the normal-council matrix remains the provider-comparison acceptance gate.
 - A browser probe shall verify the 1,000 population default and live Settings cap, and a factory probe shall verify 3×3+ footprints, type-specific modules, multi-storey floors, and strict no-1×1 fallback.
 - The factory-site regression shall verify a seed with abundant open land commissions a 3×3+ campus without reporting “no free plot and no room to expand,” and that a later expansion candidate is accepted only when its projected street unlocks the requested footprint.
+- The industry-expansion regression shall verify every factory type has a catalogue block, distinct HouseKit modules, an industry stats row, an explicit production recipe where applicable, and positive capacity-scaled output through the real business inventory path for seed 1337.
 - A progression horizon shall report tier-ups, wings, maximum floors/footprint, and first skyscraper day; the skyscraper event shall be visible in the town log when a building crosses ten floors.
 - The UI probe shall verify that both initial load and Reset restore the wide overview camera pivot.
 - The UI probe shall open the Settings modal and verify the default density, 1,000 population cap, glow, council, speed, and automation controls.

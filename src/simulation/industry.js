@@ -62,31 +62,69 @@ export const FACTORY_TYPES = [
   // trade rows, HUD, Stocks and stats all iterate COMMODITIES already.
   { id: 'textile', label: 'Textile mill', product: 'cloth', floors: 3, modules: ['sawtooth-roof', 'dye-tanks', 'delivery-bay'] },
   { id: 'software', label: 'Software house', product: 'software', floors: 5, modules: ['office-tower', 'data-hall', 'cooling-units'] },
-  { id: 'furniture', label: 'Furniture workshop', product: 'furniture', floors: 2, modules: ['showroom', 'timber-yard', 'loading-dock'] }
+  { id: 'furniture', label: 'Furniture workshop', product: 'furniture', floors: 2, modules: ['showroom', 'timber-yard', 'loading-dock'] },
+  // Phase 41 — the second industrial ring. These factories deliberately
+  // produce one named commodity each so inventory, payroll, trade and Council
+  // evidence can attribute every unit to a real works instead of a catch-all
+  // goods plant.
+  { id: 'quarry', label: 'Aggregate quarry', product: 'aggregate', floors: 2, modules: ['crusher', 'aggregate-piles', 'conveyor', 'service-yard'] },
+  { id: 'food-processing', label: 'Food processor', product: 'packaged_food', floors: 2, modules: ['processing-hall', 'cold-store', 'silo-bank', 'loading-dock'] },
+  { id: 'glassworks', label: 'Glassworks', product: 'glass', floors: 3, modules: ['furnace', 'annealing-hall', 'glass-tanks', 'stack'] },
+  { id: 'chemicals', label: 'Chemical plant', product: 'chemicals', floors: 4, modules: ['reactor-tanks', 'pipe-rack', 'storage-tanks', 'flare-stack'] },
+  { id: 'paper', label: 'Paper mill', product: 'paper', floors: 3, modules: ['pulp-tanks', 'paper-machine', 'roll-store', 'loading-dock'] },
+  { id: 'electronics', label: 'Electronics plant', product: 'electronics', floors: 4, modules: ['clean-room', 'fab-hall', 'cooling-units', 'loading-dock'] },
+  { id: 'machinery', label: 'Machinery works', product: 'machinery', floors: 4, modules: ['machine-hall', 'gantry-crane', 'parts-yard', 'loading-dock'] },
+  { id: 'refinery', label: 'Fuel refinery', product: 'refined_fuel', floors: 5, modules: ['distillation-tower', 'storage-tanks', 'pipe-rack', 'flare-stack'] },
+  { id: 'polymers', label: 'Polymer plant', product: 'polymers', floors: 4, modules: ['reactor-tanks', 'pellet-silos', 'pipe-rack', 'flare-stack'] },
+  { id: 'pharma', label: 'Pharmaceutical plant', product: 'medicine', floors: 5, modules: ['clean-room', 'sterile-tower', 'batch-tanks', 'loading-dock'] },
+  { id: 'batteries', label: 'Battery plant', product: 'batteries', floors: 4, modules: ['cell-hall', 'electrolyte-tanks', 'battery-racks', 'loading-dock'] }
 ];
 
-export const COMMODITIES = ['lumber', 'steel', 'cement', 'goods', 'cloth', 'software', 'furniture'];
+export const COMMODITIES = [
+  'lumber', 'steel', 'cement', 'goods', 'cloth', 'software', 'furniture',
+  'aggregate', 'packaged_food', 'glass', 'chemicals', 'paper', 'electronics',
+  'machinery', 'refined_fuel', 'polymers', 'medicine', 'batteries', 'crude_oil'
+];
+
+// Crude oil is a tradable raw input, not a locally manufactured product. It
+// remains in the same contractor inventory and economy stats as every other
+// commodity, but it is excluded from factory-balancing and export surplus
+// loops so a refinery does not compete with itself for a phantom producer.
+const RAW_INPUTS = new Set(['crude_oil']);
+const PRODUCIBLE_COMMODITIES = COMMODITIES.filter((key) => FACTORY_TYPES.some((factory) => factory.product === key));
 
 const BASE_PRICE = {
   lumber: 48, steel: 64, cement: 40, goods: 36,
-  cloth: 44, software: 78, furniture: 52
+  cloth: 44, software: 78, furniture: 52,
+  aggregate: 22, packaged_food: 58, glass: 72, chemicals: 84,
+  paper: 46, electronics: 128, machinery: 150, refined_fuel: 92,
+  polymers: 96, medicine: 210, batteries: 180, crude_oil: 68
 };
 const IMPORT_MULT = 1.18;
 const EXPORT_MULT = 0.84;
 const CAPACITY = {
   lumber: 900, steel: 850, cement: 850, goods: 900,
-  cloth: 800, software: 600, furniture: 800
+  cloth: 800, software: 600, furniture: 800,
+  aggregate: 1000, packaged_food: 850, glass: 750, chemicals: 700,
+  paper: 800, electronics: 600, machinery: 500, refined_fuel: 850,
+  polymers: 700, medicine: 450, batteries: 500, crude_oil: 1000
 };
 const INITIAL = {
   lumber: 500, steel: 400, cement: 450, goods: 400,
   // software sits just over the strain gate at load: the founding storehouse
   // starts healthy (no commission signal until real drawdown).
-  cloth: 300, software: 250, furniture: 300
+  cloth: 300, software: 250, furniture: 300,
+  aggregate: 500, packaged_food: 300, glass: 250, chemicals: 220,
+  paper: 300, electronics: 180, machinery: 150, refined_fuel: 300,
+  polymers: 220, medicine: 120, batteries: 150, crude_oil: 420
 };
 /** Units produced per reference-capacity factory per game day. */
 const RATE = {
   lumber: 45, steel: 35, cement: 40, goods: 30,
-  cloth: 32, software: 20, furniture: 28
+  cloth: 32, software: 20, furniture: 28,
+  aggregate: 58, packaged_food: 38, glass: 28, chemicals: 26,
+  paper: 34, electronics: 18, machinery: 16, refined_fuel: 45,
+  polymers: 27, medicine: 13, batteries: 15
 };
 // HouseKit's factory capacity is an area/floor measure. A normal 3x3 campus
 // with two floors is roughly 400 capacity units; larger works must earn a
@@ -96,14 +134,29 @@ const FACTORY_REFERENCE_CAPACITY = 400;
 // its posts. This models an owner/operator crew and basic automation; an empty
 // works still produces nothing, and a fully staffed works still reaches 100%.
 const FACTORY_MIN_STAFFED_UTILIZATION = 0.25;
-const INPUTS = {
+export const FACTORY_INPUTS = Object.freeze({
   goods: { steel: 0.05, lumber: 0.08 },
   furniture: { lumber: 0.25 },
-  cement: { lumber: 0.03 }
-};
+  cement: { lumber: 0.03 },
+  'packaged_food': { food: 0.72 },
+  glass: { aggregate: 0.28, steel: 0.04 },
+  chemicals: { refined_fuel: 0.2, aggregate: 0.08 },
+  paper: { lumber: 0.34 },
+  electronics: { glass: 0.16, steel: 0.08, software: 0.1 },
+  machinery: { steel: 0.3, electronics: 0.12 },
+  refined_fuel: { crude_oil: 0.48 },
+  polymers: { refined_fuel: 0.28, chemicals: 0.2 },
+  medicine: { chemicals: 0.24, glass: 0.08, software: 0.06 },
+  batteries: { steel: 0.16, chemicals: 0.24, electronics: 0.12 }
+});
+const INPUTS = FACTORY_INPUTS;
 const LABEL = {
   lumber: 'Lumber', steel: 'Steel', cement: 'Cement', goods: 'Goods',
-  cloth: 'Cloth', software: 'Software', furniture: 'Furniture'
+  cloth: 'Cloth', software: 'Software', furniture: 'Furniture',
+  aggregate: 'Aggregate', packaged_food: 'Packaged food', glass: 'Glass',
+  chemicals: 'Chemicals', paper: 'Paper', electronics: 'Electronics',
+  machinery: 'Machinery', refined_fuel: 'Refined fuel', polymers: 'Polymers',
+  medicine: 'Medicine', batteries: 'Batteries', crude_oil: 'Crude oil'
 };
 /** Construction materials — what a plan's bill is denominated in. */
 export const MATERIAL_KEYS = ['lumber', 'steel', 'cement'];
@@ -313,6 +366,7 @@ export class IndustrySystem {
     let worstRatio = Infinity;
     let worstStock = Infinity;
     for (const key of COMMODITIES) {
+      if (RAW_INPUTS.has(key)) continue;
       const ratio = this.fillRatio(key);
       if (ratio >= STRAIN_GATE) continue;
       const stock = this.stocks[key] || 0;
@@ -339,13 +393,13 @@ export class IndustrySystem {
     const strained = this.strainedProduct();
     if (strained) return strained;
     const counts = {};
-    for (const key of COMMODITIES) counts[key] = 0;
+    for (const key of PRODUCIBLE_COMMODITIES) counts[key] = 0;
     for (const b of this.factories()) {
       const key = this.typeOf(b).product;
       if (counts[key] != null) counts[key]++;
     }
-    let best = COMMODITIES[0];
-    for (const key of COMMODITIES) {
+    let best = PRODUCIBLE_COMMODITIES[0];
+    for (const key of PRODUCIBLE_COMMODITIES) {
       if (counts[key] < counts[best]) best = key;
     }
     return best;
@@ -510,7 +564,7 @@ export class IndustrySystem {
     // Phase 12 — every consumer row rides the same rule; goods keeps its own
     // import branch below (it is the staple the shops draw on, not a surplus).
     for (const key of COMMODITIES) {
-      if (key === 'goods') continue;
+      if (key === 'goods' || RAW_INPUTS.has(key)) continue;
       const cap = CAPACITY[key];
       if (this.stocks[key] <= cap * 0.85) continue;
       const qty = Math.floor(this.stocks[key] - cap * 0.6);
@@ -551,6 +605,34 @@ export class IndustrySystem {
     const supplyInput = (firm, key, quantity) => {
       let remaining = Math.max(0, quantity - (firm.inventory[key] || 0));
       if (remaining <= 1e-9) return;
+      // Food is produced and stored by ResourceSystem. Move it into the
+      // factory's normal business inventory before recordProduction consumes
+      // it, so the processor is tied to the same finite farm reserve rather
+      // than receiving a second invisible food supply.
+      if (key === 'food') {
+        const resource = this.town.resources;
+        const available = Math.max(0, Number(resource?.levels?.food) || 0);
+        const moved = Math.min(remaining, available);
+        if (moved > 0) {
+          resource.levels.food -= moved;
+          firm.inventory[key] = (firm.inventory[key] || 0) + moved;
+          economy?._adjustExpectedInventory(firm.id, key, moved);
+          remaining -= moved;
+        }
+      }
+      // Crude oil is an imported raw input. It uses the same contractor
+      // inventory and economy import path as a manual commodity purchase, but
+      // only tops up the amount this refinery actually needs for today's run.
+      if (remaining > 1e-9 && RAW_INPUTS.has(key)) {
+        const imported = this.manualBuy(key, Math.min(Math.ceil(remaining), 180));
+        if (imported.ok) {
+          const moved = Math.min(remaining, imported.qty);
+          this.stocks[key] -= moved;
+          firm.inventory[key] = (firm.inventory[key] || 0) + moved;
+          economy?._adjustExpectedInventory(firm.id, key, moved);
+          remaining -= moved;
+        }
+      }
       // The contractor storehouse is the public material buffer. It is used
       // before peer inventories so imported seed stock and local works share a
       // single physical flow rather than three disconnected silos.
@@ -615,7 +697,7 @@ export class IndustrySystem {
       }
     }
     for (const key of COMMODITIES) {
-      if (key === 'goods') continue;
+      if (key === 'goods' || RAW_INPUTS.has(key)) continue;
       const cap = CAPACITY[key];
       for (const firm of economy?.businesses?.filter((b) => b.type === 'industry') || []) {
         if ((firm.inventory[key] || 0) <= cap * 0.2) continue;

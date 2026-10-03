@@ -1,10 +1,10 @@
 ﻿# Construction and metropolis roadmap
 
-Updated 2026-10-03 after the tourism, hotel/resort, and hospitality-economy audit.
+Updated 2026-10-03 after the industrial-chain and hospitality-economy audit.
 
 ## Completed
 
-- [x] Shared immutable catalogue covers 64 blocks across housing, commerce, civic, industry, resources, utilities, roads, public space, and props.
+- [x] Shared immutable catalogue covers 78 blocks across housing, commerce, civic, industry, resources, utilities, roads, public space, and props.
 - [x] Catalogue rows have stable IDs, kit/family labels, footprints, module roles, bills of materials, labour hours, and audit coverage.
 - [x] HouseKit supports accessible entrances, balconies, solar roofs, planted roofs, deterministic rebuilds, and inspection metadata.
 - [x] CivicKit includes courthouse, emergency shelter, transit hub, recycling centre, college, and university. College/university capacity is a measured `tertiary` service; lifecycle graduation waits for available higher-education capacity.
@@ -70,6 +70,7 @@ Updated 2026-10-03 after the tourism, hotel/resort, and hospitality-economy audi
 - [x] Factory progression now checks the complete acquired campus footprint before offering `BUILD_FACTORY`. A partial vacant frontage no longer suppresses `ACQUIRE_LAND`; the land order surveys and buys a contiguous frontier patch first, and blocked factory requests report `ACQUIRE_LAND first`. The factory-site regression covers this ordering.
 - [x] Factory completion now carries the exact reserved campus cells from the frontage-anchored survey through the executor. A multi-cell works no longer shifts its footprint at the end of construction and rolls back; the factory-site regression advances a real project to completion and checks for `FAILED_ROLLED_BACK`.
 - [x] Factory production now uses a capacity-normalized rate. Footprint × floors scale rated output, input draw, capital requirements, full-capacity revenue, and the Works inspector; staffing, utilities, payroll, and input stock remain utilization gates. A staffed works has a bounded 25% minimum operating level while it fills vacancies, while an empty or payroll-arrears works remains stopped. Added `npm run test:factory-production` for capacity ratios, output-bonus, and labour-floor coverage.
+- [x] Expanded the industrial ring with aggregate quarry, food processor, glassworks, chemical plant, paper mill, electronics plant, machinery works, fuel refinery, polymer plant, pharmaceutical plant, and battery plant. Added aggregate, packaged food, glass, chemicals, paper, electronics, machinery, refined fuel, polymers, medicine, batteries, and crude-oil inventory rows with prices, capacities, imports/exports, explicit input recipes, and capacity-scaled output. Food processors draw the ResourceSystem food reserve; refineries use priced crude imports. Added unique HouseKit silhouettes, catalogue blocks, and `npm run test:industry-expansion` for geometry, catalogue, stats, and production-flow coverage.
 - [x] Fuel stations remain resource-system pump/tank sites for production accounting but are explicitly tagged `planningClass=civic`, `publicFacing`, and `facility=fuel-station`; they are sited in a shallow civic belt around the measured town core, with short access spurs and government ownership, instead of being treated as remote factories.
 - [x] Resource siting now protects a shared two-tile facility buffer: reservoirs, silos, wind, solar, farms, husbandry, poultry, and battery yards are kept away from residential, commercial, and civic buildings in both founding/later resource placement and Council/final building placement. Industrial supplier adjacency remains legal, while fuel stations and lakes retain their public-facing/amenity exceptions.
 - [x] Education campus siting now uses a shared three-tile Chebyshev catchment buffer for schools, colleges, universities, conservatories, and the university landmark campus. Council footprint surveys and the final `Town.placeBuilding` boundary both reject a campus directly opposite or too close to an existing campus, while ordinary civic buildings remain unaffected.
@@ -89,7 +90,7 @@ Updated 2026-10-03 after the tourism, hotel/resort, and hospitality-economy audi
 - [x] Added tourism growth gates: hotels require population and positive measured demand; resorts require an existing hotel, stronger demand, and high hotel occupancy. This prevents destination capacity from arriving before the town has a functioning visitor economy.
 - [x] Added Council tourism evidence with visitors, occupied/free rooms, demand, appeal, occupancy, and nightly revenue. The Council can now compare hospitality investment with weather, mood, approval, and existing attractions.
 
-## Current sprint (2026-10-03, congestion-directed street planning)
+## Current sprint (2026-10-03, industrial-chain expansion and congestion-directed street planning)
 
 - [x] Audited the complete `EXTEND_STREET` path from traffic demand sampling through GrowthSystem candidate generation, graph scoring, finance, stale-selection validation, and asphalt commit.
 - [x] Made measured road-cell delay the location signal. High visits with zero delay no longer qualify as a hotspot, and sparse OD history now selects a delayed corridor before a generic component join.

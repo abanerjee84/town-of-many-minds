@@ -26,6 +26,7 @@
     "test:vehicle-parking": "node scripts/_vehicle_parking_check.mjs",
     "test:factory-site": "node scripts/_factory_site_regression.mjs",
     "test:factory-production": "node scripts/_factory_production_check.mjs",
+    "test:industry-expansion": "node scripts/_industry_expansion_check.mjs",
     "test:society": "node scripts/_society_transport_check.mjs",
     "test:agriculture": "node scripts/_agricultural_setback_check.mjs",
     "test:resource-neighbour": "node scripts/_resource_neighbour_check.mjs",
