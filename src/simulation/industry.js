@@ -5,7 +5,9 @@ import { events } from '../core/events.js';
  * consumes (lumber, steel, cement) plus consumer goods; a stockpile gates
  * every gated build, exports add treasury income, and citizens' goods access
  * feeds their mood. Deterministic: production jitter comes from one forked
- * stream, so seeded runs replay exactly.
+ * stream, so seeded runs replay exactly. A factory's rate is capacity-normalized:
+ * a standard three-by-three two-storey works is the reference, and footprint
+ * times floors scale its output, input draw, capital requirement, and revenue.
  */
 
 /** Material cost per construction type — consumed on start, refunded on stall. */
@@ -81,11 +83,19 @@ const INITIAL = {
   // starts healthy (no commission signal until real drawdown).
   cloth: 300, software: 250, furniture: 300
 };
-/** Units produced per factory per game day. */
+/** Units produced per reference-capacity factory per game day. */
 const RATE = {
   lumber: 45, steel: 35, cement: 40, goods: 30,
   cloth: 32, software: 20, furniture: 28
 };
+// HouseKit's factory capacity is an area/floor measure. A normal 3x3 campus
+// with two floors is roughly 400 capacity units; larger works must earn a
+// proportionally larger rated output instead of sharing one flat rate.
+const FACTORY_REFERENCE_CAPACITY = 400;
+// A staffed works can keep a small line alive while it recruits the rest of
+// its posts. This models an owner/operator crew and basic automation; an empty
+// works still produces nothing, and a fully staffed works still reaches 100%.
+const FACTORY_MIN_STAFFED_UTILIZATION = 0.25;
 const INPUTS = {
   goods: { steel: 0.05, lumber: 0.08 },
   furniture: { lumber: 0.25 },
@@ -341,13 +351,42 @@ export class IndustrySystem {
     return best;
   }
 
-  /** Daily output value of one factory — what the works contributes to GDP. */
+  /**
+   * The capacity contract used by a factory's output loop. HouseKit records a
+   * floor/footprint capacity on the building; the fallback keeps legacy records
+   * meaningful when they predate that field.
+   */
+  factoryCapacity(building) {
+    const spec = building?.house?.spec || building?.spec || null;
+    const capacity = Number(building?.capacity ?? spec?.capacity);
+    if (Number.isFinite(capacity) && capacity > 0) return capacity;
+    const footprint = Math.max(1, building?.footprint?.length || spec?.footprintTiles || 1);
+    const floors = Math.max(1, building?.floors || spec?.floors || 1);
+    return footprint * floors * 1.6;
+  }
+
+  factoryCapacityScale(building) {
+    return Math.max(0.1, this.factoryCapacity(building) / FACTORY_REFERENCE_CAPACITY);
+  }
+
+  factoryProductionRate(building, { includeBonus = true } = {}) {
+    const key = this.typeOf(building).product;
+    const bonus = includeBonus ? 1 + (this.outputBonus || 0) : 1;
+    return RATE[key] * this.factoryCapacityScale(building) * bonus;
+  }
+
+  factoryLabourFactor(firm) {
+    if (!firm || firm.status === 'payroll_arrears') return 0;
+    const employees = Math.max(0, Number(firm.employees) || 0);
+    if (!employees) return 0;
+    const staffing = employees / Math.max(1, Number(firm.jobsRequired) || 1);
+    return Math.min(1, FACTORY_MIN_STAFFED_UTILIZATION + staffing * (1 - FACTORY_MIN_STAFFED_UTILIZATION));
+  }
+
+  /** Daily full-capacity output value of one factory — its GDP contribution. */
   revenuePerDay(building) {
     const key = this.typeOf(building).product;
-    // Phase 17 — the innovation ladder's `output` lever rides the same
-    // per-works rate the whole industry is sized from, so a research gain and a
-    // new works are comparable and compound.
-    return Math.round(RATE[key] * BASE_PRICE[key] * (1 + (this.outputBonus || 0)));
+    return Math.round(this.factoryProductionRate(building) * BASE_PRICE[key]);
   }
 
   manualBuy(key, qty = 50) {
@@ -460,7 +499,7 @@ export class IndustrySystem {
   runLegacyDay() {
     for (const b of this.factories()) {
       const key = this.typeOf(b).product;
-      const made = RATE[key] * this.rng.float(0.9, 1.1);
+      const made = this.factoryProductionRate(b) * this.rng.float(0.9, 1.1);
       this.stocks[key] = Math.min(CAPACITY[key], this.stocks[key] + made);
     }
 
@@ -538,18 +577,21 @@ export class IndustrySystem {
       const firm = economy?.businessesById?.get(building.businessId);
       if (!firm) continue;
       const key = this.typeOf(building).product;
-      const labour = firm.status === 'payroll_arrears'
-        ? 0
-        : Math.min(1, (firm.employees || 0) / Math.max(1, firm.jobsRequired || 1));
-      const capital = Math.min(1, (firm.fixedCapital || 0) / Math.max(1, RATE[key] * 800));
+      // Rated output is the building's capacity contract. Keep staffing,
+      // utilities, working capital, and input draw as utilization gates on
+      // that same rated quantity; a larger multi-storey works must not still
+      // consume and produce like the smallest baseline factory.
+      const ratedOutput = this.factoryProductionRate(building);
+      const labour = this.factoryLabourFactor(firm);
+      const capital = Math.min(1, (firm.fixedCapital || 0) / Math.max(1, ratedOutput * 800));
       const needs = INPUTS[key] || {};
       for (const [input, perUnit] of Object.entries(needs))
-        supplyInput(firm, input, RATE[key] * perUnit);
+        supplyInput(firm, input, ratedOutput * perUnit);
       let materials = 1;
       for (const [input, perUnit] of Object.entries(needs))
-        materials = Math.min(materials, (firm.inventory[input] || 0) / Math.max(1e-6, RATE[key] * perUnit));
+        materials = Math.min(materials, (firm.inventory[input] || 0) / Math.max(1e-6, ratedOutput * perUnit));
       const factor = Math.max(0, Math.min(labour, capital, materials, utilityFactor));
-      const made = RATE[key] * factor * (1 + (this.outputBonus || 0)) * this.rng.float(0.9, 1.1);
+      const made = ratedOutput * factor * this.rng.float(0.9, 1.1);
       const consumed = Object.fromEntries(Object.entries(needs).map(([input, perUnit]) => [input, made * perUnit]));
       firm.productionFactor = factor;
       firm.utilityFactor = utilityFactor;
@@ -612,13 +654,21 @@ export class IndustrySystem {
     const def = this.typeOf(building);
     if (!def) return null;
     const key = def.product;
+    const rate = this.factoryProductionRate(building);
+    const firm = this.town.economy?.businessesById?.get(building.businessId);
+    const utilization = Number.isFinite(firm?.productionFactor) ? firm.productionFactor : null;
     return {
       label: def.label,
       product: key,
       productLabel: LABEL[key],
-      rate: RATE[key],
+      rate: Math.round(rate),
+      baseRate: RATE[key],
+      factoryCapacity: Math.round(this.factoryCapacity(building)),
+      capacityScale: Math.round(this.factoryCapacityScale(building) * 100) / 100,
+      utilization: utilization == null ? null : Math.round(utilization * 100) / 100,
+      actualRate: utilization == null ? null : Math.round(rate * utilization),
       stock: Math.round(this.totalStock(key)),
-      capacity: CAPACITY[key],
+      stockCapacity: CAPACITY[key],
       worth: this.revenuePerDay(building)
     };
   }

@@ -882,8 +882,9 @@ export class Interaction {
           works
             ? `<div class="divider"></div><div class="sub">Works</div>
                <div class="kv"><span>Type</span><span>${works.label}</span></div>
-               <div class="kv"><span>Output</span><span>${works.rate} ${works.productLabel.toLowerCase()}/day</span></div>
-               <div class="kv"><span>Storehouse</span><span>${works.stock} / ${works.capacity}</span></div>
+               <div class="kv"><span>Output capacity</span><span>${works.rate} ${works.productLabel.toLowerCase()}/day · ${works.factoryCapacity} capacity ×${works.capacityScale}</span></div>
+               ${works.actualRate != null ? `<div class="kv"><span>Current output</span><span>${works.actualRate} ${works.productLabel.toLowerCase()}/day · ${Math.round((works.utilization || 0) * 100)}% utilized</span></div>` : ''}
+               <div class="kv"><span>Storehouse</span><span>${works.stock} / ${works.stockCapacity}</span></div>
                <div class="kv"><span>Worth</span><span>${fmtMoney(works.worth)}/day</span></div>`
             : ''
         }
