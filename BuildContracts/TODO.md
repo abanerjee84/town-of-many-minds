@@ -18,6 +18,7 @@ Updated 2026-10-03 after the dynamic-market and build-duration audit.
 - [x] Checklist closure: `npm run test:state-service` runs the seeded 800-day public-service horizon with no page errors, no uncovered emergency shortfall, a ready transit network, and station-bound operational buses.
 - [x] Added `BuildContracts/hardcode-catalog.json` and `BuildContracts/HARDCODE_AUDIT.md`, covering runtime tuning constants by priority, target JSON module, rationale, and extraction order.
 - [x] Extracted seasons and weather modifiers from `src/simulation/weather.js` into versioned `src/data/weather.json` while preserving deterministic seeded behavior.
+- [x] Added `npm run test:speed` to exercise every ribbon speed button, active-state synchronisation, pause, exact Clock scaling through 100×, Settings persistence, and page-error safety.
 
 ## Hardcode extraction queue
 
