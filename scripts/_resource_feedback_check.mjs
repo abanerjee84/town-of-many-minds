@@ -10,11 +10,16 @@ await page.waitForFunction(() => !!window.town?.resources?.sites?.length, null, 
 await page.waitForTimeout(500);
 
 const result = await page.evaluate(() => {
+  window.town.generate(1337);
   const site = window.town.resources.sites.find((entry) => entry.kind === 'farm');
   if (!site) return { ok: false, reason: 'founding farm missing' };
+  const firstDecision = window.town.governance.enact('INTENT: UPDATE_RESOURCE resource=food', 'test');
+  const repeatedDecision = window.town.governance.enact('INTENT: UPDATE_RESOURCE resource=food', 'test');
   const upgraded = window.town.resources.upgrade('food', site);
   const feedback = document.getElementById('resource-feedback');
   return {
+    firstDecision: { status: firstDecision.status, detail: firstDecision.detail },
+    repeatedDecision: { status: repeatedDecision.status, detail: repeatedDecision.detail },
     upgraded,
     level: site.level,
     cells: site.cells.length,
@@ -29,6 +34,8 @@ const result = await page.evaluate(() => {
 
 const failures = [
   ...(result.reason ? [result.reason] : []),
+  ...(result.firstDecision?.status !== 'started' ? ['UPDATE_RESOURCE did not reach the resource procedure'] : []),
+  ...(result.repeatedDecision?.detail?.includes('no procedure') ? ['repeated resource upgrade still reports no procedure'] : []),
   ...(result.upgraded !== true ? ['resource upgrade did not complete'] : []),
   ...(result.level !== 2 ? ['resource upgrade did not advance to tier 2'] : []),
   ...(result.cells !== 40 ? [`tier-2 farm yard is ${result.cells} cells, expected 40`] : []),

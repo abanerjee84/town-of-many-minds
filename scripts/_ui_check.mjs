@@ -44,6 +44,16 @@ const result = await page.evaluate((required) => {
       fogFar: window.sceneMgr.scene.fog?.far
     },
     weather: town.weather?.stats?.() || null,
+    storehouse: (() => {
+      const box = document.getElementById('stat-trade');
+      const style = box ? getComputedStyle(box) : null;
+      return {
+        rows: box?.querySelectorAll('.trade-row').length || 0,
+        overflowY: style?.overflowY || '',
+        maxHeight: style?.maxHeight || '',
+        scrollable: !!box && box.scrollHeight > box.clientHeight
+      };
+    })(),
     fitTown: {
       pressed: document.getElementById('fit-town')?.getAttribute('aria-pressed'),
       active: document.getElementById('fit-town')?.classList.contains('active'),
@@ -235,6 +245,7 @@ const failures = [
   ...(!result.stats.settings?.speedOptions?.includes('100') ? ['settings modal is missing the 100x speed option'] : []),
   ...(result.stats.settings?.cameraYaw !== '34.5' || result.stats.settings?.cameraPitch !== '64' || result.stats.settings?.cameraZoom !== '228' || result.stats.settings?.cameraTargetX !== '-20' || result.stats.settings?.cameraTargetZ !== '-40' ? ['settings modal has the wrong camera defaults'] : []),
   ...(result.stats.settings?.sectionCount !== 4 || !result.stats.settings?.searchable ? ['settings modal is missing search or sections'] : []),
+  ...(result.stats.storehouse?.overflowY !== 'auto' || !result.stats.storehouse?.maxHeight || result.stats.storehouse?.rows < 18 ? ['storehouse rows are missing its bounded scroll region'] : []),
   ...(result.stats.settingsSearch?.visibleSections.join(',') !== 'camera' || result.stats.settingsSearch?.visibleRows !== 5 ? ['settings search did not isolate camera controls'] : []),
   ...(result.stats.cameraMutation?.stored !== -10 || Math.abs((result.stats.cameraMutation?.target ?? 0) + 10) > 0.01 ? ['pan setting did not update the OrbitControls target'] : []),
   ...(!result.stats.cameraOrbit?.includes('yaw') || !result.stats.cameraZoom?.endsWith('m') || !result.stats.cameraPan?.includes('x') ? ['camera readout is missing orbit, zoom, or pan values'] : []),

@@ -57,6 +57,8 @@ Updated 2026-10-03 after the industrial-chain and hospitality-economy audit.
 - [x] Agriculture yards now start as exact 7×4 rectangles (28 tiles) and expand to 8×5 and 9×6 tiers for farms, livestock, and poultry, with matching catalogue footprints.
 - [x] `UPDATE_RESOURCE` now emits an auditable event, a transient world-space pulse at the upgraded yard, and a visible HUD notice that reports the site, level change, and yard area.
 - [x] Added the `UPDATE_RESOURCE` parser spelling as a canonical alias for `UPGRADE_RESOURCE`, so provider wording and the visible feedback use the same resource-upgrade path.
+- [x] Resource upgrade refusals now explain the actual gate (missing producer, level-3 cap, or an upgrade already in progress) instead of reporting the misleading `no procedure for that action`; the resource feedback regression covers the alias and repeated-request path.
+- [x] The Storehouse rows now have an independent bounded scrollbar, leaving the upper TOMM Simulator statistics area on the panel's full flexible extent; the UI regression verifies all 19 commodity rows and the scroll region.
 - [x] Added a compact Council evidence panel beside Decisions. It shows the latest model thought, delayed self-learning lesson count/pending observations, and the latest resource-upgrade feedback without prescribing a Council trait.
 - [x] Refit the narrow 1024px ribbon after adding 100× so all speed, seed, camera, Settings, and Reset controls remain contained.
 - [x] Footways are now explicit pedestrian-access work. The growth ranking no longer invents them as filler, and target selection excludes park/public parcels and requires a useful inland link; the Road tool can convert an intentional footway cell to asphalt.

@@ -100,6 +100,35 @@ const NULL_PLAN_DETAIL = {
   RESTRUCTURE_BUILDING: 'no occupied building has a safe higher floor to add'
 };
 
+/** Explain a resource upgrade that cannot produce a plan. The old generic
+ * "no procedure" text was misleading: the procedure exists, but the chosen
+ * resource may have no producing site left below the level cap, or its only
+ * eligible site may already be reserved by an active project. */
+function resourcePlanFailure(town, params = {}) {
+  const resources = town?.resources;
+  if (!resources) return 'resource system is unavailable';
+  const snapshot = resources.stats?.();
+  const resource = ORDER.includes(params.resource)
+    ? params.resource
+    : snapshot?.strained?.[0] || ORDER[0];
+  const label = resource.charAt(0).toUpperCase() + resource.slice(1);
+  const kind = params.kind && resources.kindOfResource?.(params.kind) === resource
+    ? params.kind
+    : null;
+  if (params.kind && !kind) return `${params.kind} is not a ${label.toLowerCase()} site`;
+  const sites = (resources.sites || []).filter((site) => resources.kindOfResource?.(site.kind) === resource);
+  if (!sites.length) return `no ${label.toLowerCase()} production site exists to upgrade`;
+  const target = resources.upgradeTarget?.(resource, kind);
+  if (target) return `the ${label.toLowerCase()} upgrade is currently unavailable for this project`;
+  const pending = sites.find((site) => town.growth?.pendingTargets?.has?.(site));
+  if (pending) return `${label} upgrade is already in progress at ${pending.kind}`;
+  const storageOnly = new Set(['reservoir', 'silo', 'battery']);
+  const producers = sites.filter((site) => !storageOnly.has(site.kind));
+  if (!producers.length) return `${label} has storage but no upgradeable production site`;
+  if (producers.every((site) => (site.level || 1) >= 3)) return `all ${label.toLowerCase()} production sites are at the level 3 cap`;
+  return `no ${label.toLowerCase()} production site is currently upgradeable`;
+}
+
 /** The replay code a plan round-trips through the phrase table. */
 export function planCode(plan) {
   if (!plan) return 'NO_ACTION';
@@ -1806,6 +1835,8 @@ export class GovernanceSystem {
           ? parsed.params?.to
             ? `no corridor can be raised to ${XS_CLASS_LABEL[parsed.params.to] || parsed.params.to}`
             : 'every corridor is already a boulevard'
+          : parsed.intent === 'UPGRADE_RESOURCE'
+            ? resourcePlanFailure(t, parsed.params)
           : NULL_PLAN_DETAIL[parsed.intent] || 'no procedure for that action';
       this.record(decision);
       return decision;

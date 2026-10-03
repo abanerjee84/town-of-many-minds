@@ -508,6 +508,20 @@
       }
       #trade.collapsed #stat-trade { display: none; }
       #trade:not(.collapsed) { padding-bottom: 2px; }
+      /* The catalogue now carries nineteen commodity rows. Keep the upper
+         TOMM Simulator stats area on the panel's flexible height and give the
+         Storehouse its own bounded scroll region when it is expanded. */
+      #stat-trade {
+        max-height: clamp(120px, 24vh, 220px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding-right: 4px;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255,255,255,0.22) transparent;
+      }
+      #stat-trade::-webkit-scrollbar { width: 6px; }
+      #stat-trade::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.22); border-radius: 3px; }
+      #stat-trade::-webkit-scrollbar-track { background: transparent; }
 
       /* Phase 14 — one column per primary resource (resourceKit.ORDER). */
       .res-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
