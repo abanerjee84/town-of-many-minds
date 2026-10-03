@@ -79,8 +79,8 @@ const result = await page.evaluate(async () => {
 });
 
 const failures = [
-  ...(result.twiceDaily !== 3 ? [`expected three calls across day-1 noon and day-2's two slots, got ${result.twiceDaily}`] : []),
-  ...(result.fourDaily !== 4 ? [`expected four calls with four sittings/day, got ${result.fourDaily}`] : []),
+  ...(result.twiceDaily !== 15 ? [`expected five minister calls across three sittings, got ${result.twiceDaily}`] : []),
+  ...(result.fourDaily !== 20 ? [`expected five minister calls across four sittings, got ${result.fourDaily}`] : []),
   ...(result.cadenceHours !== 6 ? [`expected four-sitting cadence to be six hours, got ${result.cadenceHours}`] : []),
   ...(Math.abs(result.congestion?.average - 0.467) > 0.002 ? [`expected time-weighted congestion average near 0.467, got ${result.congestion?.average}`] : []),
   ...(result.congestion?.samples !== 3 ? [`expected three interval samples, got ${result.congestion?.samples}`] : []),

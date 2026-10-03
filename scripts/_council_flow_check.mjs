@@ -22,11 +22,16 @@ try {
     let calls = 0;
     t.governance.setProvider({
       id: 'correction-provider',
-      complete: async () => {
+      complete: async ({ department, messages }) => {
         calls++;
+        const correction = messages.some((message) => message.role === 'user' && /CORRECTION:/i.test(message.content));
         return {
           model: 'correction-provider',
-          text: calls === 1 ? 'INTENT: BUILD_FACTORY type=sawmill' : 'INTENT: UPGRADE_RESOURCE resource=energy'
+          text: correction
+            ? 'INTENT: UPGRADE_RESOURCE resource=energy'
+            : department === 'treasury'
+              ? 'INTENT: BUILD_FACTORY type=sawmill'
+              : 'INTENT: NO_ACTION'
         };
       }
     });
@@ -56,7 +61,7 @@ try {
   assert.equal(errors.length, 0, errors.join('\n'));
   assert.ok(result.opportunity, JSON.stringify(result));
   assert.ok(result.rankedArchetypes >= 1, JSON.stringify(result));
-  assert.equal(result.providerCalls, 2, JSON.stringify(result));
+  assert.equal(result.providerCalls, 6, JSON.stringify(result));
   assert.equal(result.decision.intent, 'UPGRADE_RESOURCE', JSON.stringify(result));
   assert.notEqual(result.decision.requiredAction, 'INTENT: UPGRADE_RESOURCE resource=energy', JSON.stringify(result));
   console.log(JSON.stringify(result));

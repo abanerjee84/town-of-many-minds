@@ -49,18 +49,31 @@ export class CabinetSystem {
   }
 
   prompt() {
-    const departments = this.departments.map((department) =>
-      `${department.id}=${department.label}`
-    ).join(' · ');
     return [
-      'CABINET MODE overrides the common one-action reply: return one JSON object, motions=[].',
-      `Include at most ${this.motionsPerSitting} motions, normally one per department; each has department, canonical intent, reason, priority 0..1, and optional params.`,
-      'Use the existing intent vocabulary and report evidence. The Mayor approves or rejects; do not claim execution or invent coordinates, budgets, IDs, or actions.',
-      departments
+      'CABINET MODE: return one JSON object {"motions":[]}; do not use the legacy one-line format unless the provider cannot emit JSON.',
+      `Submit at most ${this.motionsPerSitting} motions, normally one per department. Each motion has department, canonical intent, reason, priority 0..1, emergency when measured, and optional parser params.`,
+      'Use only the report evidence and the named department remit. The Mayor approves or rejects; do not claim execution or invent coordinates, budgets, IDs, or actions.'
     ].join('\n');
   }
 
-  parse(text) {
+  /**
+   * One independent system message per minister. Keeping these prompts in the
+   * data file lets a benchmark swap a department's decision frame without
+   * changing parsing, Mayor review, or execution.
+   */
+  systemPrompts() {
+    return this.departments.map((department) => {
+      const focus = department.systemPrompt || department.remit || 'Use the report evidence for this department.';
+      const intents = department.intents.join('|');
+      return [
+        `CABINET MINISTER ${department.id} — ${department.label}.`,
+        focus,
+        `Own intents: ${intents}. Submit at most one motion for this department; use another department for another remit.`
+      ].join(' ');
+    });
+  }
+
+  parse(text, options = {}) {
     const parsed = extractJson(text);
     let rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.motions) ? parsed.motions : null;
     if (!rows) {
@@ -72,7 +85,11 @@ export class CabinetSystem {
     // Keep a small overflow window so the Mayor can explicitly defer a
     // provider that ignores the sitting cap instead of silently dropping its
     // sixth proposal.
-    return rows.slice(0, Math.max(12, this.motionsPerSitting + this.departments.length)).map((row, index) => {
+    const defaultDepartment = this.departments.find((item) => item.id === options.departmentId) || null;
+    const maxMotions = Number.isFinite(Number(options.maxMotions))
+      ? Math.max(1, Number(options.maxMotions))
+      : Math.max(12, this.motionsPerSitting + this.departments.length);
+    return rows.slice(0, maxMotions).map((row, index) => {
       const object = row && typeof row === 'object' ? row : { text: row };
       const intentText = object.intent || object.action || object.code || object.text || '';
       const raw = /^\s*(?:INTENT|ACTION|DECISION)\s*:/i.test(String(intentText))
@@ -80,11 +97,13 @@ export class CabinetSystem {
         : `INTENT: ${String(intentText)}`;
       const result = parser(raw);
       const declaredDepartment = this.departments.find((item) => item.id === object.department);
-      const department = declaredDepartment || this.departmentForIntent(result.intent, index);
+      const department = declaredDepartment || defaultDepartment || this.departmentForIntent(result.intent, index);
       const params = object.params && typeof object.params === 'object' ? object.params : {};
       const fullRaw = paramsText(params) ? `${raw} ${paramsText(params)}` : raw;
       const finalResult = paramsText(params) ? parser(fullRaw) : result;
-      const ownershipValid = !declaredDepartment || finalResult.intent === 'NO_ACTION' || declaredDepartment.intents.includes(finalResult.intent);
+      const ownershipValid = defaultDepartment
+        ? (finalResult.intent === 'NO_ACTION' || defaultDepartment.intents.includes(finalResult.intent))
+        : (!declaredDepartment || finalResult.intent === 'NO_ACTION' || declaredDepartment.intents.includes(finalResult.intent));
       return {
         id: `motion-${index + 1}`,
         index,
@@ -108,6 +127,10 @@ export class CabinetSystem {
       enabled: this.enabled,
       motionsPerSitting: this.motionsPerSitting,
       departments: this.departments.map(({ id, label, intents }) => ({ id, label, intents: [...intents] })),
+      systemPrompts: this.systemPrompts().map((prompt, index) => ({
+        department: this.departments[index]?.id || null,
+        prompt
+      })),
       mayor: this.mayor.stats(),
       lastSittingId: this.lastSittingId,
       lastMotions: this.lastMotions.map((motion) => ({ ...motion })),

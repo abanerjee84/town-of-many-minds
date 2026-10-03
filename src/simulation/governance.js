@@ -641,6 +641,25 @@ export function systemPrompt(town, options = {}) {
   const mode = options.cabinet ?
     ' Read the town report and prepare one evidence-backed motion for each Cabinet department; return the Cabinet JSON contract that follows.' :
     ' Read the town report and choose exactly one action.';
+  // Each Cabinet minister receives its own provider call. The department
+  // branch is intentionally compact enough that this minister can retain a
+  // full report and its own role/remit inside the 4K prompt budget instead of
+  // sharing one crowded multi-department instruction.
+  if (options.cabinetDepartment) {
+    const department = options.cabinetDepartment;
+    const focus = department.systemPrompt || department.remit || 'Use the report evidence for this department.';
+    return [
+      COUNCIL_ETHOS,
+      st.opening,
+      st.focus,
+      `You are the ${department.label} Cabinet minister. ${focus}`,
+      `Your owned canonical intents are: ${department.intents.join(', ')}.`,
+      'Read the town report as evidence. Resolve a mandatory remedy first; choose only a legal action supported by Feasible now, Priority, or an explicit always-available rule. Do not invent coordinates, budgets, IDs, or actions.',
+      'Return exactly one JSON object: {"motions":[{"department":"' + department.id + '","intent":"CANONICAL_INTENT","reason":"short measured reason","priority":0.0,"params":{}}]}. Use priority 0..1; set params only when the report supports them.',
+      voice,
+      learning
+    ].filter(Boolean).join(' ');
+  }
   return COUNCIL_ETHOS + ' ' + st.opening + ' ' + st.focus + mode + voice + ' ' + learning + ' ' + PROMPT_BODY;
 }
 
@@ -1312,6 +1331,7 @@ export class GovernanceSystem {
     this.spent = 0;
     this.parseFailures = 0;
     this.llmCalls = 0;
+    this.cabinetCalls = 0;
     // Deterministic, synchronous request counter used by horizon probes. Test
     // requests go through the same parser, planner, finance checks, and
     // outcome ledger as a model reply, but never open a network connection or
@@ -2886,10 +2906,11 @@ export class GovernanceSystem {
   }
 
   /**
-   * Cabinet sitting: one provider response yields up to one motion per
-   * department, then the Mayor filters duplicates and hard sequencing
-   * conflicts before each approved motion enters the normal enact() boundary.
-   * A plain one-line INTENT remains valid for older providers and tests.
+   * Cabinet sitting: each department is a separate provider call with its own
+   * system prompt and full context budget. Replies are gathered first, then
+   * the Mayor reviews the batch and all approved motions enter enact() in the
+   * same sitting. A blocked primary-resource motion gets one same-sitting
+   * correction call for that minister only.
    */
   async askCabinet() {
     if (this.pending) return { status: 'busy' };
@@ -2901,85 +2922,139 @@ export class GovernanceSystem {
     this.activeRequestId = requestId;
     const isCurrent = () => this.epoch === epoch && this.activeRequestId === requestId;
     let finalDecision = null;
-    let correction = '';
     try {
       this.pending = true;
       const sittingId = this.activeSittingId && this.activeSittingId !== this.lastCompletedSittingId
         ? this.activeSittingId
         : `cabinet-${++this.sittingSeq}`;
       this.activeSittingId = sittingId;
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const reply = await this.provider.complete({
-          endpoint: this.endpoint,
-          model: this.model,
-          temperature: this.temperature,
-          maxTokens: 600,
-          signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
-          messages: [
-            // The following Cabinet contract is the later, more specific
-            // system instruction. Keeping the common prompt unchanged keeps
-            // the combined provider input inside the 4,000-token contract.
-            { role: 'system', content: systemPrompt(this.town) },
-            { role: 'system', content: this.cabinet.prompt() },
-            { role: 'user', content: `${this.report()}${correction ? `\n\n${correction}` : ''}` }
-          ],
-          town: this.town,
-          sittingId
-        });
-        if (!isCurrent()) {
-          this.staleReplies = (this.staleReplies || 0) + 1;
-          return { status: 'stale', intent: null, detail: 'the town was regenerated before the Cabinet reply arrived' };
+      // Every configured minister gets a call every sitting. The setting is
+      // the Mayor's approval cap, not a silent filter that could prevent the
+      // services minister from reporting a water or emergency shortfall.
+      const departments = this.cabinet.departments;
+      const report = this.report();
+      const callMinister = async (department, correction = '') => {
+        try {
+          const reply = await this.provider.complete({
+            endpoint: this.endpoint,
+            model: this.model,
+            temperature: this.temperature,
+            maxTokens: 600,
+            signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
+            messages: [
+              { role: 'system', content: systemPrompt(this.town, { cabinetDepartment: department }) },
+              { role: 'user', content: `${report}${correction ? `\n\n${correction}` : ''}` }
+            ],
+            town: this.town,
+            sittingId,
+            department: department.id
+          });
+          return { department, reply };
+        } catch (error) {
+          return { department, error };
         }
-        const data = reply?.raw || {};
-        const text = reply?.text || '';
-        this.available = true;
-        this.lastError = null;
-        this.lastReply = text;
-        this.cabinet.lastReply = text;
-        this.cabinet.lastSittingId = sittingId;
-        this.modelUsed = reply?.model || data.model || this.model || this.provider?.id || 'unknown';
-        this.activeResponseId = `response-${++this.responseSeq}`;
-        this.consecutiveFailures = 0;
-        this.rulesOnly = false;
-        this.llmCalls++;
+      };
 
-        const motions = this.cabinet.parse(text);
-        this.cabinet.lastMotions = motions;
-        const review = this.cabinet.mayor.review(motions, { requiredAction: this.requiredAction });
-        this.cabinet.lastReview = review;
-        for (const motion of [...review.rejected, ...review.deferred]) {
-          this.recordMayorMotion(motion, motion.status, motion.mayorReason);
-        }
-
-        const execution = [];
-        let blocked = null;
-        for (const motion of review.approved) {
-          this.activeMotion = motion;
-          let decision;
-          try {
-            decision = this.enact(motion.raw, 'llm');
-          } finally {
-            this.activeMotion = null;
-          }
-          decision.motionId = motion.id;
-          decision.department = motion.department;
-          decision.departmentLabel = motion.departmentLabel;
-          decision.mayor = 'approved';
-          execution.push(decision);
-          if (decision.status === 'blocked' && decision.requiredAction) {
-            blocked = decision;
-            break;
-          }
-        }
-        this.cabinet.lastExecution = execution;
-        finalDecision = execution[execution.length - 1]
-          || ((review.rejected.length || review.deferred.length) ? this.lastDecision : null);
-        if (blocked && attempt === 0) {
-          correction = `CORRECTION: the Mayor's approved motion was blocked by a hard sequencing constraint. Choose exactly ${blocked.requiredAction} now; return one JSON motion or one INTENT line and do not repeat ${blocked.intent}.`;
-          continue;
-        }
-        break;
+      const responses = await Promise.all(departments.map((department) => callMinister(department)));
+      if (!isCurrent()) {
+        this.staleReplies = (this.staleReplies || 0) + 1;
+        return { status: 'stale', intent: null, detail: 'the town was regenerated before the Cabinet replies arrived' };
       }
+      const successful = responses.filter((result) => result.reply);
+      const failed = responses.filter((result) => result.error);
+      if (!successful.length) throw failed[0]?.error || new Error('no Cabinet minister replied');
+
+      this.available = true;
+      this.lastAborted = false;
+      this.lastError = failed.length ? `${failed.length} Cabinet minister(s) did not reply` : null;
+      this.consecutiveFailures = 0;
+      this.rulesOnly = false;
+      this.llmCalls += successful.length;
+      this.cabinetCalls += successful.length;
+      this.activeResponseId = `response-${++this.responseSeq}`;
+      this.modelUsed = successful[0].reply?.model || successful[0].reply?.raw?.model || this.model || this.provider?.id || 'unknown';
+      const replies = successful.map(({ department, reply }) => `${department.id}: ${reply?.text || ''}`.trim());
+      this.lastReply = replies.join(' · ');
+      this.cabinet.lastReply = this.lastReply;
+      this.cabinet.lastSittingId = sittingId;
+
+      const motions = [];
+      successful.forEach(({ department, reply }, responseIndex) => {
+        const parsed = this.cabinet.parse(reply?.text || '', {
+          departmentId: department.id,
+          maxMotions: 1
+        });
+        parsed.forEach((motion) => {
+          motion.index = responseIndex;
+          motions.push(motion);
+        });
+      });
+      this.cabinet.lastMotions = motions;
+      let review = this.cabinet.mayor.review(motions, { requiredAction: this.requiredAction });
+      this.cabinet.lastReview = review;
+      for (const motion of [...review.rejected, ...review.deferred]) {
+        this.recordMayorMotion(motion, motion.status, motion.mayorReason);
+      }
+
+      const execution = [];
+      let blocked = null;
+      const execute = (motion) => {
+        this.activeMotion = motion;
+        let decision;
+        try {
+          decision = this.enact(motion.raw, 'llm');
+        } finally {
+          this.activeMotion = null;
+        }
+        decision.motionId = motion.id;
+        decision.department = motion.department;
+        decision.departmentLabel = motion.departmentLabel;
+        decision.mayor = 'approved';
+        execution.push(decision);
+        if (decision.status === 'blocked' && decision.requiredAction) blocked = decision;
+      };
+      for (const motion of review.approved) {
+        execute(motion);
+        if (blocked) break;
+      }
+
+      if (blocked) {
+        const requiredIntent = String(blocked.requiredAction || '').match(/INTENT:\s*([A-Z0-9_]+)/)?.[1] || '';
+        const correctionDepartment = this.cabinet.departmentForIntent(requiredIntent)
+          || departments.find((department) => department.id === blocked.department)
+          || departments[0];
+        const correction = `CORRECTION: this sitting's approved ${blocked.intent} was blocked by a hard sequencing constraint. Choose exactly ${blocked.requiredAction} now; return one JSON motion for your department and do not repeat ${blocked.intent}.`;
+        const correctedReply = await callMinister(correctionDepartment, correction);
+        if (correctedReply.reply && isCurrent()) {
+          this.llmCalls++;
+          this.cabinetCalls++;
+          const corrected = this.cabinet.parse(correctedReply.reply.text || '', {
+            departmentId: correctionDepartment.id,
+            maxMotions: 1
+          });
+          if (corrected[0]) {
+            corrected[0].index = motions.length;
+            motions.push(corrected[0]);
+            const correctionReview = this.cabinet.mayor.review(corrected, { requiredAction: this.requiredAction });
+            review = {
+              approved: [...review.approved, ...correctionReview.approved],
+              rejected: [...review.rejected, ...correctionReview.rejected],
+              deferred: [...review.deferred, ...correctionReview.deferred],
+              label: correctionReview.label
+            };
+            this.cabinet.lastReview = review;
+            for (const motion of [...correctionReview.rejected, ...correctionReview.deferred]) {
+              this.recordMayorMotion(motion, motion.status, motion.mayorReason);
+            }
+            for (const motion of correctionReview.approved) execute(motion);
+          }
+        }
+      }
+
+      this.cabinet.lastMotions = motions;
+      this.cabinet.lastExecution = execution;
+      finalDecision = execution[execution.length - 1]
+        || ((review.rejected.length || review.deferred.length) ? this.lastDecision : null);
       finalDecision ||= {
         day: this.town.clockDay || 0,
         source: 'llm',
@@ -3139,6 +3214,7 @@ export class GovernanceSystem {
       lastError: this.lastError,
       cycles: this.cycles,
       llmCalls: this.llmCalls,
+      cabinetCalls: this.cabinetCalls,
       parseFailures: this.parseFailures,
       forcedRequests: this.forcedRequests || 0,
       modelUsed: this.modelUsed,
