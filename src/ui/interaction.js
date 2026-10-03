@@ -536,7 +536,7 @@ export class Interaction {
       ${
         gv
           ? `<div class="kv grp"><span>🏛 Council</span><span>${esc(gv.providerLabel || gv.providerId || gv.modelUsed || 'LM Studio')}${gv.modelUsed && gv.modelUsed !== gv.providerId ? ` · ${esc(gv.modelUsed)}` : ''} · ${
-              gv.available === null ? 'idle' : gv.pending ? 'connected · thinking' : gv.rulesOnly ? `rules only · ${gv.consecutiveFailures} failures` : gv.available ? 'connected' : 'offline · rules fallback'
+              gv.available === null ? 'idle' : gv.pending ? 'connected · thinking' : gv.rulesOnly ? `Council paused · ${gv.consecutiveFailures} failures` : gv.available ? 'connected' : 'offline · awaiting Council'
             }</span></div>
              ${
                gv.last

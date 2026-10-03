@@ -890,7 +890,12 @@ export class ResourceSystem {
    * along the map edge, a dozen turbines no two of them near each other.
    */
   placeSite(g, rng, bounds, kind, opts = {}) {
-    const placement = this.findSitePlacement(g, rng, bounds, kind, opts);
+    // Council resource projects carry the exact read-only survey through the
+    // construction ledger. Reusing it prevents a farm from shifting to a
+    // different yard when the 12-hour project completes.
+    const placement = opts.placement?.kind === kind
+      ? opts.placement
+      : this.findSitePlacement(g, rng, bounds, kind, opts);
     if (!placement) return false;
     const { cells, spur } = placement;
     if (!carveRoad(g, spur, this.townRef)) return false;
@@ -1630,6 +1635,9 @@ export class ResourceSystem {
     }
     this.importWater(demand);
     this.importFuel(demand);
+    // Resource production is simulation state, but commissioning a new yard is
+    // a town-building decision. In Council-only mode this day-boundary pass
+    // may update shortage telemetry, never place a site or spend capital.
     this.growSites(demand);
   }
 
@@ -1715,16 +1723,18 @@ export class ResourceSystem {
   }
 
   /**
-   * Deficit-driven site growth: the founding plan sized sites for the START
-   * population only, so a town whose rated output falls under SURPLUS×demand
-   * adds one energy or food site per day while caps allow (water's headroom
-   * is the site-level upgrade — its lake is init-only). Mirrors plan()'s
-   * alternating kind order so new sites read as the same family.
+   * Council-authorized deficit response: the founding plan sized sites for the
+   * START population only, so a town whose rated output falls under
+   * SURPLUS×demand may commission one energy, food, or fuel site at a time
+   * while caps allow (water's headroom is the site-level upgrade — its lake is
+   * init-only). The day-boundary caller is deliberately report-only.
    */
-  growSites(demand) {
+  growSites(demand, options = {}) {
+    if (options.authorized !== true) return false;
     const g = this.townRef.grid;
     const bounds = coreBounds(g);
     if (!bounds) return;
+    const requestedResource = options.resource || null;
     const rng = this.growRng || (this.growRng = this.townRef.rng.fork(9007));
     // A producing site for `res` — pure storehouses (reservoir, silo) hold
     // stock but make none, so they never count toward the growth cap. The gas
@@ -1752,8 +1762,11 @@ export class ResourceSystem {
       // on day one.
       const opts = kind === 'windmill' ? { cluster: WIND_FARM } : {};
       for (const gap of GAP_LADDER) {
-        if (this.placeSite(g, rng, bounds, kind, { ...opts, gap })) {
-          if (economy) economy.fundProject(plan);
+        const placement = options.placement?.kind === kind ? options.placement : null;
+        if (this.placeSite(g, rng, bounds, kind, { ...opts, gap, ...(placement ? { placement } : {}) })) {
+          // A Council resource project is already funded by GrowthSystem.apply;
+          // the standalone day-boundary API still funds its own explicit call.
+          if (economy && options.funded !== true) economy.fundProject(plan);
           const site = this.sites[this.sites.length - 1];
           if (site) { site.id = site.id || `resource-${plan.projectId}`; site.ownerType = 'government'; site.ownerId = 'government'; site.fixedCapital = plan.cost; }
           return true;
@@ -1763,11 +1776,11 @@ export class ResourceSystem {
     };
     const announceSite = (kind, res) => {
       events.emit('council', {
-        source: 'town',
-        actor: 'Town',
+        source: 'council',
+        actor: 'Council',
         action: 'BUILD_SITE',
         status: 'done',
-        detail: `output ${Math.round(this.production[res] || 0)}/${Math.round(demand[res] || 0)} — auto-sited a ${kind} to cover the deficit`,
+        detail: `output ${Math.round(this.production[res] || 0)}/${Math.round(demand[res] || 0)} — the Council commissioned a ${kind} to cover the deficit`,
         cost: 30000
       });
     };
@@ -1784,22 +1797,27 @@ export class ResourceSystem {
     // buying another turbine that cannot solve an overnight deficit.
     const energyCapacity = this.capacity.energy || 0;
     if (
+      (!requestedResource || requestedResource === 'energy') &&
       energyCapacity < Math.max(900, demand.energy * BUFFER_DAYS) &&
       this.sites.filter((s) => s.kind === 'battery').length < 3 &&
       sited('battery')
     ) {
       this.townRef.rebuildStatic();
       events.emit('council', {
-        source: 'town', actor: 'Town', action: 'BUILD_BATTERY', status: 'done', cost: 30000,
+        source: 'council', actor: 'Council', action: 'BUILD_BATTERY', status: 'done', cost: 30000,
         detail: `energy storage ${Math.round(energyCapacity)} is below ${Math.round(demand.energy * BUFFER_DAYS)} kWh of daily buffer`
       });
       return;
     }
 
-    if (shortOn('energy')) {
+    if ((!requestedResource || requestedResource === 'energy') && shortOn('energy')) {
       const sites = prod('energy');
       if (sites.length < MAX_GROWTH_SITES.energy) {
-        const next = sites.length % 2 === 0 ? 'windmill' : 'solar';
+        // An explicit Council order may carry the surveyed producer kind so
+        // the executor uses the exact footprint that was quoted.  The
+        // alternating ladder remains the default for callers that do not
+        // specify a kind.
+        const next = options.kind || (sites.length % 2 === 0 ? 'windmill' : 'solar');
         if (sited(next)) {
           // The spur and yard changed roads and lots: rebuildStatic refreshes
           // the road graph, lots, zones and site meshes (and recomputes
@@ -1810,30 +1828,36 @@ export class ResourceSystem {
         }
       }
     }
-    if (shortOn('food')) {
+    if ((!requestedResource || requestedResource === 'food') && shortOn('food')) {
       const sites = prod('food');
       if (sites.length < MAX_GROWTH_SITES.food) {
         const cycle = ['farm', 'husbandry', 'poultry'];
-        const next = cycle[sites.length % cycle.length];
+        // Resource emergency plans reserve a concrete producer room before
+        // construction starts.  Honour that kind; otherwise the old cycle
+        // chooses the next farm/husbandry/poultry pattern.
+        const next = options.kind || cycle[sites.length % cycle.length];
         if (sited(next)) {
           this.townRef.rebuildStatic();
           announceSite(next, 'food');
+          return true;
         }
       }
     }
     // Phase 14 — a gas station is both pump AND tank, so it is not excluded
     // from the producing set the way the pure storehouses are.
-    if (shortOn('fuel')) {
+    if ((!requestedResource || requestedResource === 'fuel') && shortOn('fuel')) {
       const sites = prod('fuel');
       if (sites.length < MAX_GROWTH_SITES.fuel && sited('gas')) {
         this.townRef.rebuildStatic();
         announceSite('gas', 'fuel');
+        return true;
       }
     } else if (this.production.fuel < demand.fuel * SURPLUS) {
       // Capacity is fine and output is still short: the town simply has nobody
       // on the pumps. Say so instead of quietly trying to buy another one.
       this.noteUnderstaffed('fuel');
     }
+    return false;
   }
 
   noteUnderstaffed(res) {

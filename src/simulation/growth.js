@@ -1526,10 +1526,16 @@ export function planFor(town, type, opts = {}) {
       const kind =
         typeof opts.kind === 'string' && rs.kindOfResource?.(opts.kind) === r ? opts.kind : null;
       const cost = rs.upgradeCost(r, kind);
-      if (cost <= 0) return null;
-      const target = rs.upgradeTarget(r, kind);
-      if (!target) return null;
-      const tier = rs.nextTierLabel?.(target) || `site level ${(target.level || 1) + 1}`;
+      // A level-capped producer can still have a capacity shortfall. In that
+      // case the Council's UPGRADE_RESOURCE order commissions the next legal
+      // producer site on acquired land. The resource kit's day-boundary pass
+      // is report-only, so this is the sole construction path for new yards.
+      if (cost <= 0 && !rs.producerSiteRoom?.(r)) return null;
+      const target = cost > 0 ? rs.upgradeTarget(r, kind) : null;
+      if (cost > 0 && !target) return null;
+      const tier = target
+        ? (rs.nextTierLabel?.(target) || `site level ${(target.level || 1) + 1}`)
+        : 'the next production yard';
       return {
         type: 'resource',
         resource: r,
@@ -1540,12 +1546,22 @@ export function planFor(town, type, opts = {}) {
         // strand a growing town with dry water/food stores.
         financingSector: 'developer',
         allowMaterialImports: true,
-        label: kind
-          ? `Crews raise the ${SITE_LABEL[kind].toLowerCase()} to ${tier}`
-          : `Crews raise one ${r} works to ${tier}`,
-        cost,
+        label: cost > 0
+          ? (kind
+            ? `Crews raise the ${SITE_LABEL[kind].toLowerCase()} to ${tier}`
+            : `Crews raise one ${r} works to ${tier}`)
+          : `The Council commissions a new ${r} production yard`,
+        cost: cost > 0 ? cost : 30000,
         materials: MATERIALS.upgrade,
-        run: () => rs.upgrade(r, target)
+        run: (_cell, _target, rec) => cost > 0
+          ? rs.upgrade(r, target)
+          : rs.growSites(rs.demandNow(town), {
+            authorized: true,
+            funded: true,
+            resource: r,
+            kind: rec?.resourcePlacement?.kind || kind,
+            placement: rec?.resourcePlacement || null
+          })
       };
     }
     case 'power':
@@ -1584,9 +1600,10 @@ export class GrowthSystem {
     this.rng = town.rng.fork(9111);
     this.enabled = true;
     this.auto = false;
-    // The private developer runs on its own capital, independently of the
-    // council's auto-planner: `auto` is the council's switch, this is the
-    // market's. Set false to model a town with no private developers at all.
+    // Private developers are independent actors. They use their own capital
+    // and demand signal to commission private commerce without a Council vote;
+    // public land, roads, civic works, utilities and resource yards remain on
+    // the Council-governed path.
     this.developer = true;
     this.developerCooldown = 0;
     this.developerBuilt = 0;
@@ -2033,9 +2050,10 @@ export class GrowthSystem {
         return { resource, kind: 'upgrade', intent: 'UPGRADE_RESOURCE' };
       }
       if (rs.producerSiteRoom(resource)) {
-        // The day-boundary resource pass will commission this legal site. It
-        // is a production emergency, but not a reason to buy unrelated land.
-        return { resource, kind: 'site', intent: 'BUILD_SITE' };
+        // The Council uses the same UPGRADE_RESOURCE vocabulary for a new
+        // producer when every existing yard is at its level cap. The day
+        // boundary only reports this need; it never commissions the site.
+        return { resource, kind: 'site', intent: 'UPGRADE_RESOURCE' };
       }
       return { resource, kind: 'land', intent: 'ACQUIRE_LAND' };
     }
@@ -2435,7 +2453,7 @@ export class GrowthSystem {
       const resourceTarget = rs.strained.find((resource) =>
         resource === 'water' || rs.producerCapacityShortfall?.(resource)
       );
-      if (resourceTarget && (resourceTarget === 'water' || rs.upgradeCost?.(resourceTarget) > 0)) {
+      if (resourceTarget && (resourceTarget === 'water' || rs.upgradeCost?.(resourceTarget) > 0 || rs.producerSiteRoom?.(resourceTarget))) {
         add('resource', 1, { resource: resourceTarget });
       }
     }
@@ -2770,7 +2788,8 @@ export class GrowthSystem {
         return rs
           .stats()
           .strained.some((k) =>
-            (k === 'water' || rs.producerCapacityShortfall?.(k)) && rs.upgradeCost(k) > 0
+            (k === 'water' || rs.producerCapacityShortfall?.(k)) &&
+            (rs.upgradeCost(k) > 0 || rs.producerSiteRoom?.(k))
           );
       }
       case 'upgrade': {
@@ -4557,6 +4576,20 @@ export class GrowthSystem {
     }
 
     const needsCell = !NO_SITE.has(plan.type);
+    // New producer yards are the one resource plan that does need a physical
+    // footprint even though an in-place tier upgrade does not. Carry the
+    // exact producer survey into the project so claims, access and execution
+    // all refer to the same cells.
+    if (plan.type === 'resource' && plan.resource && !plan.target && this.town.resources?.producerSiteRoom) {
+      const room = plan.resourcePlacement || this.town.resources.producerSiteRoom(plan.resource, { uncached: true });
+      if (!room) {
+        this.lastBlock = 'no legal acquired producer footprint';
+        return false;
+      }
+      plan.resourcePlacement = room;
+      plan.cells = room.cells.map((cell) => cell.slice());
+      plan.accessSpur = (room.spur || []).map((cell) => cell.slice());
+    }
     // Named civic facilities have a non-negotiable campus minimum. They may
     // expand the street once to reach a new parcel, but they must never fall
     // back to a one-cell shell when the horizontal lot is unavailable: that

@@ -556,19 +556,18 @@ export class Hud {
     if (this.el.councilState) {
       const g = stats.governance;
       this.renderCouncilFeedback(g);
-      // Phase 30 (S19b) — `rulesOnly` is its own state: the endpoint has failed
-      // `askTimeoutMs`-worth of sittings in a row and is no longer being asked,
-      // which "offline · rules" did not say (it reads like a transient blip).
+      // `rulesOnly` is retained as a provider-failure diagnostic for old saves,
+      // but Council-only mode does not commission work through that path.
       const s =
         !g || g.available === null
           ? 'idle'
           : g.pending
             ? 'thinking…'
             : g.rulesOnly
-              ? `rules only · ${g.consecutiveFailures} failures`
+              ? `Council paused · ${g.consecutiveFailures} failures`
               : g.available
                 ? 'connected'
-                : 'offline · rules';
+                : 'offline · awaiting Council';
       if (s !== this._cs) {
         this._cs = s;
         this.el.councilState.textContent = s;

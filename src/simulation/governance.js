@@ -597,7 +597,7 @@ const PROMPT_BODY = [
   'BUILD_DISTRICT commissions a whole district as one order — the crews then work through a queue of roads, homes, shops, civic buildings and works, sized from the town\u2019s own housing pressure, strained resources and worst-loaded facility,',
   'and every build that lands off the network lays its own access road and pays for it, so nothing is ever stranded — read the Connectivity line for how many components the town has,',
   'The report lines "Feasible now (builds)", "Blocked" and "Priority" are ground truth: build only from Feasible now —',
-  'a Blocked pick cannot start and the council planner will substitute its own choice; non-build actions (tax, trade, hire, finance, festival, emergency, study, ATTRACT_SETTLERS, FUND_INNOVATION, ENACT_SCHEME, END_SCHEME, PASS_LAW, REPEAL_LAW, EXTEND_FOOTWAY, NO_ACTION) are always available,',
+  'a Blocked public pick cannot start; the Council must choose a later remedy from the next report. Private developers remain independent and may commission private commerce from their own accounts, but they do not substitute the Council\'s blocked public motion. Non-build actions (tax, trade, hire, finance, festival, emergency, study, ATTRACT_SETTLERS, FUND_INNOVATION, ENACT_SCHEME, END_SCHEME, PASS_LAW, REPEAL_LAW, EXTEND_FOOTWAY, NO_ACTION) are always available,',
   // The land-use family is never ranked (see ranked()), so — like EXTEND_
   // FOOTWAY — it must be declared always available or the "build only from
   // Feasible now" rule would make it unorderable. plaza/parking are ranked
@@ -1235,6 +1235,11 @@ export class GovernanceSystem {
       endpoint: this.endpoint,
       model: this.model
     });
+    // Public simulation decisions belong to the LLM Council. The private
+    // developer is deliberately outside this boundary and keeps its own
+    // independent commissioning pass; rules fallback is disabled so a
+    // deterministic public actor cannot silently author Council work.
+    this.councilOnly = opts.councilOnly !== false;
     this.rng = town.rng.fork(6006);
     this.reset();
   }
@@ -1271,7 +1276,7 @@ export class GovernanceSystem {
   reset() {
     this.enabled = true;
     this.auto = true;
-    this.fallback = true;
+    this.fallback = false;
     this.pending = false;
     this.proxied = false;
     this.available = null;
@@ -1835,17 +1840,17 @@ export class GovernanceSystem {
     // A dry primary resource is a safety-critical capacity signal. An LLM can
     // still be creative about the remedy, but it cannot spend the sitting on
     // a housing floor, shop polish or a landmark while the next producer has
-    // no legal footprint. The rules fallback then chooses the measured
-    // UPGRADE_RESOURCE or ACQUIRE_LAND plan and records the model's blocked
-    // motion for learning.
+    // no legal footprint. The next sitting must choose the measured
+    // UPGRADE_RESOURCE or ACQUIRE_LAND plan; no public rules actor may spend
+    // the sitting behind the model's back.
     const resourceEmergency = source === 'llm'
       ? t.growth?.resourceEmergency?.()
       : null;
-    if (resourceEmergency && resourceEmergency.kind !== 'site') {
+    if (resourceEmergency) {
       const sameResource = !parsed.params?.resource || parsed.params.resource === resourceEmergency.resource;
       const allowed = parsed.intent === 'TRADE_BUY' || parsed.intent === 'HIRE_WORKERS' ||
         (resourceEmergency.kind === 'land' && parsed.intent === 'ACQUIRE_LAND') ||
-        (resourceEmergency.kind === 'upgrade' && parsed.intent === 'UPGRADE_RESOURCE' && sameResource);
+        ((resourceEmergency.kind === 'upgrade' || resourceEmergency.kind === 'site') && parsed.intent === 'UPGRADE_RESOURCE' && sameResource);
       if (!allowed) {
         decision.status = 'blocked';
         decision.detail = `${resourceEmergency.resource} capacity emergency — ${resourceEmergency.intent} takes priority over ${parsed.intent}`;
@@ -1870,8 +1875,8 @@ export class GovernanceSystem {
       // a dead-end UPGRADE_RESOURCE loop. This mirrors the factory
       // prerequisite substitution below and lets the next sitting acquire a
       // complete producer footprint plus access spur.
-      if (parsed.intent === 'UPGRADE_RESOURCE' && t.growth.resourceLandNeed?.(parsed.params?.resource || null)) {
-        const acquisition = this.enact('INTENT: ACQUIRE_LAND', 'rules');
+      if ((source === 'test' || (!this.councilOnly && this.fallback)) && parsed.intent === 'UPGRADE_RESOURCE' && t.growth.resourceLandNeed?.(parsed.params?.resource || null)) {
+        const acquisition = this.enact('INTENT: ACQUIRE_LAND', source === 'test' ? 'test' : 'rules');
         acquisition.substituted = {
           intent: decision.intent,
           status: decision.status,
@@ -1895,8 +1900,8 @@ export class GovernanceSystem {
       // works need. When the complete campus is not on acquired serviced land,
       // make the prerequisite explicit instead of falling back to an unrelated
       // build and leaving the factory demand stranded.
-      if (parsed.intent === 'BUILD_FACTORY' && t.growth.factoryLandNeeded?.(parsed.params || {})) {
-        const acquisition = this.enact('INTENT: ACQUIRE_LAND', 'rules');
+      if ((source === 'test' || (!this.councilOnly && this.fallback)) && parsed.intent === 'BUILD_FACTORY' && t.growth.factoryLandNeeded?.(parsed.params || {})) {
+        const acquisition = this.enact('INTENT: ACQUIRE_LAND', source === 'test' ? 'test' : 'rules');
         acquisition.substituted = {
           intent: decision.intent,
           status: decision.status,
@@ -2012,6 +2017,7 @@ export class GovernanceSystem {
    *  source. Amenity work (park/archetype/filler floor) never fills this slot —
    *  with nothing to demand outstanding the fallback is NO_ACTION (Phase 4 C3). */
   replan() {
+    if (this.councilOnly) return null;
     let plan = this.town.growth.evaluate({ amenities: false });
     let code = planCode(plan);
     // With nothing to build, staff gaps still give the council work.
@@ -2054,7 +2060,22 @@ export class GovernanceSystem {
    * motion rides along on it and in `stats()`.
    */
   substitute(modelDecision) {
-    const chosen = this.replan();
+    if (this.councilOnly) return modelDecision;
+    // A generic replan is normally useful, but it is unsafe during a primary
+    // resource capacity emergency: if the emergency row is temporarily
+    // blocked by a quote detail, ranked() can fall through to a housing/floor
+    // upgrade and repeat the exact starvation shown in the Council card. Drive
+    // the measured remedy directly, and leave the failure visible if that
+    // remedy itself cannot start.
+    const emergency = this.town.growth?.resourceEmergency?.();
+    let chosen = null;
+    if (emergency?.kind === 'upgrade') {
+      chosen = this.enact(`INTENT: UPGRADE_RESOURCE resource=${emergency.resource}`, 'rules');
+    } else if (emergency?.kind === 'land') {
+      chosen = this.enact('INTENT: ACQUIRE_LAND', 'rules');
+    } else {
+      chosen = this.replan();
+    }
     if (chosen) {
       chosen.substituted = {
         intent: modelDecision.intent,
@@ -2570,8 +2591,8 @@ export class GovernanceSystem {
    *   • an **epoch guard**, so a reply that arrives after `reset()` — after the
    *     town was regenerated underneath it — is discarded instead of enacted
    *     against a town its reasoning never saw;
-   *   • a **failure counter** with `ASK_FAIL_LIMIT`, handing the town to the
-   *     rules fallback rather than retrying a dead endpoint every slot;
+   *   • a **failure counter** with `ASK_FAIL_LIMIT`, pausing public autonomous
+   *     construction rather than retrying a dead endpoint every slot;
    *   • a bounded temperature plus a one-entry `(situationKey → decision)` cache,
    *     with a one-entry situation cache so stable situations do not churn.
    *     The default 0.15 adds small construction variation; set temperature=0
@@ -2681,7 +2702,7 @@ export class GovernanceSystem {
         }
         return rules || { status: 'error', intent: null, detail: this.lastError };
       }
-      return { status: 'error', intent: null, detail: this.lastError };
+      return { status: 'error', intent: null, detail: `${this.lastError} — Council-only mode took no automatic action` };
     } finally {
       // Belt and braces. The catch above already clears `pending` on every path
       // it handles, but it can itself throw while building a fallback sitting,
@@ -2757,6 +2778,7 @@ export class GovernanceSystem {
     if (this.consecutiveFailures >= ASK_FAIL_LIMIT) {
       this.rulesOnly = true;
       if (this.cycles % 4 === 0) { this.askQuietly(); return; }
+      if (this.councilOnly) return;
       const rules = this.replan();
       if (rules) {
         rules.substituted = {
@@ -2776,7 +2798,7 @@ export class GovernanceSystem {
    * Start a sitting and report its rejection.
    *
    * `ask()` has a complete internal handler — it records `lastError`, counts the
-   * failure, degrades to the rules fallback and clears `pending` — so the empty
+   * failure, records the provider error and clears `pending` — so the empty
    * catch was never hiding a stuck flag. What it hid is the rejection itself,
    * from anything watching: a sweep for empty catch blocks misses it entirely,
    * because a swallowed promise is not a catch block. One line makes it visible
@@ -2792,6 +2814,7 @@ export class GovernanceSystem {
     return {
       enabled: this.enabled,
       auto: this.auto,
+      councilOnly: this.councilOnly,
       endpoint: this.endpoint,
       providerId: this.provider?.id || 'unknown',
       providerLabel: this.provider?.label || this.provider?.id || 'unknown',

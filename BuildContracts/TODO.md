@@ -4,9 +4,15 @@ Updated 2026-10-03 after the industrial-chain and hospitality-economy audit.
 
 ## Completed
 
+- [x] Hardened the primary-resource emergency boundary. When an LLM request is blocked because food, energy, or fuel capacity is short, the live Council-only path records the measured emergency and waits for the Council to choose `UPGRADE_RESOURCE` or `ACQUIRE_LAND`; it cannot fall through to an unrelated `UPGRADE_BUILDING`. New producer yards use that same Council order after land is acquired, and the resource-land regression covers upgrade, land, and site branches.
+
+- [x] Made the Council the sole public decision maker. Rules fallback is disabled for public work and provider failure pauses autonomous Council construction instead of silently building through a deterministic actor. The private developer pass remains independent, using its own capital and demand signal for private commerce.
+
+- [x] Added `npm run test:council-authority` to verify the public Council boundary, report-only resource day pass, blocked LLM motion, and independent private-developer switch.
+
 - [x] Uncoupled `ACQUIRE_LAND` from the construction crew cap. Land purchases remain gated by exhausted acquired serviced plots, frontier availability, target footprint/access survey, treasury reserve, and charged ledger accounting, but they can now run while two unrelated buildings are under construction; the land-gate regression covers this occupied-crew case.
 
-- [x] Resource growth now treats a dry primary-resource store as a capacity emergency. It distinguishes capacity shortfalls from understaffing, surveys the exact acquired-land producer footprint and access spur, and ranks frontier acquisition before housing or cosmetic progression when a 7×4 food yard no longer fits. Food growth caps now leave headroom for a 1,000-resident town. The governance boundary blocks an LLM housing/progression request during that emergency and substitutes the measured `UPGRADE_RESOURCE` or `ACQUIRE_LAND` action; a resource upgrade with no eligible site becomes the land prerequisite. `npm run test:resource-land` covers the dry-food → frontier acquisition → new-farm path on seed 1337.
+- [x] Resource growth now treats a dry primary-resource store as a capacity emergency. It distinguishes capacity shortfalls from understaffing, surveys the exact acquired-land producer footprint and access spur, and ranks frontier acquisition before housing or cosmetic progression when a 7×4 food yard no longer fits. Food growth caps now leave headroom for a 1,000-resident town. The governance boundary blocks an LLM housing/progression request during that emergency and waits for the Council's `UPGRADE_RESOURCE` or `ACQUIRE_LAND` choice; a resource upgrade with no eligible site becomes the land prerequisite. `npm run test:resource-land` covers the dry-food → frontier acquisition → new-farm path on seed 1337.
 
 - [x] Shared immutable catalogue covers 78 blocks across housing, commerce, civic, industry, resources, utilities, roads, public space, and props.
 - [x] Catalogue rows have stable IDs, kit/family labels, footprints, module roles, bills of materials, labour hours, and audit coverage.
@@ -195,7 +201,7 @@ Updated 2026-10-03 after the industrial-chain and hospitality-economy audit.
 - [x] Added explicit social evidence to the Council report: approval, citizen mood, needs/safety/services/economy/belonging/transport dimensions, neighbourhood count, crime backlog, laws, and mayor. Schemes and landmark candidates can now be weighed against the same public state without turning mood into a hidden hard gate.
 - [x] Extended the UI regression probe to require the societal panel and its live summary rows.
 - [x] Kept the founding core within a compact 22–24 × 19–21 cell frame (below the 30×30 ceiling). The perimeter ledger now acquires the complete non-water founding envelope, producing a tight seed-42 roughly 30×30 envelope with about 893 acquired town tiles and frontier land only outside it.
-- [x] Added a severe-congestion priority band (65%+) so a legal EXTEND_STREET or ROADUP plan outranks lower-band infill in the rules fallback and is labelled emergency in the Council report.
+- [x] Added a severe-congestion priority band (65%+) so a legal EXTEND_STREET or ROADUP plan outranks lower-band infill in Council feasibility ordering and is labelled emergency in the Council report.
 - [x] Added recycling-cap regression coverage to `npm run test:society`.
 - [x] Added `npm run test:campus` for the near-campus, across-road, far-campus, and ordinary-civic placement cases.
 - [x] Reworked the founding street layout into a two-street cross with explicit frontage zoning and compact resource siting. Seed-42 starts with the same 15-building/30-resident contract and a fully acquired non-water founding envelope; later branches are earned through legal `EXTEND_STREET` and outward land acquisition.

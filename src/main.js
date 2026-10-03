@@ -460,8 +460,8 @@ function frame(now) {
   // HUD's speed buttons on the user's intended rate, lets a click DURING the
   // freeze stick as the resume rate, and still stops the rotors and the clock
   // for the frame (resourceKit freezes on clock.speed === 0, the same rule the
-  // pause button uses). The rules fallback is never paused: its decision is
-  // synchronous and clears pending before enact runs.
+  // pause button uses). Council-only mode never lets a fallback author work;
+  // while the provider is thinking, the town simply waits for its decision.
   const thinking = !!town.governance?.pending;
   const heldSpeed = thinking ? clock.speed : 0;
   if (thinking) clock.speed = 0;
