@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CELL, CELL_KIND } from '../../core/config.js';
+import { CELL, CELL_KIND, PALETTE } from '../../core/config.js';
 import { N, E, S, W } from '../../core/grid.js';
 import { merge } from '../geometry.js';
 import {
@@ -30,7 +30,6 @@ import {
   addSurface,
   addTrafficLight,
   addTunnel,
-  addWater,
   bridgeNeighbor,
   classify,
   edgeInfo,
@@ -105,6 +104,7 @@ export class RoadKit {
     this.graph = new RoadGraph();
     this.signals = null;
     this.signalMeshes = [];
+    this.waterMeshes = [];
     this.stats = { tiles: 0, components: {} };
   }
 
@@ -125,7 +125,16 @@ export class RoadKit {
     this.signMeshes = [];
   }
 
+  releaseWaterMeshes() {
+    for (const m of this.waterMeshes) {
+      m.geometry?.dispose();
+      m.material?.dispose();
+    }
+    this.waterMeshes = [];
+  }
+
   build() {
+    this.releaseWaterMeshes();
     this.group.clear();
     this.pickables = [];
     this.releaseSigns();
@@ -143,6 +152,7 @@ export class RoadKit {
     const sigBuckets = {};
     const signalCells = [];
     const extras = [];
+    const waterCells = [];
     const counts = {};
     const bump = (k, n = 1) => {
       counts[k] = (counts[k] || 0) + n;
@@ -162,7 +172,7 @@ export class RoadKit {
 
     this.grid.forEach((x, y, g) => {
       if (g.kindAt(x, y) === CELL_KIND.WATER) {
-        addWater(b, { x, y, p: g.cellToWorld(x, y), rng: this.cellRng(x, y) });
+        waterCells.push([x, y]);
         bump('Water');
         return;
       }
@@ -216,6 +226,12 @@ export class RoadKit {
 
     this.graph.build(this.grid, { cellInfo: this.cellInfo, xsByCell: this.xsByCell });
     this.stats.graph = this.graph.stats();
+
+    const waterMeshes = createWaterBodyMeshes(this.grid, waterCells);
+    for (const mesh of waterMeshes) {
+      this.waterMeshes.push(mesh);
+      this.group.add(mesh);
+    }
 
     this.emit(buckets, extras, sigBuckets, signalCells);
     return this.group;
@@ -414,6 +430,187 @@ function standard(color, roughness, opts = {}) {
     roughness,
     metalness: opts.metalness ?? 0.02
   });
+}
+
+/**
+ * Build one visual water body for each connected set of water cells.  Water
+ * cells stay square in the simulation because zoning, bridges and resource
+ * accounting all depend on the grid.  The visible body is a separate rounded
+ * polygon: its dark shore hides tile seams and its slightly inset surface has
+ * deterministic shoreline variation, so a lake reads as an organic feature
+ * without changing the authoritative tile layout.
+ */
+function createWaterBodyMeshes(grid, waterCells) {
+  if (!waterCells.length) return [];
+  const water = new Set(waterCells.map(([x, y]) => `${x},${y}`));
+  const components = [];
+  const unseen = new Set(water);
+  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+  while (unseen.size) {
+    const start = unseen.values().next().value;
+    unseen.delete(start);
+    const queue = [start];
+    const cells = [];
+    for (let i = 0; i < queue.length; i++) {
+      const key = queue[i];
+      const [x, y] = key.split(',').map(Number);
+      cells.push([x, y]);
+      for (const [dx, dy] of dirs) {
+        const next = `${x + dx},${y + dy}`;
+        if (unseen.delete(next)) queue.push(next);
+      }
+    }
+    components.push(cells);
+  }
+
+  const meshes = [];
+  for (let componentIndex = 0; componentIndex < components.length; componentIndex++) {
+    const component = components[componentIndex];
+    const loop = largestBoundaryLoop(component, water, grid);
+    if (loop.length < 3) continue;
+
+    const shoreShape = roundedShape(loop, grid, 0);
+    const centre = loop.reduce((sum, p) => ({ x: sum.x + p.x, z: sum.z + p.z }), { x: 0, z: 0 });
+    centre.x /= loop.length;
+    centre.z /= loop.length;
+    const surfacePoints = loop.map((p, i) => {
+      const dx = p.x - centre.x;
+      const dz = p.z - centre.z;
+      const length = Math.hypot(dx, dz) || 1;
+      // Keep the variation smaller than the shore inset. This adds a natural
+      // edge without allowing the surface to spill over adjacent land cells.
+      const wave = Math.sin((i + 1) * 2.17 + component.length * 0.31 + componentIndex) * CELL * 0.08;
+      const inset = CELL * 0.18;
+      const scale = Math.max(0.78, 1 - inset / length);
+      return {
+        x: centre.x + dx * scale + (dx / length) * wave,
+        z: centre.z + dz * scale + (dz / length) * wave
+      };
+    });
+    const surfaceShape = roundedShape(surfacePoints, grid, CELL * 0.08);
+
+    const shore = new THREE.Mesh(
+      new THREE.ShapeGeometry(shoreShape),
+      new THREE.MeshStandardMaterial({
+        color: 0x244f68,
+        roughness: 0.78,
+        metalness: 0.04,
+        side: THREE.DoubleSide
+      })
+    );
+    shore.name = `road-water-shore-${componentIndex}`;
+    shore.rotation.x = -Math.PI / 2;
+    shore.position.y = 0.006;
+    shore.receiveShadow = true;
+
+    const surface = new THREE.Mesh(
+      new THREE.ShapeGeometry(surfaceShape),
+      new THREE.MeshStandardMaterial({
+        color: PALETTE.water,
+        roughness: 0.2,
+        metalness: 0.12,
+        transparent: true,
+        opacity: 0.94,
+        side: THREE.DoubleSide
+      })
+    );
+    surface.name = `road-water-surface-${componentIndex}`;
+    surface.rotation.x = -Math.PI / 2;
+    surface.position.y = 0.045;
+    surface.receiveShadow = true;
+    meshes.push(shore, surface);
+  }
+  return meshes;
+}
+
+function largestBoundaryLoop(component, water, grid) {
+  const edges = new Map();
+  const addEdge = (sx, sy, ex, ey) => {
+    const start = `${sx},${sy}`;
+    // Diagonal-only contacts can make two loops share a corner. Keep the
+    // first edge here; the component itself is four-connected, so the common
+    // case remains a single unambiguous shoreline.
+    if (!edges.has(start)) edges.set(start, [ex, ey]);
+  };
+  for (const [x, y] of component) {
+    if (!water.has(`${x},${y - 1}`)) addEdge(x, y, x + 1, y);
+    if (!water.has(`${x + 1},${y}`)) addEdge(x + 1, y, x + 1, y + 1);
+    if (!water.has(`${x},${y + 1}`)) addEdge(x + 1, y + 1, x, y + 1);
+    if (!water.has(`${x - 1},${y}`)) addEdge(x, y + 1, x, y);
+  }
+
+  const loops = [];
+  const unused = new Set(edges.keys());
+  while (unused.size) {
+    const start = unused.values().next().value;
+    let current = start;
+    const loop = [];
+    const guard = edges.size + 4;
+    for (let i = 0; i < guard; i++) {
+      const edge = edges.get(current);
+      if (!edge) break;
+      const [sx, sy] = current.split(',').map(Number);
+      loop.push(cornerWorld(grid, sx, sy));
+      unused.delete(current);
+      current = `${edge[0]},${edge[1]}`;
+      if (current === start) break;
+    }
+    if (loop.length >= 3 && current === start) loops.push(loop);
+    else break;
+  }
+  loops.sort((a, b) => Math.abs(polygonArea(b)) - Math.abs(polygonArea(a)));
+  return loops[0] || [];
+}
+
+function cornerWorld(grid, x, y) {
+  return {
+    x: (x - grid.w / 2) * CELL,
+    z: (y - grid.h / 2) * CELL
+  };
+}
+
+function polygonArea(points) {
+  let area = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    area += a.x * b.z - b.x * a.z;
+  }
+  return area / 2;
+}
+
+function roundedShape(points, grid, extraRadius = 0) {
+  const shape = new THREE.Shape();
+  const n = points.length;
+  const entries = points.map((point, i) => {
+    const previous = points[(i + n - 1) % n];
+    const next = points[(i + 1) % n];
+    const beforeLength = Math.hypot(previous.x - point.x, previous.z - point.z) || CELL;
+    const afterLength = Math.hypot(next.x - point.x, next.z - point.z) || CELL;
+    const radius = Math.min(CELL * 0.38 + extraRadius, beforeLength * 0.3, afterLength * 0.3);
+    return {
+      point,
+      incoming: {
+        x: point.x + (previous.x - point.x) * radius / beforeLength,
+        z: point.z + (previous.z - point.z) * radius / beforeLength
+      },
+      outgoing: {
+        x: point.x + (next.x - point.x) * radius / afterLength,
+        z: point.z + (next.z - point.z) * radius / afterLength
+      }
+    };
+  });
+  // ShapeGeometry is created in XY and rotated onto the XZ ground plane. The
+  // negated second coordinate keeps world +Z pointing in the expected direction.
+  const first = entries[0].outgoing;
+  shape.moveTo(first.x, -first.z);
+  for (const entry of entries) {
+    shape.lineTo(entry.incoming.x, -entry.incoming.z);
+    shape.quadraticCurveTo(entry.point.x, -entry.point.z, entry.outgoing.x, -entry.outgoing.z);
+  }
+  shape.closePath();
+  return shape;
 }
 
 function popcount(m) {

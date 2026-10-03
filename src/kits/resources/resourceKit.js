@@ -192,9 +192,14 @@ const MAX_SPUR = 8; // longest access road from a site to the network
 /** Phase 18 — the same ceiling for any off-network build's access road. */
 export const MAX_SPUR_LENGTH = 8;
 const EDGE_MARGIN = 1; // keep sites off the raw map edge
-const LAKE_MAX = 20;
-const LAKE_MIN = 4;
-const LAKE_REACH = 4; // lake grows no further than this from its seed
+// A founding water source is a real lake, rather than the four-cell pond the
+// old demand-only minimum produced.  The grid footprint remains authoritative
+// for water accounting and path finding, while the road kit smooths its visible
+// shoreline.  The reach cap keeps the body compact enough to service from one
+// spur and prevents it from turning into a thin river across the town.
+const LAKE_MAX = 64;
+const LAKE_MIN = 24;
+const LAKE_REACH = 8; // lake grows no further than this from its seed
 const MAX_ENERGY_SITES = 7;
 /**
  * Energy sites a founding town always gets, demand notwithstanding: the

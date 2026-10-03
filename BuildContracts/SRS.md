@@ -69,6 +69,7 @@ This specification defines the shared construction vocabulary and the progressio
 21d. WeatherSystem shall run a deterministic 120-day year with four 30-day seasons (spring, summer, autumn, winter). It shall select bounded clear, cloudy, rain, storm, heatwave, and snow states from the seeded day/season, expose season, temperature, precipitation, next transition, history, and modifiers through `Town.stats().weather`, and emit a `weather-change` event plus a town-log entry when a state changes. Food production, water/energy demand, traffic speed, and citizen mood shall consume the same live modifier object; no consumer may invent a separate weather rule. The clock HUD and Council report shall show the current season and weather so provider decisions can account for observed conditions.
 
 21e. The scene shall make precipitation visible when the live weather is rain, storm, or snow. Rain shall use bounded animated streak geometry and snow shall use bounded animated flakes, both camera-local to the current orbit target, fogged and transparent, with no per-frame particle allocation. Clear weather shall hide both layers while retaining the existing overcast sky, fog, and exposure changes.
+21f. A natural lake shall use a minimum 24-cell and maximum 64-cell connected water footprint at founding, with a compact eight-cell growth reach and a road-connected spur. The grid cells remain authoritative for water accounting, ownership, bridges, zoning, and collision rules. RoadKit shall render each connected water body as a unified Three.js shoreline and inset surface with rounded deterministic boundary variation, so a lake reads as an irregular organic body instead of a checkerboard of square tiles. Rebuilding roads shall dispose the generated lake meshes without changing the water ledger.
 
 21b. Footways shall be pedestrian-only links. Automatic growth shall not commission a footway as filler; an explicit `EXTEND_FOOTWAY`/player order may lay a shortest useful link only to a private or civic inland parcel, excluding park/public reservations. A footway may be converted to asphalt through the Road tool when vehicle access is required.
 
@@ -176,7 +177,7 @@ The next social-system acceptance pass shall add a player-facing stop-placement 
 
 ## Acceptance tests
 
-- npm run build, npm run test:ui, npm run test:kits, npm run test:economy, npm run test:governor, npm run test:glow, npm run test:resources, npm run test:council, npm run test:soak, and npm run test:metropolis pass with no page errors.
+- npm run build, npm run test:ui, npm run test:kits, npm run test:economy, npm run test:governor, npm run test:glow, npm run test:resources, npm run test:lake, npm run test:council, npm run test:soak, and npm run test:metropolis pass with no page errors.
 - A two-floor house built with all four flags contains balcony, ramp, solar, and green-roof roles and modules.
 - Every civic order row has a catalogue entry and a declared capacity kind, including college, university, and recycling.
 - A college/university build contributes tertiary capacity; secondary residents do not graduate while the tertiary load has no headroom.
@@ -210,6 +211,7 @@ The next social-system acceptance pass shall add a player-facing stop-placement 
 - The land-gate regression shall verify that the first exhausted-ledger acquisition can proceed, then a second `ACQUIRE_LAND` is rejected while acquired serviced plots remain.
 - The housing-growth regression shall verify a full-bed seed ranks `DEVELOP_HOUSING` on acquired land, starts the explicit order, and never requests frontier acquisition while a serviced founding plot remains.
 - The forest regression shall verify seed-1337 full-plate tree coverage with an irregular edge stand, four-lumber deforestation credit, plantation accounting, bounded natural fall, and clean rendering with no page errors.
+- The lake regression shall verify seed-1337 has at least 16 connected water cells, a footprint wider/deeper than the former pond, both shoreline and surface meshes, no page errors, and a passing town validation.
 - The campus regression shall reject nearby and across-road school/college/university/conservatory footprints, accept a separated campus, and leave ordinary civic facilities eligible. The weather regression shall verify visible rain streaks and snow flakes as well as deterministic seasons and Council evidence.
 - The tourism regression shall place a hotel on an acquired legal site, preserve its room/tourism metadata, classify it as lodging, derive positive floor-area staffing, settle visitor nights as external export revenue, expose the tourism Council line, and verify the resort pool/service-wing kit and larger quote.
 

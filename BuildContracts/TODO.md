@@ -152,6 +152,7 @@ Updated 2026-10-03 after the tourism, hotel/resort, and hospitality-economy audi
 - [x] Re-ran the deterministic 800-day seed-1337 forest horizon after the foliage-kit balance: 580 natural falls, 2,320 lumber recovered, no renderer errors, and a valid town; weekly batching reduced tree coverage 19%→13% while the 12-cell decorative understory remained.
 - [x] Added a seeded WeatherSystem with a 120-day four-season calendar, bounded rain/storm/heatwave/snow states, HUD and Council evidence, and shared effects on food yield, utility demand, traffic speed, and citizen mood. Added `npm run test:weather` for deterministic season-boundary and Council-report coverage.
 - [x] Added camera-local visible precipitation: rain is rendered as animated streaks and snow as animated flakes around the current town view. The renderer reuses the deterministic weather state, overcast lighting, and fog, and the weather regression now verifies both visible layers.
+- [x] Enlarged the founding lake to a 24–64-cell compact connected body with an eight-cell reach cap. The water grid remains authoritative, while RoadKit now groups connected water cells and renders a rounded dark shoreline plus inset, deterministic organic Three.js surface. Added `npm run test:lake` for seed-1337 footprint, mesh, validation, and page-error coverage.
 
 ## Optional operator experiments (require external provider credentials)
 

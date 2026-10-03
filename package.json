@@ -36,7 +36,8 @@
     "test:vegetation-clear": "node scripts/_vegetation_clear_check.mjs",
     "test:weather": "node scripts/_weather_check.mjs",
     "test:campus": "node scripts/_campus_spacing_check.mjs",
-    "test:tourism": "node scripts/_tourism_check.mjs"
+    "test:tourism": "node scripts/_tourism_check.mjs",
+    "test:lake": "node scripts/_lake_check.mjs"
   },
   "dependencies": {
     "three": "^0.169.0"
