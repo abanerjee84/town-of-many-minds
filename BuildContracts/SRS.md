@@ -28,7 +28,7 @@ This specification defines the shared construction vocabulary and the progressio
 ### Housing, commerce, and mixed use
 
 6. HouseKit shall support accessible entrances, balconies, solar roofs, and planted roofs with role-tagged geometry and module records.
-7. IMAGINE_ARCHETYPE block=<id> shall validate the block, infer a compatible zone/facility, merge module flags with explicit flags, and reject unrelated kit families.
+7. IMAGINE_ARCHETYPE block=<id> shall validate the block, infer a compatible zone/facility, merge module flags with explicit flags, and reject unrelated kit families. The planner shall expose it from measured design opportunities: overloaded civic capacity or low approval may promote a matching archetype into Priority, while comfortable-town experiments remain Feasible-now amenity work with a population-earned allowance.
 8. Project and decision records shall retain blockId, modules, materials, and labourHours. Buildings shall retain blockId and climate/access flags.
 9. Residential occupancy shall be three residents per tiled footprint per floor, except for the founding contract's explicit five-bed homes. A three-storey one-tile home therefore holds nine residents; multi-cell homes multiply by their tile count. Commerce and factory occupancy shall be monotone in footprint area and floors; office desks shall follow the same floor-area rule.
 10. A building's staffing requirement shall be derived from floor area × floors at the shared `AREA_PER_STAFF` rate. Public civic buildings shall contribute posts to Lifecycle, Governance, settler pull, and hiring; civic hires shall be placed at civic buildings only.
@@ -179,7 +179,11 @@ The council system prompt is an epistemic contract for provider comparison: it d
 
 47a. Every Council report shall include the same social evidence used by the Societal panel: approval, citizen mood, available mood dimensions, neighbourhood count, open crimes, court backlog, active laws, and mayor. Schemes and landmark choices may respond to this evidence, but the report shall not convert it into an undisclosed automatic landmark gate.
 
+47b. A creative design opportunity shall state the measured reason, suggested compatible catalogue block, and whether it is demand work or amenity work. Demand-driven archetypes shall be eligible for Priority; optional designs shall remain below essential work and be bounded by population-earned design allowances. Completed archetypes shall feed occupancy, staffing, service-load, fiscal, traffic, approval, and accessibility outcomes into the Council learning record.
+
 48. When measured congestion reaches 65%, a legal `EXTEND_STREET` or `ROADUP` candidate shall receive an emergency priority score above lower-band infill in Council feasibility ordering. The candidate must still pass the road planner's measured-demand, connected-component, legal-run, finance, and material checks; severe congestion never authorizes arbitrary paving.
+
+48a. When an LLM sitting is blocked by a primary-resource emergency, the governance boundary shall record a mandatory next remedy and place it at the top of the next report. The same sitting may request one corrective provider response with the exact required action; the response remains subject to normal parsing, need, quote, finance, materials, and construction checks. No deterministic public substitute may enact it.
 
 The next social-system acceptance pass shall add a player-facing stop-placement tool, staffed court throughput, neighbourhood-specific budgets, and seeded provider comparisons for approval, fiscal runway, crime resolution, and land-use efficiency. These are follow-up experiments rather than hidden Council objectives.
 
@@ -205,6 +209,7 @@ The next social-system acceptance pass shall add a player-facing stop-placement 
 - The resource feedback probe shall upgrade a founding farm through the real kit path, verify its exact tier-2 area, observe a world pulse, and observe the HUD `UPDATE_RESOURCE` message and Council evidence panel.
 - The resource-land regression shall force a seed-1337 food-capacity shortage with the founding producer at level 3, verify that a remaining one-cell vacancy does not suppress `ACQUIRE_LAND`, verify a charged contiguous frontier purchase, and verify that the next resource pass places a new food producer.
 - The Council-authority regression shall verify that public rules replanning is inert, a dry resource day pass reports without placing a new site, an LLM-blocked motion is not substituted, and the independent private-developer pass remains enabled.
+- The Council-flow regression shall verify that an evidence-backed archetype opportunity is offered without a random roll and that one blocked primary-resource reply receives an immediate corrective provider turn and does not consume three later sittings.
 - The agricultural setback probe shall verify the protected boundary, a legal next tile, a clean seed-1337 founding layout, and that Council footprint surveys do not return a site inside a farm/paddock buffer.
 - The resource-neighbour probe shall verify the shared two-tile production/storage buffer in both directions, permit industrial supplier adjacency, and show seed 1337 has no ordinary building beside a protected resource site after founding placement or Council survey.
 - The footway probe shall verify no automatic footway ranking, successful explicit pedestrian-link placement, Road-tool conversion to asphalt, and a forced request with zero provider calls.

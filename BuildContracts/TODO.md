@@ -10,6 +10,14 @@ Updated 2026-10-03 after the industrial-chain and hospitality-economy audit.
 
 - [x] Added `npm run test:council-authority` to verify the public Council boundary, report-only resource day pass, blocked LLM motion, and independent private-developer switch.
 
+- [x] Reworked `IMAGINE_ARCHETYPE` into a measured design-opportunity channel. Civic overload and low approval can promote a compatible catalogue archetype into Priority; comfortable-town experiments remain bounded amenity work, and the report explains the design gap.
+
+- [x] Added a one-turn Council correction loop for hard primary-resource sequencing. A blocked LLM motion now records a mandatory remedy in the next report and receives one immediate corrective provider response, avoiding repeated BUILD_FACTORY/TIERUP blocks across several sittings without reintroducing rules fallback.
+
+- [x] Added `npm run test:council-flow` for evidence-backed archetype visibility and same-sitting resource-remedy correction.
+
+- [x] Extended delayed Council learning evidence with approval, accessibility coverage, and completed archetype counts so creative designs are compared by outcomes rather than names or prose.
+
 - [x] Uncoupled `ACQUIRE_LAND` from the construction crew cap. Land purchases remain gated by exhausted acquired serviced plots, frontier availability, target footprint/access survey, treasury reserve, and charged ledger accounting, but they can now run while two unrelated buildings are under construction; the land-gate regression covers this occupied-crew case.
 
 - [x] Resource growth now treats a dry primary-resource store as a capacity emergency. It distinguishes capacity shortfalls from understaffing, surveys the exact acquired-land producer footprint and access spur, and ranks frontier acquisition before housing or cosmetic progression when a 7×4 food yard no longer fits. Food growth caps now leave headroom for a 1,000-resident town. The governance boundary blocks an LLM housing/progression request during that emergency and waits for the Council's `UPGRADE_RESOURCE` or `ACQUIRE_LAND` choice; a resource upgrade with no eligible site becomes the land prerequisite. `npm run test:resource-land` covers the dry-food → frontier acquisition → new-farm path on seed 1337.

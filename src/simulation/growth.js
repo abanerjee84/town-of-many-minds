@@ -1476,7 +1476,9 @@ export function planFor(town, type, opts = {}) {
         cost: bill ? bill.cost : cellCost + 1500,
         materials: bill ? bill.materials : MATERIALS.archetype,
         labourHours: bill?.labourHours || null,
-        modules: block?.modules || []
+        modules: block?.modules || [],
+        designGap: opts.designGap || null,
+        designReason: opts.designReason || null
       };
       plan.run = (c) =>
         !!c &&
@@ -1608,7 +1610,7 @@ export class GrowthSystem {
     this.developerCooldown = 0;
     this.developerBuilt = 0;
     this.history = [];
-    this.built = { house: 0, shop: 0, civic: 0, park: 0, road: 0, utility: 0, factory: 0, mall: 0, multiplex: 0 };
+    this.built = { house: 0, shop: 0, civic: 0, park: 0, archetype: 0, road: 0, utility: 0, factory: 0, mall: 0, multiplex: 0 };
     this.metrics = { tierUps: 0, floorUpgrades: 0, wings: 0 };
     this.cooldown = 6;
     // In-flight construction: queued projects, the cells they have claimed
@@ -1636,7 +1638,7 @@ export class GrowthSystem {
 
   reset() {
     this.history = [];
-    this.built = { house: 0, shop: 0, civic: 0, park: 0, road: 0, utility: 0, factory: 0, mall: 0, multiplex: 0, district: 0 };
+    this.built = { house: 0, shop: 0, civic: 0, park: 0, archetype: 0, road: 0, utility: 0, factory: 0, mall: 0, multiplex: 0, district: 0 };
     this.metrics = { tierUps: 0, floorUpgrades: 0, wings: 0 };
     this.cooldown = 6;
     this.projects = [];
@@ -2079,6 +2081,87 @@ export class GrowthSystem {
   }
 
   /**
+   * Return a bounded creative-design opportunity derived from measured town
+   * state.  IMAGINE_ARCHETYPE used to be a 60% random filler roll, which made
+   * it both hard to observe and unrelated to the town's actual problems.  A
+   * design is now offered when it can answer a real civic/legitimacy gap, or
+   * as occasional comfort work after the town has earned a stable surplus.
+   * The LLM still chooses the final design; this method only supplies the
+   * evidence and a legal catalogue starting point.
+   */
+  archetypeOpportunity(input = null) {
+    const s = input || this.inputs();
+    const eco = s.economy;
+    if (!eco || this.projects.length >= MAX_ACTIVE || eco.treasury < BUILD_FLOOR) return null;
+    if (this.projects.some((project) => project.plan?.type === 'archetype')) return null;
+
+    const clamp01 = (v) => Math.max(0, Math.min(1, Number(v) || 0));
+    const overload = civicExpansionNeed(this.town);
+    if (overload && overload.load > 1.05) {
+      const facility = CIVIC_FACILITY_FOR_KIND[overload.kind];
+      if (facility) {
+        const need = clamp01((overload.load - 0.85) / 0.75);
+        return {
+          need,
+          amenity: false,
+          reason: `${overload.kind} capacity is ${Math.round(overload.load * 100)}% loaded`,
+          opts: {
+            zone: 'civic',
+            facility,
+            blockId: `civic.${facility}`,
+            need,
+            designGap: 'service-capacity',
+            designPriority: 6,
+            designReason: `${overload.kind} capacity is ${Math.round(overload.load * 100)}% loaded`
+          }
+        };
+      }
+    }
+
+    const society = this.town.society?.stats?.();
+    const community = this.town.buildings.some((building) => building.facility === 'community');
+    if (society && society.approvalRate < 0.55 && !community && s.pop >= 35) {
+      const need = clamp01((0.55 - society.approvalRate) / 0.35);
+      return {
+        need,
+        amenity: false,
+        reason: `approval is ${Math.round(society.approvalRate * 100)}% with no community centre`,
+        opts: {
+          zone: 'civic',
+          facility: 'community',
+          blockId: 'civic.community',
+          need,
+          designGap: 'legitimacy',
+          designPriority: 5,
+          designReason: `approval is ${Math.round(society.approvalRate * 100)}% with no community centre`
+        }
+      };
+    }
+
+    // Optional creative work is deliberately bounded by population-earned
+    // milestones. It is visible to the Council once the town is comfortable,
+    // but it cannot crowd out housing, resources, roads, or progression.
+    const built = this.built.archetype || 0;
+    const allowance = Math.max(1, Math.floor((s.pop || 0) / 80));
+    if (s.pressure > FILLER_PRESSURE_GATE && built < allowance) {
+      const zone = s.pressure > 0.8 ? 'house' : 'shop';
+      const need = clamp01((s.pressure - FILLER_PRESSURE_GATE) / 0.4);
+      return {
+        need: Math.max(0.2, need),
+        amenity: true,
+        reason: `surplus capacity supports one experimental ${zone} design`,
+        opts: {
+          zone,
+          need: Math.max(0.2, need),
+          designGap: 'comfort',
+          designReason: `surplus capacity supports one experimental ${zone} design`
+        }
+      };
+    }
+    return null;
+  }
+
+  /**
    * The land order must carry the same target that made it necessary. A
    * factory is a campus, so a single vacant frontage cell is not enough to
    * make BUILD_FACTORY feasible; the survey needs to find the complete
@@ -2412,6 +2495,13 @@ export class GrowthSystem {
         // stronger tie-break than commerce polish so a long run cannot spend
         // every sitting on shop tiers while all buildings remain low-rise.
         const heightPriority = type === 'upgrade' && s.pop >= 60 && !!this.progressionTarget();
+        // A design that answers a measured service or legitimacy gap is
+        // creative capacity work, not decoration. Keep optional designs in
+        // the amenity band, but let evidence-backed archetypes enter the
+        // Council's Priority list above ordinary polish.
+        const designPriority = type === 'archetype' && opts?.designGap
+          ? Number(opts.designPriority || 0)
+          : 0;
         const congestion = s.mobility?.congestion || 0;
         const roadEmergency = (type === 'road' || type === 'roadup') && congestion >= ROAD_EMERGENCY_GATE;
         // A legal EXTEND_STREET candidate is the direct network response to a
@@ -2432,7 +2522,7 @@ export class GrowthSystem {
           // Once the first town cohort exists, earned progression competes
           // with ordinary civic infill. This keeps long runs from repeatedly
           // selecting new one-storey shells while floors/wings wait forever.
-          score: band + Math.min(1, need) + (earnedProgression ? 4 : 0) + (heightPriority ? 6 : 0) + (roadEmergency ? 20 : 0) + congestionPriority + primaryResourcePriority,
+          score: band + Math.min(1, need) + (earnedProgression ? 4 : 0) + (heightPriority ? 6 : 0) + (roadEmergency ? 20 : 0) + congestionPriority + primaryResourcePriority + designPriority,
           opts,
           amenity
         });
@@ -2615,9 +2705,8 @@ export class GrowthSystem {
       // polish (renovation, decorative archetypes, parks) is skipped there.
       add('upgrade', Math.min(1, Math.max(0.25, (rung - 2) / 10)));
     } else if (filler) add('upgrade', 0.5, undefined, true);
-    if (filler && this.rng.next() < 0.6) {
-      add('archetype', 0.4, { zone: s.pressure > 0.75 ? 'house' : 'shop', need: 0.4 }, true);
-    }
+    const design = this.archetypeOpportunity(s);
+    if (design) add('archetype', design.need, design.opts, design.amenity);
     // In-place quality work (Phase 5): renovate the plainest building and
     // lift a shop one commerce rung. Amenity while jobs are fine — polish,
     // never the fallback answer; above the unemployment gate a tierup is real
@@ -2818,7 +2907,7 @@ export class GrowthSystem {
         return crews && (!!this.wingTarget() || !!this.landmarkWingTarget());
       }
       case 'archetype':
-        return s.pressure > FILLER_PRESSURE_GATE && this.projects.length < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR;
+        return !!this.archetypeOpportunity(s);
       default:
         return !!LANDMARKS[type] && this.landmarkWanted(LANDMARKS[type], s, eco);
     }
@@ -5056,6 +5145,7 @@ export class GrowthSystem {
       pressure: Math.round(s.pressure * 100) / 100,
       capacity: s.capacity,
       pop: s.pop,
+      designOpportunity: this.archetypeOpportunity(s),
       // Phase 18 — the district in progress and the town's connectivity.
       district: q
         ? {

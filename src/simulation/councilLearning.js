@@ -62,12 +62,22 @@ export function measureCouncilState(town) {
     : (citizens.length ? citizens.reduce((sum, c) => sum + (Number(c.mood) || 0), 0) / citizens.length : 0);
   const homes = (town?.buildings || []).filter((b) => b.kind === 'house');
   const capacity = homes.reduce((sum, b) => sum + (Number(b.capacity) || 0), 0);
+  const publicBuildings = (town?.buildings || []).filter((b) => b.kind === 'civic' || b.purpose === 'commercial');
+  const accessibleBuildings = publicBuildings.filter((b) =>
+    b.constructionFlags?.accessible === true || b.accessible === true || b.house?.spec?.accessible === true
+  ).length;
+  const society = (() => {
+    try { return town?.society?.stats?.() || {}; } catch { return {}; }
+  })();
   return {
     treasury: Number(eco.treasury) || 0,
     reserve: Number(eco.reserve) || 0,
     population: pop,
     spareBeds: Math.max(0, capacity - pop),
     mood,
+    approval: Number(society.approvalRate) || 0,
+    accessibility: publicBuildings.length ? accessibleBuildings / publicBuildings.length : 0,
+    designs: Number(gr.built?.archetype) || 0,
     unemployment: Number(eco.unemployment) || 0,
     congestion: Number(mb.congestion) || 0,
     utilityStrain: utilityStrainCount(ut),
@@ -84,6 +94,9 @@ const DIRECTIONS = Object.freeze({
   population: 1,
   spareBeds: 1,
   mood: 1,
+  approval: 1,
+  accessibility: 1,
+  designs: 1,
   unemployment: -1,
   congestion: -1,
   utilityStrain: -1,
@@ -118,7 +131,7 @@ function score(changes) {
 function describe(changes) {
   const labels = {
     treasury: 'treasury', reserve: 'reserve', population: 'population',
-    spareBeds: 'beds', mood: 'mood', unemployment: 'jobs',
+    spareBeds: 'beds', mood: 'mood', approval: 'approval', accessibility: 'accessibility', designs: 'designs', unemployment: 'jobs',
     congestion: 'traffic', utilityStrain: 'utilities', deficits: 'shortages',
     offNetwork: 'connectivity', built: 'buildings'
   };

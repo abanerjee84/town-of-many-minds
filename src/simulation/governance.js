@@ -512,6 +512,7 @@ const PROMPT_BODY = [
   'Valid actions: ' + INTENTS.join(', '),
   'Reply on the first line as: INTENT: <ACTION>, then at most one short sentence of reasoning.',
   'Council method: locate the most binding measured constraint, note who or what it touches when the report supports it, compare second-order effects, then select one action from Priority and Feasible now; preserve solvency and future options before spending.',
+  'If the report contains MANDATORY COUNCIL REMEDY, that is a sequencing directive from the measured emergency: choose that exact remedy in this sitting unless TRADE_BUY or HIRE_WORKERS is the evidence-backed direct fix. Do not repeat the blocked construction action.',
   'Prefer DEVELOP_HOUSING when homes are scarce, EXPAND_* when a utility is over capacity,',
   'UPGRADE_BUILDING to raise an existing building a floor (especially one whose Load shows over capacity), IMAGINE_ARCHETYPE to commission a new design.',
   CREATIVE_ARCHETYPE_GUIDANCE,
@@ -1294,6 +1295,10 @@ export class GovernanceSystem {
     // window and must stay one.
     this.spentByProject = new Map();
     this.lastDecision = null;
+    // A blocked public motion creates a short-lived sequencing directive. It
+    // is evidence for the next Council sitting, never an automatic decision.
+    this.requiredAction = null;
+    this.blockedRemedyAttempts = 0;
     this.spent = 0;
     this.parseFailures = 0;
     this.llmCalls = 0;
@@ -1439,6 +1444,11 @@ export class GovernanceSystem {
     // Day-81 report had the pipe network only, so the council never saw the
     // water store sitting at 0% and answered NO_ACTION.
     const rs = t.resources && t.resources.stats ? t.resources.stats() : null;
+    const emergency = t.growth?.resourceEmergency?.() || null;
+    const required = this.requiredAction && emergency &&
+      this.requiredAction.resource === emergency.resource
+      ? this.requiredAction
+      : emergency;
     // Phase 15 — the policy read-out. `stats()` is cheap (the jurisdiction
     // figure is cached against a signature), so the report and the council see
     // the same object.
@@ -1585,6 +1595,12 @@ export class GovernanceSystem {
       `Utilities: ${utilLine}`,
       t.utilities?.electricityState ? `Electricity: generation / distribution / coverage service ${Math.round(t.utilities.electricityState().serviceFactor * 100)}%, limited by ${t.utilities.electricityState().limiting}` : '',
       rs ? `Primary resources: ${resLine}` : '',
+      required
+        ? `MANDATORY COUNCIL REMEDY: choose INTENT: ${required.intent}${required.resource ? ` resource=${required.resource}` : ''} now — ${required.detail || `${required.resource} capacity emergency`}; do not spend this sitting on another construction action`
+        : '',
+      gr?.designOpportunity
+        ? `Design opportunity: ${gr.designOpportunity.reason} · suggested ${planCode(planFor(t, 'archetype', gr.designOpportunity.opts) || { type: 'archetype', zone: gr.designOpportunity.opts?.zone })}`
+        : '',
       rs?.waste
         ? `Waste flow: ${rs.waste.generated} generated/day · ${rs.waste.processed}/${rs.waste.processingCapacity} processed · ${rs.waste.compost} compost · ${rs.waste.landfill} landfill (${rs.waste.diversion}% diverted)`
         : '',
@@ -1854,6 +1870,18 @@ export class GovernanceSystem {
       if (!allowed) {
         decision.status = 'blocked';
         decision.detail = `${resourceEmergency.resource} capacity emergency — ${resourceEmergency.intent} takes priority over ${parsed.intent}`;
+        this.requiredAction = {
+          intent: resourceEmergency.intent,
+          resource: resourceEmergency.resource,
+          kind: resourceEmergency.kind,
+          detail: decision.detail,
+          day: t.clockDay || 0,
+          attempts: (this.requiredAction?.resource === resourceEmergency.resource
+            ? this.requiredAction.attempts || 0
+            : 0) + 1
+        };
+        decision.requiredAction = `INTENT: ${resourceEmergency.intent} resource=${resourceEmergency.resource}`;
+        this.blockedRemedyAttempts = this.requiredAction.attempts;
         this.record(decision);
         return this.fallback ? this.substitute(decision) : decision;
       }
@@ -1958,8 +1986,18 @@ export class GovernanceSystem {
             ? t.growth.unwantedWhy(plan.type === 'utility' ? plan.kind : plan.type) || 'the town does not need this right now'
             : 'the town does not need this right now')
         : t.growth.lastBlock || 'no free plot and no room to expand';
+    if (res && (parsed.intent === 'UPGRADE_RESOURCE' || parsed.intent === 'ACQUIRE_LAND' || parsed.intent === 'TRADE_BUY' || parsed.intent === 'HIRE_WORKERS')) {
+      const current = t.growth.resourceEmergency?.();
+      if (!current || current.resource === this.requiredAction?.resource) {
+        this.requiredAction = null;
+        this.blockedRemedyAttempts = 0;
+      }
+    }
     if (res && plan.blockId) {
       decision.detail += ` · ${plan.blockId} (${(plan.modules || []).join(', ')})`;
+    }
+    if (res && plan.designGap) {
+      decision.detail += ` · design gap: ${plan.designReason || plan.designGap}`;
     }
     if (res && committedPlan.type === 'road') {
       decision.detail += ` at ${committedPlan.cells[0].join(', ')} (${committedPlan.roadTiles} tiles; ${committedPlan.roadReason})`;
@@ -2625,43 +2663,59 @@ export class GovernanceSystem {
       // A previous model reply is an audit artifact, never a fresh mandate.
       // The provider is the only network boundary. Every model adapter gets
       // the same messages, timeout, temperature, and token budget.
-      const reply = await this.provider.complete({
-        endpoint: this.endpoint,
-        model: this.model,
-        temperature: this.temperature,
-        maxTokens: 160,
-        signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
-        messages: [
-          { role: 'system', content: systemPrompt(this.town) },
-          { role: 'user', content: this.report() }
-        ],
-        town: this.town,
-        sittingId: this.activeSittingId
-      });
-      const data = reply?.raw || {};
-      const text = reply?.text || '';
-      // The town may have been regenerated while the model was thinking. Its
-      // answer describes a town that no longer exists; enacting it would spend
-      // the new town's money on the old town's reasoning.
-      if (!isCurrent()) {
-        this.staleReplies = (this.staleReplies || 0) + 1;
-        return { status: 'stale', intent: null, detail: 'the town was regenerated before the reply arrived' };
+      // A provider can misunderstand a hard sequencing constraint even when
+      // the report states it. Give it one immediate, explicit correction in
+      // the same sitting so one bad construction choice does not consume the
+      // next three scheduled sittings. This remains a Council decision: the
+      // second response is still parsed, checked, financed, and recorded by
+      // the normal boundary; there is no deterministic public fallback.
+      let correction = '';
+      let decision = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const reply = await this.provider.complete({
+          endpoint: this.endpoint,
+          model: this.model,
+          temperature: this.temperature,
+          maxTokens: 160,
+          signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
+          messages: [
+            { role: 'system', content: systemPrompt(this.town) },
+            {
+              role: 'user',
+              content: `${this.report()}${correction ? `\n\n${correction}` : ''}`
+            }
+          ],
+          town: this.town,
+          sittingId: this.activeSittingId
+        });
+        const data = reply?.raw || {};
+        const text = reply?.text || '';
+        // The town may have been regenerated while the model was thinking. Its
+        // answer describes a town that no longer exists; enacting it would spend
+        // the new town's money on the old town's reasoning.
+        if (!isCurrent()) {
+          this.staleReplies = (this.staleReplies || 0) + 1;
+          return { status: 'stale', intent: null, detail: 'the town was regenerated before the reply arrived' };
+        }
+        this.available = true;
+        this.lastError = null;
+        this.lastReply = text;
+        this.modelUsed = reply?.model || data.model || this.model || this.provider?.id || 'unknown';
+        this.activeResponseId = `response-${++this.responseSeq}`;
+        this.consecutiveFailures = 0;
+        this.rulesOnly = false;
+        this.llmCalls++;
+        if (key) {
+          this.cache = new Map([[key, text]]);
+          this.cacheKey = key;
+        }
+        decision = this.enact(text, 'llm');
+        if (!(attempt === 0 && decision?.status === 'blocked' && decision.requiredAction)) break;
+        correction = `CORRECTION: your previous action was blocked. Choose exactly ${decision.requiredAction} now because the primary-resource emergency is a hard sequencing constraint. Do not repeat ${decision.intent || 'the blocked action'}; reply with one INTENT line.`;
       }
-      this.available = true;
-      this.lastError = null;
-      this.lastReply = text;
-      this.modelUsed = reply?.model || data.model || this.model || this.provider?.id || 'unknown';
-      this.activeResponseId = `response-${++this.responseSeq}`;
-      this.consecutiveFailures = 0;
-      this.rulesOnly = false;
-      this.llmCalls++;
-      if (key) {
-        this.cache = new Map([[key, text]]);
-        this.cacheKey = key;
-      }
-      const decision = this.enact(text, 'llm');
       // On the model's OWN record: a substitution returns the planner's
       // decision, and that one never spent the model's time.
+      decision ||= { status: 'error', intent: null, detail: 'Council returned no decision' };
       decision.ms = Date.now() - started;
       this.activeResponseId = null;
       this.pending = false;
@@ -2824,6 +2878,8 @@ export class GovernanceSystem {
       congestion: this.congestionEvidence(),
       available: this.available,
       pending: this.pending,
+      requiredAction: this.requiredAction,
+      blockedRemedyAttempts: this.blockedRemedyAttempts || 0,
       lastError: this.lastError,
       cycles: this.cycles,
       llmCalls: this.llmCalls,

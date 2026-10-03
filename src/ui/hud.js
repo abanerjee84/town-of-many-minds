@@ -320,10 +320,14 @@ export class Hud {
     if (this.el.councilThought) {
       const reply = String(g?.lastReply || '').replace(/\s+/g, ' ').trim();
       const last = g?.last;
-      this.el.councilThought.textContent = g?.pending
+      const base = g?.pending
         ? 'Considering the current town report…'
         : reply || (last ? `${last.intent || 'Decision'} · ${last.status || 'recorded'}${last.detail ? ` — ${last.detail}` : ''}` : 'Waiting for the first sitting.');
-      this.el.councilThought.title = reply || '';
+      const remedy = g?.requiredAction
+        ? `Required next: ${g.requiredAction.intent}${g.requiredAction.resource ? ` resource=${g.requiredAction.resource}` : ''}`
+        : '';
+      this.el.councilThought.textContent = remedy ? `${base} · ${remedy}` : base;
+      this.el.councilThought.title = remedy || reply || '';
     }
     if (this.el.councilLearning) {
       const learning = g?.learning;
