@@ -33,6 +33,13 @@ try {
       id: 'cabinet-check',
       complete: async ({ department, sittingId, messages }) => {
         messageMeta.push({ department, sittingId, messages });
+        if (department === 'council') {
+          calls++;
+          return {
+            model: 'cabinet-check',
+            text: JSON.stringify({ selected: [{ id: 'motion-4', priority: 0.95, reason: 'services candidate wins the synthesis review' }] })
+          };
+        }
         const row = (sittingId === 'cabinet-1' ? firstRound : secondRound)[department];
         calls++;
         return { model: 'cabinet-check', text: JSON.stringify({ motions: [row] }) };
@@ -69,9 +76,10 @@ try {
       cabinetPromptTokens,
       cabinetContextTokens,
       providerCalls: calls,
-      departmentPrompts: [...new Set(messageMeta.map((row) => row.department))],
+      councilCalls: t.governance.stats().councilCalls,
+      departmentPrompts: [...new Set(messageMeta.filter((row) => row.department !== 'council').map((row) => row.department))],
       ownSystemPrompt: messageMeta.every((row) => row.messages.filter((message) => message.role === 'system').length === 1),
-      distinctSystemPrompts: new Set(messageMeta.filter((row) => row.sittingId === 'cabinet-1').map((row) => row.messages[0]?.content)).size,
+      distinctSystemPrompts: new Set(messageMeta.filter((row) => row.sittingId === 'cabinet-1' && row.department !== 'council').map((row) => row.messages[0]?.content)).size,
       wrongDepartment: { valid: wrongDepartment.ownershipValid, reason: wrongDepartment.ownershipReason },
       sittingIds: [...new Set(t.governance.decisions.filter((row) => row.motionId).map((row) => row.sittingId))],
       execution: cabinet.lastExecution.map((row) => ({ intent: row.intent, status: row.status, mayor: row.mayor }))
@@ -82,17 +90,18 @@ try {
   assert.equal(result.max, 5, JSON.stringify(result));
   assert.ok(result.cabinetPromptTokens <= 4000, JSON.stringify(result));
   assert.ok(result.cabinetContextTokens <= 4000, JSON.stringify(result));
-  assert.equal(result.providerCalls, 10, JSON.stringify(result));
+  assert.equal(result.providerCalls, 12, JSON.stringify(result));
+  assert.equal(result.councilCalls, 2, JSON.stringify(result));
   assert.deepEqual(result.departmentPrompts, ['treasury', 'land', 'infrastructure', 'services', 'society'], JSON.stringify(result));
   assert.equal(result.ownSystemPrompt, true, JSON.stringify(result));
   assert.equal(result.distinctSystemPrompts, 5, JSON.stringify(result));
   assert.equal(result.firstMotions, 5, JSON.stringify(result));
-  assert.equal(result.firstApproved, 5, JSON.stringify(result));
-  assert.equal(result.firstExecuted, 5, JSON.stringify(result));
+  assert.equal(result.firstApproved, 1, JSON.stringify(result));
+  assert.equal(result.firstExecuted, 1, JSON.stringify(result));
   assert.equal(result.motions, 5, JSON.stringify(result));
   assert.equal(result.approved, 1, JSON.stringify(result));
   assert.equal(result.rejected, 0, JSON.stringify(result));
-  assert.equal(result.deferred, 1, JSON.stringify(result));
+  assert.equal(result.deferred, 0, JSON.stringify(result));
   assert.equal(result.executed, 1, JSON.stringify(result));
   assert.equal(result.boundaryViolations, 3, JSON.stringify(result));
   assert.equal(result.wrongDepartment.valid, false, JSON.stringify(result));

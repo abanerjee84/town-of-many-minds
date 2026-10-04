@@ -39,6 +39,7 @@ export class CabinetSystem {
     this.lastSittingId = null;
     this.lastMotions = [];
     this.lastBoundaryViolations = [];
+    this.lastCouncil = null;
     this.lastReview = null;
     this.lastExecution = [];
     this.mayor.reset();
@@ -124,6 +125,44 @@ export class CabinetSystem {
     });
   }
 
+  /**
+   * Parse the sixth-call Council synthesis envelope. The Council may rank
+   * only motions already submitted by a minister; it cannot invent a new
+   * intent, department, coordinate, budget, or catalogue id at this stage.
+   */
+  parseCouncil(text, candidates = []) {
+    const parsed = extractJson(text);
+    const hasEnvelope = Boolean(parsed && (Array.isArray(parsed?.selected) || Array.isArray(parsed?.motions) || Array.isArray(parsed)));
+    const rows = Array.isArray(parsed?.selected)
+      ? parsed.selected
+      : Array.isArray(parsed?.motions)
+        ? parsed.motions
+        : Array.isArray(parsed)
+          ? parsed
+          : [];
+    const byId = new Map(candidates.map((motion) => [motion.id, motion]));
+    const selected = [];
+    const invalid = [];
+    const seen = new Set();
+    rows.forEach((row) => {
+      const id = typeof row === 'string' ? row : row?.id || row?.motionId;
+      const candidate = byId.get(id);
+      if (!candidate || seen.has(candidate.id)) {
+        invalid.push(id || 'missing motion id');
+        return;
+      }
+      seen.add(candidate.id);
+      selected.push({
+        ...candidate,
+        reason: String(row?.reason || candidate.reason || '').slice(0, 240),
+        priority: Math.max(0, Math.min(1, Number(row?.priority ?? candidate.priority) || 0)),
+        councilSelected: true
+      });
+    });
+    const valid = hasEnvelope && (!rows.length || selected.length > 0);
+    return { valid, selected, invalid, raw: String(text || '').slice(0, 240) };
+  }
+
   stats() {
     return {
       enabled: this.enabled,
@@ -143,6 +182,19 @@ export class CabinetSystem {
         intent: motion.intent,
         reason: motion.ownershipReason
       })),
+      lastCouncil: this.lastCouncil ? {
+        status: this.lastCouncil.status,
+        selected: (this.lastCouncil.selected || []).map((motion) => ({
+          id: motion.id,
+          department: motion.department,
+          intent: motion.intent,
+          priority: motion.priority,
+          reason: motion.reason
+        })),
+        invalid: [...(this.lastCouncil.invalid || [])],
+        valid: this.lastCouncil.valid !== false,
+        fallback: !!this.lastCouncil.fallback
+      } : null,
       lastReview: this.lastReview ? { ...this.lastReview } : null,
       lastExecution: this.lastExecution.map((decision) => ({
         id: decision.motionId,

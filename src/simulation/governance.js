@@ -641,6 +641,18 @@ export function systemPrompt(town, options = {}) {
   const mode = options.cabinet ?
     ' Read the town report and prepare one evidence-backed motion for each Cabinet department; return the Cabinet JSON contract that follows.' :
     ' Read the town report and choose exactly one action.';
+  if (options.cabinetCouncil) {
+    return [
+      'You are the final Town Council synthesis chamber. Five independent ministers have reported; your job is to compare their evidence-backed candidate motions and set the town\'s priorities for this sitting.',
+      st.opening,
+      st.focus,
+      'Use the town report as ground truth. Resolve any mandatory remedy first. Prefer a measured Priority build, utility, housing, supply, staffing, or mobility action over optional policy when the report shows one. Select only candidate motion IDs supplied in the user message; never invent an intent, department, coordinate, budget, catalogue id, or action.',
+      'Return exactly one JSON object: {"selected":[{"id":"motion-1","priority":0.0,"reason":"short evidence-backed reason"}]}. Select at most five unique candidates, normally one per department. Select at least one candidate when any admitted candidate is feasible; return {"selected":[]} only when every candidate is infeasible or the report gives no defensible action.',
+      'The selected candidates are recommendations for the existing Mayor/planner validation boundary. Do not claim execution. Traits are emergent from evidence and outcomes; do not optimize for a prescribed personality.',
+      voice,
+      learning
+    ].filter(Boolean).join(' ');
+  }
   // Each Cabinet minister receives its own provider call. The department
   // branch is intentionally compact enough that this minister can retain a
   // full report and its own role/remit inside the 4K prompt budget instead of
@@ -1332,6 +1344,7 @@ export class GovernanceSystem {
     this.parseFailures = 0;
     this.llmCalls = 0;
     this.cabinetCalls = 0;
+    this.councilCalls = 0;
     // Deterministic, synchronous request counter used by horizon probes. Test
     // requests go through the same parser, planner, finance checks, and
     // outcome ledger as a model reply, but never open a network connection or
@@ -1742,7 +1755,7 @@ export class GovernanceSystem {
       `Build times: ${buildTimesLine()}`,
       `Warnings: ${eco && eco.warnings.length ? eco.warnings.join(', ') : 'none'}`,
       this.cabinet?.enabled
-        ? `Cabinet: ${this.cabinet.departments.map((department) => department.id).join(', ')} · up to ${this.cabinet.motionsPerSitting} motions · Mayor approval gate${this.cabinet.lastReview ? ` · last approved ${this.cabinet.lastReview.approved.length}, rejected ${this.cabinet.lastReview.rejected.length}, deferred ${this.cabinet.lastReview.deferred.length}` : ''}`
+        ? `Cabinet: ${this.cabinet.departments.map((department) => department.id).join(', ')} · ${this.cabinet.departments.length} minister calls + 1 Council synthesis · up to ${this.cabinet.motionsPerSitting} motions · Mayor validation${this.cabinet.lastReview ? ` · last approved ${this.cabinet.lastReview.approved.length}, rejected ${this.cabinet.lastReview.rejected.length}, deferred ${this.cabinet.lastReview.deferred.length}` : ''}`
         : '',
       last ? `Last decision: ${last.intent} (${last.status}) ${last.detail || ''}` : 'Last decision: none yet',
       `Reply with one line: INTENT: <ACTION>`
@@ -2906,9 +2919,10 @@ export class GovernanceSystem {
   }
 
   /**
-   * Cabinet sitting: each department is a separate provider call with its own
-   * system prompt and full context budget. Replies are gathered first, then
-   * the Mayor reviews the batch and all approved motions enter enact() in the
+  * Cabinet sitting: each department is a separate provider call with its own
+   * system prompt and full context budget. Replies are gathered first, then a
+   * sixth Council synthesis call selects the priority candidates; the Mayor
+   * validates that selected batch and approved motions enter enact() in the
    * same sitting. A blocked primary-resource motion gets one same-sitting
    * correction call for that minister only.
    */
@@ -2986,6 +3000,7 @@ export class GovernanceSystem {
         });
         parsed.forEach((motion) => {
           motion.index = responseIndex;
+          motion.id = `motion-${motions.length + 1}`;
           motions.push(motion);
         });
       });
@@ -3000,13 +3015,80 @@ export class GovernanceSystem {
         });
       }
       // An individual minister cannot put another department's intent before
-      // the Mayor. Keep the invalid reply in the Cabinet audit stats, but only
-      // admit motions owned by the calling department to the approval batch.
+      // the final Council chamber. Keep the invalid reply in the Cabinet audit
+      // stats, but only admit motions owned by the calling department.
       const admittedMotions = motions.filter((motion) => motion.ownershipValid !== false);
       const priorityIntents = this.planBoard()?.priority || [];
-      let review = this.cabinet.mayor.review(admittedMotions, {
+      const candidateDigest = admittedMotions.map((motion) => ({
+        id: motion.id,
+        department: motion.department,
+        intent: motion.intent,
+        priority: motion.priority,
+        emergency: !!motion.emergency,
+        reason: motion.reason,
+        params: motion.params
+      }));
+      let councilResult = { status: 'failed', valid: false, selected: [], invalid: [], raw: '', fallback: true };
+      try {
+        const councilReply = await this.provider.complete({
+          endpoint: this.endpoint,
+          model: this.model,
+          temperature: this.temperature,
+          maxTokens: 500,
+          signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
+          messages: [
+            { role: 'system', content: systemPrompt(this.town, { cabinetCouncil: true }) },
+            {
+              role: 'user',
+              content: `${report}\n\nMINISTER CANDIDATES (select by id only):\n${JSON.stringify(candidateDigest)}`
+            }
+          ],
+          town: this.town,
+          sittingId,
+          department: 'council',
+          stage: 'cabinet-synthesis'
+        });
+        if (!isCurrent()) {
+          this.staleReplies = (this.staleReplies || 0) + 1;
+          return { status: 'stale', intent: null, detail: 'the town was regenerated before the Council synthesis arrived' };
+        }
+        this.llmCalls++;
+        this.cabinetCalls++;
+        this.councilCalls++;
+        this.modelUsed = councilReply?.model || councilReply?.raw?.model || this.modelUsed;
+        const parsedCouncil = this.cabinet.parseCouncil(councilReply?.text || '', admittedMotions);
+        councilResult = {
+          status: parsedCouncil.valid ? 'ok' : 'invalid',
+          valid: parsedCouncil.valid,
+          selected: parsedCouncil.selected.slice(0, this.cabinet.motionsPerSitting),
+          invalid: parsedCouncil.invalid,
+          raw: parsedCouncil.raw,
+          fallback: !parsedCouncil.valid
+        };
+        this.lastReply = `${this.lastReply} · council: ${councilReply?.text || ''}`.trim();
+        this.cabinet.lastReply = this.lastReply;
+      } catch (error) {
+        councilResult = {
+          status: 'failed',
+          valid: false,
+          selected: [],
+          invalid: [String(error?.message || error)],
+          raw: '',
+          fallback: true
+        };
+      }
+      this.cabinet.lastCouncil = councilResult;
+      if (!councilResult.valid) {
+        events.emit('log', {
+          kind: 'event',
+          text: `Council synthesis ${councilResult.status}; using the recorded priority fallback for this sitting.`
+        });
+      }
+      const selectedMotions = councilResult.valid ? councilResult.selected : admittedMotions;
+      let review = this.cabinet.mayor.review(selectedMotions, {
         requiredAction: this.requiredAction,
-        priorityIntents
+        priorityIntents,
+        councilSelected: councilResult.valid
       });
       this.cabinet.lastReview = review;
       for (const motion of [...review.rejected, ...review.deferred]) {
@@ -3051,6 +3133,7 @@ export class GovernanceSystem {
           });
           if (corrected[0]) {
             corrected[0].index = motions.length;
+            corrected[0].id = `motion-${motions.length + 1}`;
             motions.push(corrected[0]);
             if (corrected[0].ownershipValid === false) {
               this.cabinet.lastBoundaryViolations.push(corrected[0]);
@@ -3242,6 +3325,7 @@ export class GovernanceSystem {
       cycles: this.cycles,
       llmCalls: this.llmCalls,
       cabinetCalls: this.cabinetCalls,
+      councilCalls: this.councilCalls,
       parseFailures: this.parseFailures,
       forcedRequests: this.forcedRequests || 0,
       modelUsed: this.modelUsed,

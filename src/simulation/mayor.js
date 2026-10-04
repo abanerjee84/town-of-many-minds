@@ -56,7 +56,7 @@ export class MayorSystem {
         deferred.push({ ...motion, status: 'mayor_deferred', mayorReason: `mandatory remedy ${required} takes priority` });
         continue;
       }
-      if (!required && priorityIntents.length && OPTIONAL_POLICY_INTENTS.has(motion.intent) && !motion.emergency) {
+      if (!context.councilSelected && !required && priorityIntents.length && OPTIONAL_POLICY_INTENTS.has(motion.intent) && !motion.emergency) {
         deferred.push({
           ...motion,
           status: 'mayor_deferred',

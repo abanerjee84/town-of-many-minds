@@ -29,6 +29,8 @@ try {
           model: 'correction-provider',
           text: correction
             ? 'INTENT: UPGRADE_RESOURCE resource=energy'
+            : department === 'council'
+              ? JSON.stringify({ selected: [{ id: 'motion-1', priority: 1, reason: 'test the final synthesis path' }] })
             : department === 'treasury'
               ? 'INTENT: BUILD_FACTORY type=sawmill'
               : 'INTENT: NO_ACTION'
@@ -61,7 +63,7 @@ try {
   assert.equal(errors.length, 0, errors.join('\n'));
   assert.ok(result.opportunity, JSON.stringify(result));
   assert.ok(result.rankedArchetypes >= 1, JSON.stringify(result));
-  assert.equal(result.providerCalls, 6, JSON.stringify(result));
+  assert.equal(result.providerCalls, 7, JSON.stringify(result));
   assert.equal(result.decision.intent, 'UPGRADE_RESOURCE', JSON.stringify(result));
   assert.notEqual(result.decision.requiredAction, 'INTENT: UPGRADE_RESOURCE resource=energy', JSON.stringify(result));
   console.log(JSON.stringify(result));
