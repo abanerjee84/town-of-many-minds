@@ -2066,10 +2066,18 @@ export class GovernanceSystem {
           ? `set aside $${r.amount.toLocaleString('en-US')} — reserve $${r.reserve.toLocaleString('en-US')}`
           : parsed.intent === 'BOND_ISSUE'
             ? `bond of $${r.amount.toLocaleString('en-US')} issued — debt $${r.debt.toLocaleString('en-US')}`
-            : parsed.intent === 'SUBSIDY'
+          : parsed.intent === 'SUBSIDY'
               ? `grant of $${r.amount.toLocaleString('en-US')} to ${r.target} — ${r.days} days of support`
               : `spending cut to ${Math.round(r.scale * 100)}%`
         : r.reason;
+      // A bond approved as the explicit funding remedy clears the temporary
+      // sequencing directive. The next sitting can then return to the actual
+      // resource/land order instead of treating the financing bridge as a
+      // permanent emergency.
+      if (r.ok && parsed.intent === 'BOND_ISSUE' && this.requiredAction?.kind === 'finance') {
+        this.requiredAction = null;
+        this.blockedRemedyAttempts = 0;
+      }
       this.record(decision);
       return decision;
     }
@@ -2186,6 +2194,31 @@ export class GovernanceSystem {
     if (!quoted.ok) {
       decision.status = 'blocked';
       decision.detail = quoted.reason;
+      // ACQUIRE_LAND can be the correct physical remedy and still be
+      // unexecutable because the government reserve gate cannot fund it. In
+      // that state, keeping ACQUIRE_LAND as a mandatory action deadlocks the
+      // Mayor: the Treasury's BOND_ISSUE is deferred for violating a remedy
+      // that cannot pass its own quote. Promote the financing bridge to the
+      // temporary mandatory remedy, preserving the blocked land order as
+      // evidence so the next sitting funds it and then retries land.
+      const emergency = t.growth?.resourceEmergency?.();
+      const cashBlocked = /over budget|needs .* on hand|insufficient_financing|operating reserve/i.test(String(quoted.reason || ''));
+      if (parsed.intent === 'ACQUIRE_LAND' && emergency?.kind === 'land' && cashBlocked && t.economy?.issueBond) {
+        const detail = `ACQUIRE_LAND is required but not financeable yet (${quoted.reason}); issue BOND_ISSUE first`;
+        this.requiredAction = {
+          ...(this.requiredAction || {}),
+          intent: 'BOND_ISSUE',
+          resource: emergency.resource,
+          kind: 'finance',
+          blockedIntent: 'ACQUIRE_LAND',
+          detail,
+          day: t.clockDay || 0,
+          attempts: 0
+        };
+        this.blockedRemedyAttempts = 0;
+        decision.requiredAction = 'INTENT: BOND_ISSUE';
+        decision.detail = `${quoted.reason} — funding remedy: BOND_ISSUE`;
+      }
       this.record(decision);
       // A model may still repeat BUILD_FACTORY after seeing a frontier
       // works need. When the complete campus is not on acquired serviced land,
@@ -2396,7 +2429,11 @@ export class GovernanceSystem {
     // remedy itself cannot start.
     const emergency = this.town.growth?.resourceEmergency?.();
     let chosen = null;
-    if (emergency?.kind === 'upgrade') {
+    if (this.requiredAction?.kind === 'finance' && this.requiredAction.intent) {
+      // Never retry the unaffordable physical remedy from the generic fallback
+      // path; execute the explicit bridge that can unlock it.
+      chosen = this.enact(`INTENT: ${this.requiredAction.intent}`, 'rules');
+    } else if (emergency?.kind === 'upgrade') {
       chosen = this.enact(`INTENT: UPGRADE_RESOURCE resource=${emergency.resource}`, 'rules');
     } else if (emergency?.kind === 'land') {
       chosen = this.enact('INTENT: ACQUIRE_LAND', 'rules');

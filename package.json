@@ -61,6 +61,7 @@
     ,"test:vehicle-render": "node scripts/_vehicle_render_check.mjs"
     ,"test:fdi": "node scripts/_fdi_check.mjs"
     ,"test:treasury-start": "node scripts/_treasury_start_check.mjs"
+    ,"test:land-funding-loop": "node scripts/_land_funding_loop_check.mjs"
     ,"mapnow:capture": "node scripts/_mapnow_capture.mjs"
   },
   "dependencies": {

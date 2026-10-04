@@ -339,3 +339,4 @@ Updated 2026-10-04 after the catalogue-wide industrial-planning audit.
 - [x] Captured and inspected seed 1337 output: the map was 1,944 bytes / 104 lines with no page errors and readable pressure/frontier windows.
 
 - [x] Made the day-one treasury an explicit data contract: `government.initialTreasury` defaults to $1,000,000, founding fleet charges remain auditable, and `opening_capitalization` settles the post-founding balance before the first simulation tick. Added `npm run test:treasury-start` across deterministic seeds.
+- [x] Broke the land-funding deadlock: an unaffordable mandatory `ACQUIRE_LAND` now promotes `BOND_ISSUE` as a temporary funding remedy, the Mayor can approve the bridge, and the next sitting returns to land acquisition. Added `npm run test:land-funding-loop`.
