@@ -1,5 +1,5 @@
 import { events } from '../core/events.js';
-import { CELL_KIND } from '../core/config.js';
+import { CELL_KIND, ZONE } from '../core/config.js';
 import { ECON, PUBLIC_PROJECT_TYPES, PRIVATE_PROJECT_TYPES, PUBLIC_PROGRAM_TYPES, SECTOR, TRANSACTION_CATEGORIES } from './economicConfig.js';
 import { qualifies } from '../kits/citizens/personality.js';
 import { setJob } from '../kits/citizens/citizenProfile.js';
@@ -432,7 +432,7 @@ export class EconomySystem {
         ? 'office'
         : (building.kind === 'hotel' || building.kind === 'resort' || building.tourism || building.house?.spec?.tourism)
           ? 'lodging'
-          : building.zone === 1 ? 'retail' : 'services';
+        : building.kind === 'shop' || building.zone === ZONE.COMMERCIAL ? 'retail' : 'services';
     const propertyValue = this.propertyValue(building);
     const owner = governmentOwned ? null : this.createOwner({ id });
     const business = {
@@ -2541,6 +2541,42 @@ export class EconomySystem {
     this.computeLandValues();
   }
 
+  /**
+   * Compact service-sector census for the report and HUD. Private offices and
+   * other non-retail service firms are market businesses; civic facilities are
+   * public service employers staffed through Lifecycle.civicStaffing(). Keep
+   * the two lanes separate so retail does not hide a missing professional or
+   * state-administration sector.
+   */
+  serviceSectorStats() {
+    const privateBusinesses = this.businesses.filter((business) =>
+      business.type === 'office' || business.type === 'services'
+    );
+    const civicStaff = this.town.lifecycle?.civicStaffing?.() || { filled: 0, open: 0 };
+    const stateFacilities = (this.town.buildings || []).filter((building) => building.kind === 'civic');
+    const privateEmployees = privateBusinesses.reduce((sum, business) => sum + (business.employees || 0), 0);
+    const privateVacancies = privateBusinesses.reduce((sum, business) => sum + (business.vacancies || 0), 0);
+    return {
+      private: {
+        businesses: privateBusinesses.length,
+        offices: privateBusinesses.filter((business) => business.type === 'office').length,
+        employees: privateEmployees,
+        vacancies: privateVacancies,
+        revenue: Math.round(privateBusinesses.reduce((sum, business) => sum + (business.revenue || 0), 0))
+      },
+      state: {
+        facilities: stateFacilities.length,
+        employees: civicStaff.filled || 0,
+        vacancies: civicStaff.open || 0
+      },
+      total: {
+        employers: privateBusinesses.length + stateFacilities.length,
+        employees: privateEmployees + (civicStaff.filled || 0),
+        vacancies: privateVacancies + (civicStaff.open || 0)
+      }
+    };
+  }
+
   stats() {
     const p = this.period || blankPeriod(this.lastDay);
     const citizens = this.town.pedestrians?.citizens || [];
@@ -2554,6 +2590,7 @@ export class EconomySystem {
     const privateCapital = this.capital.privateResidential + this.capital.privateCommercial + this.capital.privateIndustrial;
     const publicCapital = this.capital.publicInfrastructure + this.capital.publicBuildings;
     const tourism = this.tourismStats();
+    const serviceSector = this.serviceSectorStats();
     const municipalRevenue = Math.round(p.municipalRevenue ||
       ['transit_fare', 'business_license', 'land_lease', 'tourism_tax', 'utility_fee']
         .reduce((sum, category) => sum + (p.categories[category] || 0), 0));
@@ -2586,6 +2623,7 @@ export class EconomySystem {
       wages: Math.round(p.wages), rent: Math.round(p.rent), spending: Math.round(p.spending),
       unemployment: Math.round(this.unemployment * 1000) / 10, participation: Math.round(this.participation * 1000) / 10,
       businesses: this.businesses.length, revenue: Math.round(this.businesses.reduce((s, b) => s + b.revenue, 0)),
+      serviceSector,
       tourism,
       owners: this.ownersById.size,
       openPosts: this.businesses.reduce((s, b) => s + (b.vacancies || 0), 0),

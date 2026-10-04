@@ -82,6 +82,8 @@ for (const seed of SEEDS) {
       const urbanizedArea = t.buildings.reduce((sum, b) =>
         sum + Math.max(1, b.footprint?.length || 1) * Math.max(1, b.floors || b.house?.floors || 1), 0);
       const factories = t.buildings.filter((b) => b.purpose === 'industrial').length;
+      const offices = t.buildings.filter((b) => b.kind === 'office').length;
+      const stateGovernmentOffices = t.buildings.filter((b) => b.facility === 'government').length;
       const colleges = t.buildings.filter((b) => b.facility === 'college').length;
       const universities = t.buildings.filter((b) => b.facility === 'university' || b.subtype === 'campus').length;
       const recycling = t.buildings.filter((b) => b.facility === 'recycling').length;
@@ -117,6 +119,8 @@ for (const seed of SEEDS) {
           treasury: Math.round(t.economy.treasury),
           developerCash: Math.round(t.economy.accounts.developer.cash),
           factories,
+          offices,
+          stateGovernmentOffices,
           colleges,
           universities,
           recycling,
@@ -148,6 +152,8 @@ for (const seed of SEEDS) {
       minTreasury: Math.round(minTreasury),
       minTreasuryCategory,
       factories: t.buildings.filter((b) => b.purpose === 'industrial').length,
+      offices: t.buildings.filter((b) => b.kind === 'office').length,
+      stateGovernmentOffices: t.buildings.filter((b) => b.facility === 'government').length,
       colleges: t.buildings.filter((b) => b.facility === 'college').length,
       universities: t.buildings.filter((b) => b.facility === 'university' || b.subtype === 'campus').length,
       recycling: t.buildings.filter((b) => b.facility === 'recycling').length,

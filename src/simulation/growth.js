@@ -840,7 +840,7 @@ export function planFor(town, type, opts = {}) {
       const fp = opts.footprint || null;
       const cells = fp ? fp.cols * fp.rows : 1;
       const floors = Math.max(2, Math.min(MAX_FLOORS, Math.round(opts.floors || 3)));
-      return {
+      const plan = {
         type: 'office',
         footprint: fp,
         acquire: !!opts.acquire,
@@ -849,6 +849,11 @@ export function planFor(town, type, opts = {}) {
         label: opts.name ? `An office block opens — "${opts.name}"` : 'An office block opens for the town’s business',
         cost: dynamicCost(town, 'shop', cells) + dynamicCost(town, 'office', floors),
         materials: scaleMats(MATERIALS.shop, cells),
+        // Offices are a private service-sector investment.  The developer can
+        // buy a small construction shortfall through the market rather than
+        // silently abandoning the project whenever local cement or steel is
+        // temporarily committed to public works.
+        allowMaterialImports: true,
         run: (c) =>
           !!c &&
           !!town.placeBuilding(c[0], c[1], ZONE.COMMERCIAL, {
@@ -860,6 +865,7 @@ export function planFor(town, type, opts = {}) {
             name: opts.name || null
           })
       };
+      return plan;
     }
     case 'shop': {
       const fp = opts.footprint || null;
@@ -1975,6 +1981,31 @@ export class GrowthSystem {
     };
   }
 
+  /**
+   * Service-sector capacity is a population-earned target, not an
+   * unemployment-only emergency. A town can be fully employed and still
+   * need another office block as its administrative, professional, and
+   * business-service base grows. Keep the target deliberately coarse so one
+   * office block represents a meaningful population rung.
+   */
+  officeTarget(population = this.town.pedestrians?.citizens?.length || 0) {
+    if (population < OFFICE_MIN_POP) return 0;
+    return Math.max(1, Math.ceil(population / OFFICE_PER_POP));
+  }
+
+  officeGap(population = this.town.pedestrians?.citizens?.length || 0) {
+    const target = this.officeTarget(population);
+    const count = this.town.buildings.filter((b) => b.kind === 'office').length;
+    return { target, count, gap: Math.max(0, target - count) };
+  }
+
+  officeDemand(population = this.town.pedestrians?.citizens?.length || 0) {
+    const gap = this.officeGap(population);
+    return gap.target > 0 && gap.gap > 0
+      ? { ...gap, need: Math.min(1, gap.gap / Math.max(1, gap.target)) }
+      : null;
+  }
+
   /** Count genuinely usable empty plots inside the land the town already owns. */
   vacantAcquiredPlots(limit = Infinity) {
     const t = this.town;
@@ -2406,6 +2437,18 @@ export class GrowthSystem {
       return null;
     }
     const s = this.inputs();
+    // Offices are the private service sector. They have a population-earned
+    // target, so the developer can add professional/admin capacity even when
+    // retail demand and unemployment are both quiet.
+    const officeNeed = this.officeDemand(s.pop);
+    if (officeNeed && this.findCell('office')) {
+      const office = planFor(this.town, 'office', { need: officeNeed.need });
+      if (office) {
+        office.owner = 'private';
+        office.commissionedBy = 'developer';
+        return office;
+      }
+    }
     const retail = this.town.buildings.filter((b) => b.purpose === 'commercial' && b.kind !== 'office');
     const seats = retail.reduce((n, b) => n + (b.capacity || 0), 0);
     const demand = s.pop - seats;
@@ -2504,8 +2547,9 @@ export class GrowthSystem {
         : { ok: false, reason: 'retail demand is covered' };
     }
     if (type === 'office') {
-      return this.wanted('office')
-        ? { ok: true, reason: 'measured office/job capacity gap' }
+      const gap = this.officeDemand(s.pop);
+      return gap
+        ? { ok: true, reason: `office service capacity is short by ${gap.gap} block${gap.gap === 1 ? '' : 's'}` }
         : { ok: false, reason: 'office demand is not measured' };
     }
     if (type === 'factory') {
@@ -2925,7 +2969,11 @@ export class GrowthSystem {
           // Once the first town cohort exists, earned progression competes
           // with ordinary civic infill. This keeps long runs from repeatedly
           // selecting new one-storey shells while floors/wings wait forever.
-          score: band + Math.min(1, need) + (earnedProgression ? 4 : 0) + (heightPriority ? 6 : 0) + (roadEmergency ? 20 : 0) + congestionPriority + primaryResourcePriority + employmentPriority + designPriority + servicePriority,
+          // A measured milestone can add a bounded tie-break without changing
+          // the need value the Council sees.  State administration is the one
+          // service-sector gap that otherwise loses forever to repeated shop
+          // tier-ups once the town is large enough for a government office.
+          score: band + Math.min(1, need) + (earnedProgression ? 4 : 0) + (heightPriority ? 6 : 0) + (roadEmergency ? 20 : 0) + congestionPriority + primaryResourcePriority + employmentPriority + designPriority + servicePriority + Math.max(0, Number(opts?.priority || 0)),
           opts,
           amenity
         });
@@ -2967,26 +3015,31 @@ export class GrowthSystem {
     if (unemployment > UNEMPLOYMENT_GATE) {
       const need = (unemployment - UNEMPLOYMENT_GATE) / (1 - UNEMPLOYMENT_GATE);
       if (this.findCell('shop')) add('shop', need, { need }); // need rides the commerce-ladder chooser
-      // Phase 20 — an office block is DEMAND work on the same gate, ranked
-      // BELOW the shop so a town that needs trade gets trade first, and scored
-      // down as its office count catches up with its population.
-      //
-      // The offer must be the SAME test as `wanted('office')`. It used to be
-      // looser on two counts — no `OFFICE_MIN_POP` floor, and a cap written
-      // `OFFICE_PER_POP * s.pop` (one office per 90 CITIZENS squared) that
-      // never closed — so the board offered a block the council would then
-      // bounce as "the town does not need this right now", over and over.
-      if (
-        this.officeCount &&
-        s.pop >= OFFICE_MIN_POP &&
-        this.officeCount() < s.pop / OFFICE_PER_POP &&
-        this.findCell('office')
-      ) {
-        add('office', need * 0.8, { need: Math.min(0.8, need) });
-      }
+    }
+    // Offices are a service-sector capacity rung. Unemployment increases the
+    // urgency, but a low unemployment rate must not suppress a measured
+    // population-to-office gap and leave the town with only retail.
+    const officeNeed = this.officeDemand(s.pop);
+    if (officeNeed && this.findCell('office')) {
+      const jobPressure = unemployment > UNEMPLOYMENT_GATE
+        ? (unemployment - UNEMPLOYMENT_GATE) / (1 - UNEMPLOYMENT_GATE)
+        : 0;
+      add('office', Math.min(1, officeNeed.need + jobPressure * 0.35), {
+        need: Math.min(1, officeNeed.need + jobPressure * 0.35),
+        serviceNeed: `private service capacity is short by ${officeNeed.gap} office block${officeNeed.gap === 1 ? '' : 's'}`
+      });
     }
     const civicOverload = civicExpansionNeed(this.town);
     const genericCivicNeed = s.pop > s.civicCount * CIVIC_PER_POP;
+    const hasGovernmentOffice = this.town.buildings.some((b) => b.facility === 'government');
+    const governmentOfficeNeed = s.pop >= 75 && !hasGovernmentOffice && this.findCell('civic');
+    if (governmentOfficeNeed) {
+      add('civic', Math.min(1, (s.pop - 60) / 150), {
+        facility: 'government',
+        priority: 8,
+        serviceNeed: 'the state administration needs a public service office'
+      });
+    }
     if ((genericCivicNeed || civicOverload) && this.findCell('civic')) {
       const countNeed = s.pop / Math.max(1, s.civicCount * CIVIC_PER_POP) - 1;
       const loadNeed = civicOverload ? Math.min(1, civicOverload.load - 1) : 0;
@@ -3219,21 +3272,7 @@ export class GrowthSystem {
       case 'shop':
         return unemployment > UNEMPLOYMENT_GATE && !!this.findCell('shop');
       case 'office':
-        // Phase 20 — wanted on the same unemployment gate a shop is, but only
-        // while the town has no office to put the white-collar trades in, and
-        // only while it is big enough to need one (a hamlet's accountant is its
-        // shopkeeper).
-        //
-        // The size floor used to sit in the `else` of a `this.officeCount ?`
-        // test, and `officeCount` always exists — so `OFFICE_MIN_POP` was
-        // unreachable and a 39-person hamlet wanted an office block. It is a
-        // conjunction now, not an alternative.
-        return (
-          s.pop >= OFFICE_MIN_POP &&
-          unemployment > UNEMPLOYMENT_GATE &&
-          this.officeCount() < s.pop / OFFICE_PER_POP &&
-          !!this.findCell('office')
-        );
+        return !!this.officeDemand(s.pop) && !!this.findCell('office');
       case 'district':
         // Phase 18 — a district is a big, expensive answer: the council only
         // reaches for one when housing pressure is real and there is a crew to
@@ -3378,9 +3417,11 @@ export class GrowthSystem {
       }
       case 'office': {
         const u = unemploymentRate(this.town);
+        const gap = this.officeGap(s.pop);
         if (!(s.pop >= OFFICE_MIN_POP)) return `population ${s.pop} is below the ${OFFICE_MIN_POP} an office needs`;
-        if (!(u > UNEMPLOYMENT_GATE)) return `unemployment ${pct(u)} is below the ${pct(UNEMPLOYMENT_GATE)} gate`;
-        return `${this.officeCount()} offices already cover ${s.pop} people`;
+        if (gap.gap > 0) return `${gap.gap} office service block${gap.gap === 1 ? '' : 's'} short for ${s.pop} residents`;
+        if (u > UNEMPLOYMENT_GATE) return `office capacity is present; unemployment ${pct(u)} is handled by jobs and retail gates`;
+        return `${gap.count} office service blocks meet the ${gap.target}-block population target`;
       }
       case 'district':
         if (!(s.pressure > HOUSE_PRESSURE_GATE)) return `housing pressure ${s.pressure.toFixed(2)} is below the ${HOUSE_PRESSURE_GATE} gate`;

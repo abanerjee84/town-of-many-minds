@@ -1670,6 +1670,9 @@ export class GovernanceSystem {
         // the townsfolk in their own account.
         ` · open posts ${eco.openPosts} · self-employed ${eco.selfEmployed} · owners ${eco.owners}`
       : '';
+    const serviceSectorLine = eco?.serviceSector
+      ? `Service sector: private ${eco.serviceSector.private.offices} offices/${eco.serviceSector.private.businesses} firms · ${eco.serviceSector.private.employees} staff · ${eco.serviceSector.private.vacancies} vacancies · state ${eco.serviceSector.state.facilities} facilities · ${eco.serviceSector.state.employees} staff · ${eco.serviceSector.state.vacancies} vacancies`
+      : '';
     const employmentLine = (() => {
       const roster = typeof t.economy?.employed === 'function' ? t.economy.employed() : null;
       if (!eco || !roster) return '';
@@ -1787,6 +1790,7 @@ export class GovernanceSystem {
         ? `Treasury ${Math.round(eco.treasury)} · reserve ${Math.round(eco.reserve)} · debt ${Math.round(eco.debt)} · GDP ${Math.round(eco.gdp)} · unemployment ${eco.unemployment}% · tax ${eco.taxRate}%${eco.taxRate !== eco.effectiveTaxRate ? ` (${eco.effectiveTaxRate}% with law)` : ''}${eco.spendingScale !== 1 ? ` · spending ×${eco.spendingScale}` : ''}${eco.spendingScale !== eco.effectiveSpending ? ` (×${eco.effectiveSpending} with law)` : ''} · jurisdiction ${Math.round(eco.jurisdiction * 100)}%`
         : 'Treasury unknown',
       economyLine,
+      serviceSectorLine,
       employmentLine,
       fdiLine,
       tourismLine,
