@@ -805,6 +805,10 @@ export function planFor(town, type, opts = {}) {
         footprintCandidates,
         requireFootprint: !!block || !!opts.requireFootprint,
         acquire: !!opts.acquire,
+        // A normal one-cell home may open a connected street when serviced
+        // frontage is exhausted. Catalogue blocks and explicit footprints are
+        // multi-plot projects; they remain strict land-acquisition candidates.
+        allowStreetExpansion: opts.allowStreetExpansion ?? (!block && !opts.requireFootprint),
         label: block ? `${block.label} provides new family homes` : 'A new family needs a home',
         cost: catalogueBill?.cost ?? dynamicCost(town, 'house'),
         materials: catalogueBill?.materials ?? MATERIALS.house,
@@ -2273,6 +2277,27 @@ export class GrowthSystem {
   }
 
   /**
+   * A plain family home may pay for a connected street and use the new
+   * frontage. This keeps a one-cell housing shortage from escalating into an
+   * unrelated frontier purchase; multi-cell blocks still use ACQUIRE_LAND.
+   */
+  housingExpansionAvailable() {
+    const plan = planFor(this.town, 'house', { need: 0.5 });
+    if (!plan?.allowStreetExpansion) return false;
+    // This is a feasibility read used by ranked()/wanted(), not a simulation
+    // step. findExpandCells uses the town RNG for deterministic tie-breaking;
+    // restore it so merely asking whether housing can open a frontage never
+    // changes a later site choice or Council decision.
+    const rngState = this.rng.getState?.();
+    try {
+      const preview = this.expandPreview(plan);
+      return !!preview?.cells?.length;
+    } finally {
+      if (rngState !== undefined) this.rng.setState(rngState);
+    }
+  }
+
+  /**
    * Fiscal runway gate for the Council's automatic finance option. A bond is
    * offered only when the treasury is below the protected operating reserve
    * plus two weeks of measured government burn, and only while debt remains
@@ -2307,7 +2332,6 @@ export class GrowthSystem {
     const perimeter = this.town.perimeter;
     if (!perimeter?.frontierCells(1).length) return false;
     const s = this.inputs();
-    const housingPressure = (s.pressure || 0) >= 0.9;
     const strainedProduct = this.town.industry?.missingConstructionProduct?.();
     const firstWorksDeficit = !this.town.industry?.factories?.().length &&
       (this.town.industry?.missingConstructionProduct?.() || this.town.industry?.deficitProduct?.());
@@ -2333,7 +2357,11 @@ export class GrowthSystem {
     // footprint. Those progression shortages must be allowed to buy a
     // contiguous frontier patch even while smaller plots remain.
     if (vacant > 0 && !worksNeed && !educationNeed && !resourceNeed) return false;
-    return housingPressure || !!strainedProduct || !!firstWorksDeficit || civicDemand || educationNeed || worksNeed || !!resourceNeed;
+    // Housing pressure alone must not buy frontier land. A one-cell home can
+    // use the normal DEVELOP_HOUSING street-expansion path; ACQUIRE_LAND is
+    // reserved for a measured resource yard, factory, campus, civic demand, or
+    // another footprint that cannot be unlocked by one connected street.
+    return !!strainedProduct || !!firstWorksDeficit || civicDemand || educationNeed || worksNeed || !!resourceNeed;
   }
 
   /**
@@ -2742,7 +2770,7 @@ export class GrowthSystem {
       ? (s.pressure - HOUSE_PRESSURE_GATE) / (1 - HOUSE_PRESSURE_GATE)
       : 0;
     const residentialBlock = housingNeed > 0 ? this.residentialBlockOptions(s, housingNeed) : null;
-    if (housingNeed > 0 && (residentialBlock || this.findCell('house')))
+    if (housingNeed > 0 && (residentialBlock || this.findCell('house') || this.housingExpansionAvailable()))
       add('house', housingNeed, residentialBlock || undefined);
     if (unemployment > UNEMPLOYMENT_GATE) {
       const need = (unemployment - UNEMPLOYMENT_GATE) / (1 - UNEMPLOYMENT_GATE);
@@ -2995,7 +3023,7 @@ export class GrowthSystem {
         return strained.includes(type);
       case 'house':
         return housingNeedsBuild(s.pop, s.capacity, s.pressure) &&
-          (!!this.findCell('house') || !!this.residentialBlockOptions(s, Math.max(0.25, s.pressure - HOUSE_PRESSURE_GATE)));
+          (!!this.findCell('house') || !!this.residentialBlockOptions(s, Math.max(0.25, s.pressure - HOUSE_PRESSURE_GATE)) || this.housingExpansionAvailable());
       case 'shop':
         return unemployment > UNEMPLOYMENT_GATE && !!this.findCell('shop');
       case 'office':

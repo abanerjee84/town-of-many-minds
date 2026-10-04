@@ -340,3 +340,10 @@ Updated 2026-10-04 after the catalogue-wide industrial-planning audit.
 
 - [x] Made the day-one treasury an explicit data contract: `government.initialTreasury` defaults to $1,000,000, founding fleet charges remain auditable, and `opening_capitalization` settles the post-founding balance before the first simulation tick. Added `npm run test:treasury-start` across deterministic seeds.
 - [x] Broke the land-funding deadlock: an unaffordable mandatory `ACQUIRE_LAND` now promotes `BOND_ISSUE` as a temporary funding remedy, the Mayor can approve the bridge, and the next sitting returns to land acquisition. Added `npm run test:land-funding-loop`.
+
+## Current sprint (2026-10-04, housing frontage and land discipline)
+
+- [x] Kept `ACQUIRE_LAND` as a frontier remedy for exhausted land or a measured multi-cell factory, resource, campus, civic, or housing-block footprint. A free acquired serviced plot now suppresses a housing land order even when beds are full.
+- [x] Allowed ordinary one-cell `DEVELOP_HOUSING` to quote and pave one connected street link inside the acquired envelope when serviced frontage is exhausted, then place the home on the frontage it creates. Catalogue housing blocks retain strict multi-cell land requirements.
+- [x] Preserved the planner RNG during housing expansion feasibility probes so `ranked()`/`wanted()` reads cannot change later site choices.
+- [x] Added `npm run test:housing-street-expansion` to verify the quote, connected street addition, successful one-cell house start, and no frontier land purchase.

@@ -62,6 +62,7 @@
     ,"test:fdi": "node scripts/_fdi_check.mjs"
     ,"test:treasury-start": "node scripts/_treasury_start_check.mjs"
     ,"test:land-funding-loop": "node scripts/_land_funding_loop_check.mjs"
+    ,"test:housing-street-expansion": "node scripts/_housing_street_expansion_check.mjs"
     ,"mapnow:capture": "node scripts/_mapnow_capture.mjs"
   },
   "dependencies": {
