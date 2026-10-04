@@ -22,6 +22,7 @@ Updated 2026-10-03 after the dynamic-market and build-duration audit.
 - [x] Fixed the recurring bus deadlock at station approaches: transit stops now avoid junctions and one-cell station-bay clearances, stale routes are invalidated after rebuilds, and stationary blockers yield to a held bus. Added `npm run test:bus-stuck` for the seeded 180-day transit regression.
 - [x] Added the modular five-department Cabinet and Mayor approval gate. Cabinet motions are configured in `src/data/cabinet.json`, validated by department remit, capped at five per sitting, executed sequentially through the existing Council boundary, and covered by `npm run test:cabinet`.
 - [x] Split Cabinet deliberation into one provider call per department. Each minister now receives its own configured system prompt, remit, owned-intent list, learning context, and full town report; replies are gathered before one Mayor review and same-sitting execution. `npm run test:cabinet` verifies five independent prompts/calls.
+- [x] Added a strict Cabinet remit guard: out-of-department intents are quarantined before Mayor review, retained in `lastBoundaryViolations`, and surfaced as one audit log event instead of appearing as public Mayor decisions.
 
 ## Hardcode extraction queue
 

@@ -2990,7 +2990,20 @@ export class GovernanceSystem {
         });
       });
       this.cabinet.lastMotions = motions;
-      let review = this.cabinet.mayor.review(motions, { requiredAction: this.requiredAction });
+      const boundaryViolations = motions.filter((motion) => motion.ownershipValid === false);
+      this.cabinet.lastBoundaryViolations = boundaryViolations;
+      if (boundaryViolations.length) {
+        const labels = [...new Set(boundaryViolations.map((motion) => motion.departmentLabel))].join(', ');
+        events.emit('log', {
+          kind: 'event',
+          text: `Cabinet remit guard quarantined ${boundaryViolations.length} out-of-remit motion${boundaryViolations.length === 1 ? '' : 's'} from ${labels}.`
+        });
+      }
+      // An individual minister cannot put another department's intent before
+      // the Mayor. Keep the invalid reply in the Cabinet audit stats, but only
+      // admit motions owned by the calling department to the approval batch.
+      const admittedMotions = motions.filter((motion) => motion.ownershipValid !== false);
+      let review = this.cabinet.mayor.review(admittedMotions, { requiredAction: this.requiredAction });
       this.cabinet.lastReview = review;
       for (const motion of [...review.rejected, ...review.deferred]) {
         this.recordMayorMotion(motion, motion.status, motion.mayorReason);
@@ -3035,7 +3048,17 @@ export class GovernanceSystem {
           if (corrected[0]) {
             corrected[0].index = motions.length;
             motions.push(corrected[0]);
-            const correctionReview = this.cabinet.mayor.review(corrected, { requiredAction: this.requiredAction });
+            if (corrected[0].ownershipValid === false) {
+              this.cabinet.lastBoundaryViolations.push(corrected[0]);
+              events.emit('log', {
+                kind: 'event',
+                text: `Cabinet remit guard quarantined the correction from ${corrected[0].departmentLabel}.`
+              });
+            }
+            const correctionReview = this.cabinet.mayor.review(
+              corrected.filter((motion) => motion.ownershipValid !== false),
+              { requiredAction: this.requiredAction }
+            );
             review = {
               approved: [...review.approved, ...correctionReview.approved],
               rejected: [...review.rejected, ...correctionReview.rejected],

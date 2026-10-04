@@ -38,6 +38,7 @@ export class CabinetSystem {
     this.lastReply = '';
     this.lastSittingId = null;
     this.lastMotions = [];
+    this.lastBoundaryViolations = [];
     this.lastReview = null;
     this.lastExecution = [];
     this.mayor.reset();
@@ -101,8 +102,9 @@ export class CabinetSystem {
       const params = object.params && typeof object.params === 'object' ? object.params : {};
       const fullRaw = paramsText(params) ? `${raw} ${paramsText(params)}` : raw;
       const finalResult = paramsText(params) ? parser(fullRaw) : result;
+      const declaredDepartmentMatches = !defaultDepartment || !declaredDepartment || declaredDepartment.id === defaultDepartment.id;
       const ownershipValid = defaultDepartment
-        ? (finalResult.intent === 'NO_ACTION' || defaultDepartment.intents.includes(finalResult.intent))
+        ? declaredDepartmentMatches && (finalResult.intent === 'NO_ACTION' || defaultDepartment.intents.includes(finalResult.intent))
         : (!declaredDepartment || finalResult.intent === 'NO_ACTION' || declaredDepartment.intents.includes(finalResult.intent));
       return {
         id: `motion-${index + 1}`,
@@ -134,6 +136,13 @@ export class CabinetSystem {
       mayor: this.mayor.stats(),
       lastSittingId: this.lastSittingId,
       lastMotions: this.lastMotions.map((motion) => ({ ...motion })),
+      lastBoundaryViolations: this.lastBoundaryViolations.map((motion) => ({
+        id: motion.id,
+        department: motion.department,
+        departmentLabel: motion.departmentLabel,
+        intent: motion.intent,
+        reason: motion.ownershipReason
+      })),
       lastReview: this.lastReview ? { ...this.lastReview } : null,
       lastExecution: this.lastExecution.map((decision) => ({
         id: decision.motionId,

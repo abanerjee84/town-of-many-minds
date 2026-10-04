@@ -63,6 +63,7 @@ try {
       rejected: cabinet.lastReview.rejected.length,
       deferred: cabinet.lastReview.deferred.length,
       executed: cabinet.lastExecution.length,
+      boundaryViolations: cabinet.lastBoundaryViolations.length,
       departments: cabinet.departments.length,
       max: cabinet.motionsPerSitting,
       cabinetPromptTokens,
@@ -90,9 +91,10 @@ try {
   assert.equal(result.firstExecuted, 5, JSON.stringify(result));
   assert.equal(result.motions, 5, JSON.stringify(result));
   assert.equal(result.approved, 2, JSON.stringify(result));
-  assert.equal(result.rejected, 3, JSON.stringify(result));
+  assert.equal(result.rejected, 0, JSON.stringify(result));
   assert.equal(result.deferred, 0, JSON.stringify(result));
   assert.equal(result.executed, 2, JSON.stringify(result));
+  assert.equal(result.boundaryViolations, 3, JSON.stringify(result));
   assert.equal(result.wrongDepartment.valid, false, JSON.stringify(result));
   assert.equal(result.sittingIds.length, 2, JSON.stringify(result));
   console.log(JSON.stringify({ ok: true, ...result, pageErrors: errors }));
