@@ -52,6 +52,7 @@ const INSPECTOR_TOP = `
     <button class="insp-btn" data-modal="council">Decisions</button>
     <button class="insp-btn" data-modal="trade">Trade</button>
     <button class="insp-btn" data-modal="construction">Palette</button>
+    <button class="insp-btn" data-modal="kpi">KPIs</button>
   </div>`;
 
 /** Escape arbitrary (LLM-authored) text before it goes near innerHTML. Phase 29:
@@ -653,14 +654,40 @@ export class Interaction {
       if (e.target.id === 'insp-modal' || e.target.closest('#modal-close')) {
         $('insp-modal').classList.add('hidden');
       }
+      if (e.target.closest('#kpi-export')) this.exportKpi();
+      if (e.target.id === 'kpi-search') {
+        const query = e.target.value.trim().toLowerCase();
+        $('modal-body').querySelectorAll('.kpi-row').forEach((row) => {
+          row.hidden = !!query && !row.textContent.toLowerCase().includes(query);
+        });
+      }
     });
+    $('insp-modal').addEventListener('input', (e) => {
+      if (e.target.id !== 'kpi-search') return;
+      const query = e.target.value.trim().toLowerCase();
+      $('modal-body').querySelectorAll('.kpi-row').forEach((row) => {
+        row.hidden = !!query && !row.textContent.toLowerCase().includes(query);
+      });
+    });
+  }
+
+  exportKpi() {
+    const payload = this.town.kpi?.export?.() || this.town.stats()?.kpi || null;
+    if (!payload) return;
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `tomm-kpi-${this.town.seed ?? 'run'}.json`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   /** Fill the history modal — all decisions (who/what/why) or trades. */
   openHistory(kind) {
     const title = $('modal-title');
     const body = $('modal-body');
-    $('insp-modal').querySelector('.modal-box')?.classList.remove('settings-modal-box');
+    $('insp-modal').querySelector('.modal-box')?.classList.remove('settings-modal-box', 'kpi-modal-box');
     if (kind === 'council') {
       // Unified feed: council motions + player + developer + town auto, newest
       // first. Falls back to governance decisions when the HUD feed is empty
@@ -691,6 +718,29 @@ export class Interaction {
             )
             .join('')
         : '<div class="h-empty">No decisions yet this run.</div>';
+    } else if (kind === 'kpi') {
+      const kpi = this.town.kpi?.stats?.() || this.town.stats()?.kpi;
+      const scores = kpi?.scores || {};
+      const current = kpi?.current || {};
+      const target = (key) => kpi?.targets?.[key]?.target;
+      const pct = (value) => value == null ? '—' : `${Math.round(Number(value) * 100)}%`;
+      const valueClass = (key, value) => {
+        if (value == null) return '';
+        const row = kpi?.targets?.[key];
+        if (!row) return '';
+        const good = row.direction === 'lower' ? value <= row.target : value >= row.target;
+        return good ? ' kpi-good' : ' kpi-warn';
+      };
+      const row = (key, label, value, formatter = pct) =>
+        `<div class="kpi-row"><span>${esc(label)}</span><b class="${valueClass(key, value)}">${formatter(value)}</b><small>target ${formatter(target(key))}</small></div>`;
+      title.textContent = 'Council & town KPIs';
+      $('insp-modal').querySelector('.modal-box')?.classList.add('kpi-modal-box');
+      body.innerHTML = kpi
+        ? `<div class="kpi-run"><b>Run ${esc(kpi.run?.seed ?? this.town.seed)}</b> · day ${esc(kpi.run?.day ?? '?')} · ${esc(kpi.run?.provider || 'rules')}${kpi.run?.model ? ` · ${esc(kpi.run.model)}` : ''}<button id="kpi-export" class="kpi-export">Export JSON</button></div><input id="kpi-search" class="kpi-search" type="search" placeholder="Filter KPI rows…" aria-label="Filter KPI rows" />
+           <div class="kpi-section"><b>Decision quality</b>${row('constraintCompliance', 'Constraint compliance', scores.constraintCompliance)}${row('actionThroughput', 'Action throughput', scores.actionThroughput)}${row('priorityResponseRate', 'Priority response', scores.priorityResponseRate)}${row('blockedRepeatRate', 'Repeat blocked rate', scores.blockedRepeatRate)}</div>
+           <div class="kpi-section"><b>Town outcomes</b>${row('treasurySafety', 'Treasury safety', scores.treasurySafety)}${row('congestionRelief', 'Latest congestion relief', scores.congestionRelief)}<div class="kpi-row"><span>Population</span><b>${Math.round(current.population || 0).toLocaleString('en-US')}</b><small>${Math.round(current.unemployment * 100)}% unemployed</small></div><div class="kpi-row"><span>Approval / mood</span><b>${pct(current.approval)} / ${pct(current.mood)}</b><small>${pct(current.congestion)} congestion · ${current.foodReserve == null ? '—' : pct(current.foodReserve)} food</small></div></div>
+           <div class="kpi-foot">${kpi.counters?.attempted || 0} decisions · ${kpi.snapshots?.length || 0} retained daily snapshots · ${kpi.counters?.priorityActions || 0} priority observations</div>`
+        : '<div class="h-empty">No KPI observations yet.</div>';
     } else if (kind === 'construction') {
       const palette = constructionPalette(this.town);
       title.textContent = 'Construction palette · quoted runway';

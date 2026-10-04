@@ -1,6 +1,6 @@
 /** Versioned persistence for the integrity refactor's durable mechanic fields.
  * Apply to an already restored/generated town with matching stable entities. */
-export const INTEGRITY_STATE_VERSION = 2;
+export const INTEGRITY_STATE_VERSION = 3;
 
 const siteKey = (site) => site.id || `${site.kind}:${(site.cells || []).map((cell) => cell.join(',')).join(';')}`;
 const plain = (value) => JSON.parse(JSON.stringify(value));
@@ -144,6 +144,9 @@ export function exportIntegrityState(town) {
     transport: exportTransport(town),
     kitCompatibility: town.kits?.compatibilityReport?.() || null,
     kitState: town.kits?.serialize?.(town) || null,
+    // KPI observations are evaluator data, not simulation inputs. They travel
+    // with the integrity overlay so a saved run can be audited after reload.
+    kpi: town.kpi?.serialize?.() || null,
     ok: true
   };
 }
@@ -222,5 +225,6 @@ export function importIntegrityState(town, saved = {}) {
     const restored = town.kits.restore(town, saved.kitState);
     if (!restored.ok) return { ok: false, reason: 'kit_restore_failed', detail: restored };
   }
+  town.kpi?.restore?.(saved.kpi);
   return { ok: true, town };
 }

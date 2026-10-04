@@ -1,6 +1,6 @@
 # TOMM construction and progression specification
 
-Updated 2026-10-04 after the catalogue-wide industrial-planning and residential-block audit.
+Updated 2026-10-04 after the catalogue-wide industrial-planning, residential-block, and KPI audit.
 
 ## Scope
 
@@ -363,4 +363,18 @@ This section defines the target architecture for turning the current specialist 
 72. The local Vite/preview server shall write the latest snapshot to `MapNow/latest.map.txt` and retain a bounded history under `MapNow/history/`. A standalone `npm run mapnow:capture` script shall also capture the current browser state for manual inspection when no sitting is being tested.
 
 73. MapNow coordinates shall remain grid-cell coordinates with explicit bounds and scale. Empty frontier, acquired vacant land, land use, resources, roads, transit stops, footways, water, and measured pressure shall have stable legend symbols. High-resolution windows shall identify their center and coordinate range so an inspector can relate the text back to the world.
+
+## KPI ledger and provider evaluation
+
+74. Every recorded Council, rules, test, developer, and system decision shall produce one bounded raw KPI observation containing the day, canonical intent, status, source, priority flag, spend, short reason, and before/after pressure fields. The KPI ledger is observational and shall not silently alter decision ranking or provider prompts.
+
+75. At most one daily KPI snapshot shall be retained per game day. A snapshot shall include population, buildings, treasury and reserve safety, unemployment, approval, mood, congestion, food reserve, bed pressure, population/approval deltas, congestion relief, and the current measured priority heads. Retention limits shall be loaded from `src/data/kpiRules.json`.
+
+76. KPI targets and directions shall be versioned in `src/data/kpiRules.json`, not hardcoded in the UI. The first target set shall cover constraint compliance, action throughput, priority response, repeat-block rate, treasury safety, and congestion relief. Derived scores shall expose null when a denominator has no observations rather than fabricate a pass.
+
+77. `Town.stats().kpi` shall expose the evaluator run metadata, counters, scores, targets, current snapshot, recent observations, and recent daily snapshots. The inspector shall provide a KPI modal with target colouring and an `Export JSON` action; the modal is a readout, not a second simulation authority.
+
+78. Integrity saves shall include the KPI ledger with a versioned schema and bounded arrays. Loading an older save without KPI data shall reset the evaluator ledger and continue; loading a newer unsupported integrity version shall retain the existing refusal contract. KPI data shall be exportable for provider comparison without exposing the full map or private resident records.
+
+79. KPI collection shall remain cheap on the render path: decision records are written at the existing governance boundary, daily snapshots are sampled at the day boundary, and the collector shall not call the full recursive `Town.stats()` snapshot from inside itself.
 

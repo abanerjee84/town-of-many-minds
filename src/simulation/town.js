@@ -43,6 +43,7 @@ import { events } from '../core/events.js';
 import { exportIntegrityState, importIntegrityState } from './integrityState.js';
 import { BUILTIN_KIT_REGISTRY } from '../kits/kitRuntime.js';
 import { recordPriceHistory, priceHistory } from './priceChart.js';
+import { KpiSystem } from './kpi.js';
 
 export const GRID_W = EXTENT.w;
 export const GRID_H = EXTENT.h;
@@ -122,6 +123,7 @@ export class Town {
     this.economy = new EconomySystem(this);
     this.growth = new GrowthSystem(this);
     this.governance = new GovernanceSystem(this);
+    this.kpi = new KpiSystem(this);
     this.industry = new IndustrySystem(this);
     this.incidents = new IncidentBoard(this);
     this.perimeter = new PerimeterSystem(this);
@@ -165,6 +167,7 @@ export class Town {
       ? Number(seed)
       : seed;
     this.seed = normalizedSeed;
+    this.kpi.reset(normalizedSeed);
     this.kits?.invalidateContext?.(this);
     this._kitClockDay = null;
     this.entityIds = { building: 1, household: 1 };
@@ -310,6 +313,7 @@ export class Town {
     if (this.economy) this.economy.reset();
     if (this.growth) this.growth.reset();
     if (this.governance) this.governance.reset();
+    if (this.kpi) this.kpi.reset(this.seed || 1);
     if (this.industry) this.industry.reset();    if (this.policy) {
       this.policy.townRef = this;
       this.policy.reset();
@@ -808,6 +812,7 @@ export class Town {
       this._kitClockDay = clock.day;
       recordPriceHistory(this, clock.day);
       this.kits?.invoke?.('updateDay', this, { dt, clock });
+      this.kpi?.updateDay?.(clock);
     }
     // Registered kits own their declared update hooks. This is the first
     // runtime migration away from a hand-maintained Town update list; the
@@ -1583,6 +1588,7 @@ export class Town {
       priceHistory: priceHistory(this),
       society: this.society ? this.society.stats() : null,
       governance: this.governance ? this.governance.stats() : null,
+      kpi: this.kpi ? this.kpi.stats() : null,
       mobility: this.traffic ? this.traffic.mobilityStats() : null,
       performance: this.traffic?.performanceStats?.() || null,
       components: this.roadKit.stats.components || {},

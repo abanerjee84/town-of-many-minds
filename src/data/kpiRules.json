@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "retention": { "decisionRecords": 512, "snapshots": 365 },
+  "targets": {
+    "constraintCompliance": { "target": 0.95, "direction": "higher", "label": "Constraint compliance" },
+    "actionThroughput": { "target": 0.75, "direction": "higher", "label": "Action throughput" },
+    "priorityResponseRate": { "target": 0.8, "direction": "higher", "label": "Priority response" },
+    "blockedRepeatRate": { "target": 0.05, "direction": "lower", "label": "Repeat blocked rate" },
+    "treasurySafety": { "target": 0.5, "direction": "higher", "label": "Treasury safety" },
+    "congestionRelief": { "target": 0.1, "direction": "higher", "label": "Congestion relief" }
+  }
+}

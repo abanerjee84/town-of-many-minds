@@ -2796,6 +2796,7 @@ export class GovernanceSystem {
     decision.transactions = rows.map((tx) => tx.id);
     const learningBefore = decision._learningBefore;
     const learningAfter = measureCouncilState(this.town);
+    this.town.kpi?.recordDecision?.(decision, learningBefore, learningAfter);
     delete decision._learningBefore;
     delete decision._ledgerStart;
     this.lastDecision = decision;
