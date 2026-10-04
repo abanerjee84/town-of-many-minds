@@ -2630,8 +2630,9 @@ export class GrowthSystem {
   /**
    * Evaluate a Council referral synchronously. A private referral is a
    * market request, so the developer gets the same measured viability and
-   * funding checks as its scheduled pass, but the Council card receives the
-   * final accept/reject result in the same enactment turn.
+   * funding checks as its scheduled pass. A full contractor lane is a durable
+   * queue state, while other viability failures remain final refusals; the
+   * Council card receives that distinction in the same enactment turn.
    */
   evaluatePrivateOpportunityNow(opportunityId) {
     this.prunePrivateOpportunities();
@@ -2653,10 +2654,27 @@ export class GrowthSystem {
       });
       return { status: 'rejected', opportunity, reason };
     };
+    const queue = (reason) => {
+      opportunity.attempts = (opportunity.attempts || 0) + 1;
+      opportunity.lastBlock = reason;
+      this.developerLastBlock = reason;
+      events.emit('developer-opportunity', {
+        source: opportunity.source || 'council',
+        actor: 'Developer',
+        opportunityId: opportunity.id,
+        intent: opportunity.intent,
+        type: opportunity.type,
+        status: 'queued',
+        detail: reason
+      });
+      return { status: 'queued', opportunity, reason };
+    };
     if (!this.developer) return reject('private market is unavailable');
     this.developerReviews = (this.developerReviews || 0) + 1;
     const active = this.activeDeveloperProjects();
-    if (active >= DEVELOPER_MAX_ACTIVE) return reject(`private contractors busy (${active}/${DEVELOPER_MAX_ACTIVE})`);
+    if (active >= DEVELOPER_MAX_ACTIVE) {
+      return queue(`private contractors busy (${active}/${DEVELOPER_MAX_ACTIVE}) — opportunity queued for the next available slot`);
+    }
     const queued = this.privateOpportunityPlan(opportunity.id);
     if (!queued) return reject(opportunity.lastBlock || 'developer rejected the opportunity');
     const result = this.apply(queued.plan);
@@ -2862,6 +2880,10 @@ export class GrowthSystem {
     }
     for (const p of finished) {
       this.projects.splice(this.projects.indexOf(p), 1);
+      // A private referral held by a full contractor slot becomes eligible as
+      // soon as that slot is freed. The normal developer pass runs after this
+      // completion sweep in the same update, so no Council sitting is needed.
+      if (p.plan?.commissionedBy === 'developer') this.developerReviewRemaining = 0;
       for (const [cx, cy] of [...(p.plan.cells || (p.cell ? [p.cell] : [])), ...(p.plan.accessSpur || [])]) {
         this.claims.delete(`${cx},${cy}`);
       }

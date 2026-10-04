@@ -2318,19 +2318,22 @@ export class GovernanceSystem {
       }
       const evaluation = t.growth?.evaluatePrivateOpportunityNow?.(signal.opportunity.id);
       const accepted = evaluation?.status === 'accepted';
+      const queued = evaluation?.status === 'queued';
       const privatePlan = evaluation?.plan || null;
       const privateResult = evaluation?.result || null;
       decision.status = accepted
         ? privateResult?.status === 'started' ? 'started' : privateResult?.status === 'queued' ? 'queued' : 'done'
-        : 'rejected';
-      decision.developerDecision = accepted ? 'accepted' : 'rejected';
+        : queued ? 'queued' : 'rejected';
+      decision.developerDecision = accepted ? 'accepted' : queued ? 'queued' : 'rejected';
       decision.committedCost = accepted ? privatePlan?.cost || 0 : 0;
       decision.actualSpend = 0;
       decision.projectId = accepted ? privatePlan?.projectId || null : null;
       decision.cost = 0;
       decision.detail = accepted
         ? `${committedPlan.label} accepted by the private developer${privateResult?.hours ? ` — ${privateResult.hours}h build` : ''}`
-        : `${committedPlan.label} rejected by the private developer — ${evaluation?.reason || 'private viability gate failed'}`;
+        : queued
+          ? `${committedPlan.label} queued by the private developer — ${evaluation?.reason || 'waiting for an available contractor slot'}`
+          : `${committedPlan.label} rejected by the private developer — ${evaluation?.reason || 'private viability gate failed'}`;
       this.record(decision);
       return decision;
     }
