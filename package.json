@@ -69,6 +69,7 @@
     ,"test:unemployment-horizon": "node scripts/_unemployment_horizon_check.mjs"
     ,"test:employment-mobility": "node scripts/_employment_mobility_check.mjs"
     ,"test:workforce-training": "node scripts/_workforce_training_check.mjs"
+    ,"test:unemployment-priority": "node scripts/_unemployment_priority_check.mjs"
     ,"test:housing-street-expansion": "node scripts/_housing_street_expansion_check.mjs"
     ,"mapnow:capture": "node scripts/_mapnow_capture.mjs"
   },

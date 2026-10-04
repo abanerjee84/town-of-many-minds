@@ -382,7 +382,11 @@ export function desiredFloorsForPopulation(population = 0) {
  */
 export const UNEMPLOYMENT_GATE = rules.unemploymentGate;
 export const UNEMPLOYMENT_PCT = rules.unemploymentPercent;
-export const UNEMPLOYMENT_PRIORITY_GATE = rules.unemploymentPriorityGate ?? Math.max(0.25, UNEMPLOYMENT_GATE * 2.5);
+export const UNEMPLOYMENT_PRIORITY_GATE = rules.unemploymentPriorityGate ?? Math.max(0.2, UNEMPLOYMENT_GATE * 2.5);
+// Above this rate, an empty vacancy board is itself an employment emergency:
+// importing workers cannot solve local joblessness, so the Council must fund
+// training or create measured job capacity instead.
+export const UNEMPLOYMENT_REMEDY_GATE = rules.unemploymentRemedyGate ?? UNEMPLOYMENT_PRIORITY_GATE;
 
 /**
  * The town's unemployment as a FRACTION, always read from the one field that
@@ -2971,10 +2975,10 @@ export class GrowthSystem {
             ? 20
             : 0;
         // Sustained joblessness is an immediate capacity failure, not a
-        // decorative growth opportunity. Once a quarter of the labour force is
-        // unemployed, put legal job-producing work (shops, offices, works,
-        // and shop tier-ups) above civic polish while preserving the stronger
-        // utility/resource emergency bands.
+        // decorative growth opportunity. Once the configured employment
+        // priority gate is reached, put legal job-producing work (shops,
+        // offices, works, and shop tier-ups) above civic polish while
+        // preserving the stronger utility/resource emergency bands.
         const employmentPriority = unemployment >= UNEMPLOYMENT_PRIORITY_GATE &&
           ['shop', 'office', 'factory', 'tierup'].includes(type)
           ? 9 + Math.min(6, Math.max(0, (unemployment - UNEMPLOYMENT_PRIORITY_GATE) * 10))

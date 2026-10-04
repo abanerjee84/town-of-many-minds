@@ -4,7 +4,7 @@ import { MAX_FLOORS, CELL_KIND } from '../core/config.js';
 import { planFor, LANDMARKS, UTILITY_RESERVE, MAX_ACTIVE, BUILD_FLOOR, BUILD_HOURS,
   MAX_BRIDGE_GAP,
   civicLoads, civicExpansionNeed, HOUSE_PRESSURE_GATE, HOUSE_SPARE_BEDS, housingNeedsBuild, FILLER_PRESSURE_GATE,
-  UNEMPLOYMENT_GATE, UNEMPLOYMENT_PCT, UNEMPLOYMENT_PRIORITY_GATE, unemploymentRate, CIVIC_PER_POP, PARKS_PER_POP, roadCongestionGate, ROAD_EMERGENCY_GATE, CIVIC_LOAD_GATE, activePublicProjects } from './growth.js';
+  UNEMPLOYMENT_GATE, UNEMPLOYMENT_PCT, UNEMPLOYMENT_PRIORITY_GATE, UNEMPLOYMENT_REMEDY_GATE, unemploymentRate, CIVIC_PER_POP, PARKS_PER_POP, roadCongestionGate, ROAD_EMERGENCY_GATE, CIVIC_LOAD_GATE, activePublicProjects } from './growth.js';
 import { FACTORY_TYPES, COMMODITIES, MATERIAL_KEYS } from './industry.js';
 import { SHOP_TIERS } from './economy.js';
 import { CIVIC_CATALOGUE } from '../kits/civic/civicKit.js';
@@ -546,7 +546,7 @@ const PROMPT_BODY = [
   // day's footfall.
   'BUILD_OFFICE for a measured office-capacity gap (optional spec: name=Some Name, floors=2..' + MAX_FLOORS + ') — an office earns from its desks, not from passing trade,',
   'UPGRADE_RESOURCE when the report shows a primary resource DRY or in DEFICIT — raises that resource\u2019s site output (optional spec: resource=' + ORDER.join('|') + '; pin the yard with kind=farm|husbandry|poultry, e.g. UPGRADE_RESOURCE resource=food kind=husbandry to grow the ranch rather than the first food site),' ,
-  'PLANT_TREES/INSTALL_LAMP for street improvements, EXTEND_FOOTWAY to lay a footpath that unlocks an inland lot, vacant posts are filled by local matching/retraining first, HIRE_WORKERS only when Staff shows a fundable vacancy at farms, power works, businesses, or civic buildings and the town has spare beds; HIRE_WORKERS imports staff and is not an unemployment remedy for residents already in town,',
+  'PLANT_TREES/INSTALL_LAMP for street improvements, EXTEND_FOOTWAY to unlock an inland lot, vacant posts use local matching/retraining first. HIRE_WORKERS imports workers only for a fundable Staff gap; it never solves resident unemployment. At the configured ' + Math.round(UNEMPLOYMENT_REMEDY_GATE * 100) + '% gate with no gap, choose ENACT_SCHEME scheme=workforce_training or measured BUILD_OFFICE/BUILD_FACTORY/civic capacity,',
   // Phase 16 — arrivals are a function of a derived band, so the lever is the
   // pull, not a number. The Settlers line is the whole story.
     'ATTRACT_SETTLERS spends $' + CAMPAIGN.cost + ' to advertise the town for ' + CAMPAIGN.days +
@@ -1768,8 +1768,19 @@ export class GovernanceSystem {
     const intentMapLine = board
       ? `Intent map: priority [${[...priorityHeads].join(', ') || 'none'}] · feasible [${[...feasibleHeads].join(', ') || 'none'}] · blocked [${[...blockedHeads].join(', ') || 'none'}] · conditional/manual [${conditionalIntents.join(', ')}]`
       : `Intent map: ${INTENTS.join(', ')}`;
+    const trainingRow = SCHEMES.find((row) => row.id === 'workforce_training');
+    const trainingRunning = !!pol?.schemes?.some((row) => row.id === 'workforce_training');
+    const trainingEligible = citizens.filter((citizen) => {
+      const p = citizen.p;
+      return p && p.age >= 18 && p.age < 66 && !citizen.work && p.employmentStatus === 'unemployed' &&
+        (p.education?.level === 'none' || p.education?.level === 'primary');
+    }).length;
+    const trainingAvailable = trainingRow && !trainingRunning && trainingEligible > 0 &&
+      unemploymentRate(t) >= (trainingRow.needs?.unemployment || 0) && eco.treasury >= (trainingRow.cost || 0);
+    const highUnemploymentNoVacancy = unemploymentRate(t) >= UNEMPLOYMENT_REMEDY_GATE && !(staff?.gap > 0);
     const directLine = [
-      `HIRE_WORKERS ${staff?.gap ? `needed ${staff.gap}` : 'no measured gap'}`,
+      `HIRE_WORKERS ${staff?.gap ? `needed ${staff.gap}` : highUnemploymentNoVacancy ? `blocked: no vacancy at ${Math.round(unemploymentRate(t) * 100)}% unemployment` : 'no measured gap'}`,
+      `WORKFORCE_TRAINING ${trainingAvailable ? `${trainingEligible} eligible residents` : trainingRunning ? 'already running' : 'not currently eligible'}`,
       `ATTRACT_SETTLERS ${st?.spareBeds > 0 && st?.openings > 0 ? 'available' : 'wait for beds/posts'}`,
       `TRADE_BUY ${rs?.strained?.length ? `consider ${rs.strained.join('/')}` : 'no primary deficit'}`,
       `TRADE_SELL ${ind?.commodities ? 'surplus shown in Stocks' : 'unavailable'}`,
@@ -2770,8 +2781,11 @@ export class GovernanceSystem {
     const crewLine = (n) =>
       CREW_ROLES.map((r) => `${SITE_CREW[r].label} ${n.staff[r] || 0}/${n.want[r] || 0}`).join(' · ');
     if (!need.gap) {
-      decision.status = 'noop';
-      decision.detail = `every post is filled — ${crewLine(need)}, businesses ${need.biz?.have ?? 0}/${need.biz?.need ?? 0}, civic ${need.civic?.filled ?? 0}/${need.civic?.need ?? 0}`;
+      const unemployment = unemploymentRate(t);
+      decision.status = unemployment >= UNEMPLOYMENT_REMEDY_GATE ? 'rejected' : 'noop';
+      decision.detail = unemployment >= UNEMPLOYMENT_REMEDY_GATE
+        ? `no staffed vacancy can absorb local joblessness (${Math.round(unemployment * 100)}% unemployed) — use ENACT_SCHEME scheme=workforce_training when eligible or create measured job capacity`
+        : `every post is filled — ${crewLine(need)}, businesses ${need.biz?.have ?? 0}/${need.biz?.need ?? 0}, civic ${need.civic?.filled ?? 0}/${need.civic?.need ?? 0}`;
       this.record(decision);
       return decision;
     }
