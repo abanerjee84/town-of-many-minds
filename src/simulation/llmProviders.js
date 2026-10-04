@@ -31,7 +31,11 @@ export function createOpenAICompatibleProvider(options = {}) {
           messages
         })
       });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) {
+        let detail = '';
+        try { detail = (await response.text()).replace(/\s+/g, ' ').slice(0, 240); } catch { /* preserve the HTTP status */ }
+        throw new Error(`HTTP ${response.status}${detail ? ` — ${detail}` : ''}`);
+      }
       const data = await response.json();
       return {
         text: data?.choices?.[0]?.message?.content || '',

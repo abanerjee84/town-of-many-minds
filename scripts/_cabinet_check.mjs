@@ -90,6 +90,7 @@ try {
   assert.equal(result.max, 5, JSON.stringify(result));
   assert.ok(result.cabinetPromptTokens <= 4000, JSON.stringify(result));
   assert.ok(result.cabinetContextTokens <= 4000, JSON.stringify(result));
+  assert.ok(result.cabinetContextTokens <= 2200, JSON.stringify(result));
   assert.equal(result.providerCalls, 12, JSON.stringify(result));
   assert.equal(result.councilCalls, 2, JSON.stringify(result));
   assert.deepEqual(result.departmentPrompts, ['treasury', 'land', 'infrastructure', 'services', 'society'], JSON.stringify(result));

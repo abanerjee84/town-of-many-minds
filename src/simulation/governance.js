@@ -675,6 +675,43 @@ export function systemPrompt(town, options = {}) {
   return COUNCIL_ETHOS + ' ' + st.opening + ' ' + st.focus + mode + voice + ' ' + learning + ' ' + PROMPT_BODY;
 }
 
+// The full HUD report is intentionally rich, but small local models often
+// expose a 2K context window even when the UI allows a 4K Council budget. A
+// minister needs the measured rows relevant to its remit, not every catalogue
+// line, so keep the report evidence dense enough to fit prompt plus output.
+const CABINET_REPORT_PREFIXES = Object.freeze({
+  common: [
+    'TOWN REPORT', 'Construction kits:', 'Population ', 'Buildings:', 'Land:',
+    'Treasury ', 'Budget:', 'Feasible now', 'Blocked:', 'Priority:',
+    'Intent map:', 'Construction:', 'Warnings:', 'Last decision:'
+  ],
+  treasury: ['Economy:', 'Industry:', 'Staff:', 'Primary resources:', 'Stocks:', 'Trade:', 'HIRE_WORKERS', 'TRADE_BUY', 'TRADE_SELL', 'BOND_ISSUE', 'FUND_INNOVATION'],
+  land: ['Society:', 'Settlers:', 'Civic load:', 'Design opportunity:', 'Connectivity:'],
+  infrastructure: ['Congestion average', 'Road planning:', 'Services:', 'Connectivity:'],
+  services: ['Society:', 'Weather:', 'Emergency:', 'Services:', 'Industry:', 'Staff:', 'Utilities:', 'Electricity:', 'Primary resources:', 'Waste flow:'],
+  society: ['Society:', 'Weather:', 'Settlers:', 'Civic load:', 'Tourism:', 'Design opportunity:', 'Research:', 'Schemes:', 'Laws:', 'Policy effects:'],
+  council: [
+    'Society:', 'Weather:', 'Settlers:', 'Economy:', 'Industry:', 'Staff:',
+    'Primary resources:', 'Stocks:', 'Trade:', 'Congestion average', 'Road planning:',
+    'Emergency:', 'Services:', 'Utilities:', 'Electricity:', 'Waste flow:',
+    'District:', 'Connectivity:', 'Research:', 'Schemes:', 'Laws:', 'Policy effects:',
+    'Civic load:', 'Design opportunity:'
+  ]
+});
+
+function cabinetReportFor(report, departmentId = 'council') {
+  const rows = String(report || '').split(/\r?\n/).filter(Boolean);
+  const prefixes = new Set([
+    ...CABINET_REPORT_PREFIXES.common,
+    ...(CABINET_REPORT_PREFIXES[departmentId] || CABINET_REPORT_PREFIXES.council)
+  ]);
+  const selected = rows.filter((row) => [...prefixes].some((prefix) => row.startsWith(prefix)));
+  const limit = departmentId === 'council' ? 4000 : 3600;
+  const compact = selected.join('\n');
+  if (compact.length <= limit) return compact;
+  return `${compact.slice(0, limit)}\n[report truncated to fit this provider context]`;
+}
+
 function normalize(text) {
   return String(text || '')
     .toUpperCase()
@@ -2949,15 +2986,16 @@ export class GovernanceSystem {
       const report = this.report();
       const callMinister = async (department, correction = '') => {
         try {
+          const ministerReport = cabinetReportFor(report, department.id);
           const reply = await this.provider.complete({
             endpoint: this.endpoint,
             model: this.model,
             temperature: this.temperature,
-            maxTokens: 600,
+            maxTokens: 320,
             signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
             messages: [
               { role: 'system', content: systemPrompt(this.town, { cabinetDepartment: department }) },
-              { role: 'user', content: `${report}${correction ? `\n\n${correction}` : ''}` }
+              { role: 'user', content: `${ministerReport}${correction ? `\n\n${correction}` : ''}` }
             ],
             town: this.town,
             sittingId,
@@ -3040,7 +3078,7 @@ export class GovernanceSystem {
             { role: 'system', content: systemPrompt(this.town, { cabinetCouncil: true }) },
             {
               role: 'user',
-              content: `${report}\n\nMINISTER CANDIDATES (select by id only):\n${JSON.stringify(candidateDigest)}`
+              content: `${cabinetReportFor(report, 'council')}\n\nMINISTER CANDIDATES (select by id only):\n${JSON.stringify(candidateDigest)}`
             }
           ],
           town: this.town,
