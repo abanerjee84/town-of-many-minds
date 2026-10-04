@@ -4,7 +4,7 @@ import { ZONE, CELL_KIND, CELL, SIM, MAX_FLOORS } from '../core/config.js';
 import { getSettings } from '../core/settings.js';
 import { MATERIALS, FACTORY_TYPES, FACTORY_SIZES } from './industry.js';
 import { ASSESS, SHOP_TIERS } from './economy.js';
-import { ECON } from './economicConfig.js';
+import { ECON, PRIVATE_OPPORTUNITY_EXPIRY_DAYS, PRIVATE_OPPORTUNITY_LIMIT } from './economicConfig.js';
 import { stageOf } from '../kits/citizens/citizenProfile.js';
 import { roadComponents, hasNetworkAccess, urbanProfile, edgeScore, onIndustrialGround, planConnectedRoad, planFootway, MAX_LINK } from '../placement/placementController.js';
 import { straightAxis, straightRun, classify } from '../kits/roads/components.js';
@@ -800,6 +800,8 @@ export function planFor(town, type, opts = {}) {
         type: 'house',
         zone: 'house',
         wantZone: ZONE.RESIDENTIAL,
+        publicProgram: opts.publicProgram || null,
+        owner: opts.publicProgram ? 'state' : undefined,
         blockId: block?.id || null,
         footprint: opts.footprint || undefined,
         footprintCandidates,
@@ -809,7 +811,9 @@ export function planFor(town, type, opts = {}) {
         // frontage is exhausted. Catalogue blocks and explicit footprints are
         // multi-plot projects; they remain strict land-acquisition candidates.
         allowStreetExpansion: opts.allowStreetExpansion ?? (!block && !opts.requireFootprint),
-        label: block ? `${block.label} provides new family homes` : 'A new family needs a home',
+        label: opts.publicProgram === 'social_housing'
+          ? (block ? `${block.label} provides municipally supported homes` : 'A municipal social-housing programme adds homes')
+          : block ? `${block.label} provides new family homes` : 'A new family needs a home',
         cost: catalogueBill?.cost ?? dynamicCost(town, 'house'),
         materials: catalogueBill?.materials ?? MATERIALS.house,
         labourHours: catalogueBill?.labourHours || null,
@@ -1693,6 +1697,8 @@ export class GrowthSystem {
     this.developerLastAction = null;
     this.developerLastBlock = '';
     this.developerHistory = [];
+    this.privateOpportunitySeq = 0;
+    this.privateOpportunities = [];
     this.history = [];
     this.built = { house: 0, shop: 0, civic: 0, park: 0, archetype: 0, road: 0, utility: 0, factory: 0, mall: 0, multiplex: 0 };
     this.metrics = { tierUps: 0, floorUpgrades: 0, wings: 0 };
@@ -1732,6 +1738,8 @@ export class GrowthSystem {
     this.developerLastAction = null;
     this.developerLastBlock = '';
     this.developerHistory = [];
+    this.privateOpportunitySeq = 0;
+    this.privateOpportunities = [];
     this.projects = [];
     this.projectStates = new Map();
     this.claims = new Set();
@@ -2429,6 +2437,129 @@ export class GrowthSystem {
     return (min + this.rng.float(0, max - min)) * GAME_HOUR_SECONDS;
   }
 
+  /**
+   * Submit a Council request to the private market without constructing it.
+   * The request is a bounded, expiring opportunity; the developer evaluates
+   * it during its own review cadence using cash, demand, staffing and site
+   * evidence. This is the free-will boundary for ordinary private projects.
+   */
+  submitPrivateOpportunity({ intent, type, params = {}, reason = '', source = 'council', priority = 0 } = {}) {
+    const kind = String(type || '').trim();
+    if (!kind) return { ok: false, reason: 'missing private project type' };
+    const cleanParams = { ...params };
+    delete cleanParams.issues;
+    const duplicate = this.privateOpportunities.find((entry) =>
+      entry.type === kind && entry.params?.blockId === cleanParams.blockId &&
+      entry.params?.factory === cleanParams.factory && entry.params?.facility === cleanParams.facility &&
+      entry.params?.tier === cleanParams.tier && entry.params?.publicProgram === cleanParams.publicProgram
+    );
+    if (duplicate) return { ok: true, duplicate: true, opportunity: duplicate };
+    if (this.privateOpportunities.length >= PRIVATE_OPPORTUNITY_LIMIT)
+      return { ok: false, reason: `private opportunity queue full (${PRIVATE_OPPORTUNITY_LIMIT})` };
+    const day = Number(this.town.clockDay) || 0;
+    const opportunity = {
+      id: `private-opportunity-${++this.privateOpportunitySeq}`,
+      intent: intent || kind,
+      type: kind,
+      params: cleanParams,
+      reason: String(reason || '').slice(0, 180),
+      source,
+      priority: Math.max(0, Math.min(1, Number(priority) || 0)),
+      submittedDay: day,
+      expiresDay: day + PRIVATE_OPPORTUNITY_EXPIRY_DAYS,
+      attempts: 0,
+      lastBlock: ''
+    };
+    this.privateOpportunities.push(opportunity);
+    events.emit('developer-opportunity', {
+      source: 'council',
+      actor: 'Developer',
+      opportunityId: opportunity.id,
+      intent: opportunity.intent,
+      type: opportunity.type,
+      status: 'submitted'
+    });
+    return { ok: true, opportunity };
+  }
+
+  prunePrivateOpportunities() {
+    const day = Number(this.town.clockDay) || 0;
+    this.privateOpportunities = this.privateOpportunities.filter((entry) => day <= entry.expiresDay);
+  }
+
+  privateOpportunityViability(plan) {
+    const s = this.inputs();
+    const type = plan?.type;
+    if (!plan || !this.town.economy) return { ok: false, reason: 'economy unavailable' };
+    if (type === 'house') {
+      return housingNeedsBuild(s.pop, s.capacity, s.pressure)
+        ? { ok: true, reason: 'beds are under measured pressure' }
+        : { ok: false, reason: 'private housing demand is covered' };
+    }
+    if (type === 'shop') {
+      const seats = this.town.buildings.filter((b) => b.purpose === 'commercial' && b.kind !== 'office')
+        .reduce((n, b) => n + (b.capacity || 0), 0);
+      return s.pop > seats
+        ? { ok: true, reason: 'customer capacity is below population' }
+        : { ok: false, reason: 'retail demand is covered' };
+    }
+    if (type === 'office') {
+      return this.wanted('office')
+        ? { ok: true, reason: 'measured office/job capacity gap' }
+        : { ok: false, reason: 'office demand is not measured' };
+    }
+    if (type === 'factory') {
+      const def = FACTORY_TYPES.find((row) => row.id === plan.factory);
+      const urgent = this.town.industry?.mostUrgentProducer?.() || this.town.industry?.missingConstructionProduct?.();
+      const pressure = def?.product && this.town.industry?.producerPressure?.(def.product);
+      return urgent === def?.product || this.town.industry?.deficitProduct?.() === def?.product || Number(pressure?.priority) > 0.75
+        ? { ok: true, reason: `measured demand for ${def?.product || 'industrial output'}` }
+        : { ok: false, reason: `no measured demand for ${def?.product || 'this works'}` };
+    }
+    if (LANDMARKS[type]) {
+      const lm = LANDMARKS[type];
+      return lm.owner === 'private' && this.landmarkWanted(lm, s, s.economy)
+        ? { ok: true, reason: 'private landmark demand and gate are met' }
+        : { ok: false, reason: 'private landmark demand gate is not met' };
+    }
+    if (['archetype'].includes(type)) {
+      return s.pressure >= FILLER_PRESSURE_GATE
+        ? { ok: true, reason: 'design opportunity is backed by measured pressure' }
+        : { ok: false, reason: 'design demand is below the comfort gate' };
+    }
+    // In-place private progression already has a measured target selected by
+    // planFor (tier, wing, renovation, or a private floor), so its existence
+    // is the demand proof. Public civic targets are never submitted here.
+    return plan.target ? { ok: true, reason: 'existing private asset has a legal progression target' } : { ok: true, reason: 'private plan passed site and finance quote' };
+  }
+
+  privateOpportunityPlan() {
+    this.prunePrivateOpportunities();
+    const ordered = [...this.privateOpportunities].sort((a, b) => b.priority - a.priority || a.submittedDay - b.submittedDay);
+    for (const opportunity of ordered) {
+      const plan = planFor(this.town, opportunity.type, opportunity.params || {});
+      if (!plan) {
+        opportunity.lastBlock = 'no legal private site or target';
+        continue;
+      }
+      const policy = this.town.economy?.projectFinancePolicy?.(plan);
+      if (!policy?.privateActor) {
+        opportunity.lastBlock = 'project is a public mandate, not a private opportunity';
+        continue;
+      }
+      const viability = this.privateOpportunityViability(plan);
+      if (!viability.ok) {
+        opportunity.lastBlock = viability.reason;
+        continue;
+      }
+      plan.owner = 'private';
+      plan.commissionedBy = 'developer';
+      plan.privateOpportunityId = opportunity.id;
+      return { plan, opportunity, viability };
+    }
+    return null;
+  }
+
   activeDeveloperProjects() { return activeDeveloperProjects(this); }
   activePublicProjects() { return activePublicProjects(this); }
 
@@ -2441,13 +2572,19 @@ export class GrowthSystem {
       this.developerLastBlock = `private contractors busy (${this.activeDeveloperProjects()}/${DEVELOPER_MAX_ACTIVE})`;
       return null;
     }
-    const plan = this.developerPlan();
+    const queued = this.privateOpportunityPlan();
+    const plan = queued?.plan || this.developerPlan();
     if (!plan) return null;
     const result = this.apply(plan);
     if (!result) {
       this.developerLastBlock = this.lastBlock || 'private project validation failed';
+      if (queued) {
+        queued.opportunity.attempts++;
+        queued.opportunity.lastBlock = this.developerLastBlock;
+      }
       return null;
     }
+    if (queued) this.privateOpportunities = this.privateOpportunities.filter((entry) => entry.id !== queued.opportunity.id);
     this.developerCooldown = 0;
     this.developerBuilt = (this.developerBuilt || 0) + 1;
     this.developerLastBlock = '';
@@ -2455,7 +2592,8 @@ export class GrowthSystem {
       action: `BUILD_${String(plan.type || 'project').toUpperCase()}`,
       label: plan.label,
       cost: plan.cost || 0,
-      projectId: plan.projectId || null
+      projectId: plan.projectId || null,
+      opportunityId: plan.privateOpportunityId || null
     };
     this.developerHistory.push({ ...this.developerLastAction });
     if (this.developerHistory.length > 24) this.developerHistory.shift();
@@ -5446,7 +5584,12 @@ export class GrowthSystem {
         cash: Math.round(this.town.economy?.accounts?.developer?.cash || 0),
         lastAction: this.developerLastAction ? { ...this.developerLastAction } : null,
         history: this.developerHistory.slice(-8).map((entry) => ({ ...entry })),
-        blocked: this.developerLastBlock || null
+        blocked: this.developerLastBlock || null,
+        opportunities: this.privateOpportunities.slice(0, PRIVATE_OPPORTUNITY_LIMIT).map((entry) => ({
+          id: entry.id, intent: entry.intent, type: entry.type, priority: entry.priority,
+          submittedDay: entry.submittedDay, expiresDay: entry.expiresDay,
+          attempts: entry.attempts, lastBlock: entry.lastBlock || null
+        }))
       },
       built: { ...this.built },
       total: Object.values(this.built).reduce((a, b) => a + b, 0),

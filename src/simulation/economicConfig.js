@@ -53,13 +53,19 @@ export const TRANSACTION_CATEGORIES = Object.freeze([
   'estate_settlement'
 ]);
 
-export const PUBLIC_PROJECT_TYPES = Object.freeze(new Set([
+const projectFinance = rules.projectFinance || {};
+
+export const PUBLIC_PROJECT_TYPES = Object.freeze(new Set(projectFinance.publicTypes || [
   'road', 'roadup', 'bridge', 'footway', 'park', 'plaza', 'parking', 'civic',
   'utility', 'resource', 'clear', 'rezone', 'upzone', 'annex', 'district',
   'school', 'hospital', 'stadium', 'museum', 'library', 'zoo', 'amphitheatre'
 ]));
 
-export const PRIVATE_PROJECT_TYPES = Object.freeze(new Set([
+export const PRIVATE_PROJECT_TYPES = Object.freeze(new Set(projectFinance.privateTypes || [
   'house', 'shop', 'office', 'factory', 'mall', 'hotel', 'resort', 'tower', 'renovate',
   'tierup', 'upgrade', 'wing', 'archetype'
 ]));
+
+export const PUBLIC_PROGRAM_TYPES = Object.freeze(new Set(projectFinance.publicPrograms || ['social_housing']));
+export const PRIVATE_OPPORTUNITY_EXPIRY_DAYS = Math.max(1, Number(projectFinance.privateOpportunityExpiryDays) || 14);
+export const PRIVATE_OPPORTUNITY_LIMIT = Math.max(1, Number(projectFinance.privateOpportunityLimit) || 8);

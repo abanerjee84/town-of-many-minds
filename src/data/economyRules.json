@@ -24,6 +24,20 @@
     "relocationShare": 0.08,
     "demolitionShare": 0.04
   },
+  "projectFinance": {
+    "publicTypes": [
+      "road", "roadup", "bridge", "footway", "park", "plaza", "parking", "civic",
+      "utility", "resource", "clear", "rezone", "upzone", "annex", "district",
+      "school", "hospital", "stadium", "museum", "library", "zoo", "amphitheatre", "market", "station"
+    ],
+    "privateTypes": [
+      "house", "shop", "office", "factory", "mall", "hotel", "resort", "tower", "estate", "multiplex",
+      "renovate", "tierup", "upgrade", "wing", "archetype"
+    ],
+    "publicPrograms": ["social_housing"],
+    "privateOpportunityExpiryDays": 14,
+    "privateOpportunityLimit": 8
+  },
   "property": { "landWeight": 0.75, "qualityPerBudgetTier": 0.12, "annualRentYield": 0.045 },
   "municipalRevenue": {
     "businessLicense": { "dailyBase": 12, "perFloor": 3, "perCell": 1.5, "turnoverRate": 0.01, "industrialMultiplier": 1.25, "lodgingMultiplier": 1.4 },

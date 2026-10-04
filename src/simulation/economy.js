@@ -1,6 +1,6 @@
 import { events } from '../core/events.js';
 import { CELL_KIND } from '../core/config.js';
-import { ECON, PUBLIC_PROJECT_TYPES, PRIVATE_PROJECT_TYPES, SECTOR, TRANSACTION_CATEGORIES } from './economicConfig.js';
+import { ECON, PUBLIC_PROJECT_TYPES, PRIVATE_PROJECT_TYPES, PUBLIC_PROGRAM_TYPES, SECTOR, TRANSACTION_CATEGORIES } from './economicConfig.js';
 import { qualifies } from '../kits/citizens/personality.js';
 import { setJob } from '../kits/citizens/citizenProfile.js';
 import { basePrice } from './priceChart.js';
@@ -1898,18 +1898,77 @@ export class EconomySystem {
     if (this.debt <= 0) this.warnings = this.warnings.filter((w) => w !== 'debt');
   }
 
+  /**
+   * Resolve the economic boundary for a project.
+   *
+   * A Council order is not an ownership transfer. Private project types are
+   * therefore developer opportunities unless they carry an explicit public
+   * programme (currently social_housing) or modify an existing public asset.
+   * Public outcomes may still use a developer PPP leg, so financing and
+   * ownership remain separate fields.
+   */
+  projectFinancePolicy(plan = {}) {
+    const type = String(plan.type || '');
+    const privateType = PRIVATE_PROJECT_TYPES.has(type);
+    const publicType = PUBLIC_PROJECT_TYPES.has(type);
+    const publicProgram = typeof plan.publicProgram === 'string'
+      ? PUBLIC_PROGRAM_TYPES.has(plan.publicProgram)
+      : plan.publicProgram === true;
+    const targetPublic = plan.target?.ownerType === SECTOR.GOVERNMENT || plan.target?.owner === 'state';
+    const requested = plan.financingSector || (plan.owner === 'state' ? SECTOR.GOVERNMENT : null);
+    let financierSector;
+    if (privateType && !publicProgram && !targetPublic) {
+      // Private actors retain the right to refuse a private opportunity. An
+      // accidental owner=state or financingSector=government on a normal
+      // house/shop/factory cannot turn that opportunity into public spending.
+      financierSector = SECTOR.DEVELOPER;
+    } else if (requested) {
+      financierSector = requested;
+    } else if (targetPublic || publicProgram || publicType || plan.owner === 'state') {
+      financierSector = SECTOR.GOVERNMENT;
+    } else if (PRIVATE_PROJECT_TYPES.has(type) || plan.owner === 'private') {
+      financierSector = SECTOR.DEVELOPER;
+    } else if (plan.target?.ownerType === SECTOR.BUSINESS) {
+      financierSector = SECTOR.BUSINESS;
+    } else if (plan.target?.ownerType === SECTOR.HOUSEHOLD) {
+      financierSector = SECTOR.HOUSEHOLD;
+    } else {
+      financierSector = SECTOR.GOVERNMENT;
+    }
+    return {
+      type,
+      privateType,
+      publicType,
+      publicProgram,
+      publicOutcome: publicProgram || publicType || targetPublic || (!privateType && plan.owner === 'state'),
+      privateActor: privateType && !publicProgram && !targetPublic,
+      requestedSector: requested,
+      financierSector
+    };
+  }
+
+  normalizeProjectFinance(plan = {}) {
+    const policy = this.projectFinancePolicy(plan);
+    if (policy.privateActor) {
+      plan.financingSector = SECTOR.DEVELOPER;
+      // A stale owner flag must not make a private house or shop state-owned.
+      if (plan.owner === 'state') plan.owner = 'private';
+      plan.financeBoundary = 'private_market';
+    } else if (policy.publicProgram) {
+      plan.owner = 'state';
+      plan.publicProgram = plan.publicProgram === true ? 'social_housing' : plan.publicProgram;
+      plan.financeBoundary = 'public_program';
+    } else if (policy.publicOutcome) {
+      plan.financeBoundary = 'public_mandate';
+    }
+    return this.projectFinancePolicy(plan);
+  }
+
   classifyProject(plan = {}) {
-    // An explicit financing leg is a capital decision and must win over the
-    // target's ownership. Resource sites and civic facilities are state-owned
-    // outcomes, but their approved expansion can be developer-financed; the
-    // old target-first ordering silently routed those plans back to treasury.
-    if (plan.financingSector) return plan.financingSector;
-    if (plan.target?.ownerType === SECTOR.GOVERNMENT || plan.target?.owner === 'state') return SECTOR.GOVERNMENT;
-    if (plan.target?.ownerType === SECTOR.BUSINESS) return SECTOR.BUSINESS;
-    if (plan.target?.ownerType === SECTOR.HOUSEHOLD) return SECTOR.HOUSEHOLD;
-    if (plan.owner === 'state' || PUBLIC_PROJECT_TYPES.has(plan.type)) return SECTOR.GOVERNMENT;
-    if (PRIVATE_PROJECT_TYPES.has(plan.type) || plan.owner === 'private') return SECTOR.DEVELOPER;
-    return SECTOR.GOVERNMENT;
+    // An explicit developer leg remains valid for public outcomes (PPP), but
+    // private project types cannot be promoted to public spending by a stale
+    // owner/financing flag.
+    return this.normalizeProjectFinance(plan).financierSector;
   }
   projectFinancier(plan = {}) {
     const sector = this.classifyProject(plan);
@@ -1959,15 +2018,18 @@ export class EconomySystem {
   }
   resolveProjectFinance(plan = {}, reserve = 0) {
     const financier = this.projectFinancier(plan);
+    const policy = this.projectFinancePolicy(plan);
     const account = this._account(financier);
     const projectCost = finiteAmount(plan.cost);
     const reserveRequired = financier.sector === SECTOR.GOVERNMENT ? this.requiredPublicReserve(reserve) : 0;
     const requiredCash = projectCost + reserveRequired;
     const availableCash = account?.balance || 0;
     return {
-      ownerSector: plan.target?.ownerType || (plan.owner === 'state' ? SECTOR.GOVERNMENT : financier.sector),
-      ownerId: plan.target?.ownerId || plan.ownerId || financier.id,
+      ownerSector: policy.publicOutcome ? SECTOR.GOVERNMENT : (plan.target?.ownerType || financier.sector),
+      ownerId: policy.publicOutcome ? 'government' : (plan.target?.ownerId || plan.ownerId || financier.id),
       financierSector: financier.sector, financierId: financier.id, account,
+      financeBoundary: policy.privateActor ? 'private_market' : policy.publicProgram ? 'public_program' : (policy.publicOutcome || financier.sector === SECTOR.GOVERNMENT) ? 'public_mandate' : 'private_market',
+      privateActor: policy.privateActor,
       projectCost, reserveRequired, requiredCash, availableCash,
       shortfall: Math.max(0, requiredCash - availableCash),
       affordable: !!account && availableCash + 1e-8 >= requiredCash,
@@ -2057,6 +2119,7 @@ export class EconomySystem {
     if (!cost || plan.charge === false) return { ok: true, amount: 0 };
     const financier = this.projectFinancier(plan);
     const sector = this.classifyProject(plan);
+    const policy = this.projectFinancePolicy(plan);
     const category = sector === SECTOR.GOVERNMENT ? 'public_investment' : 'private_investment';
     const acquisitionCost = plan.acquisitionQuote?.total || 0;
     const constructionCost = Math.max(0, cost - acquisitionCost);
@@ -2117,8 +2180,9 @@ export class EconomySystem {
       : plan.type === 'house' ? 'privateResidential' : plan.type === 'factory' ? 'privateIndustrial' : 'privateCommercial';
     this.capital[capitalKey] += constructionCost;
     plan.financingSector = sector; plan.financierId = financier.id;
-    plan.ownerType = plan.owner === 'state' ? SECTOR.GOVERNMENT : sector;
-    plan.ownerId ||= financier.id;
+    plan.ownerType = policy.publicOutcome ? SECTOR.GOVERNMENT : sector;
+    plan.ownerId ||= policy.publicOutcome ? 'government' : financier.id;
+    plan.financeBoundary = policy.privateActor ? 'private_market' : policy.publicProgram ? 'public_program' : (policy.publicOutcome || sector === SECTOR.GOVERNMENT) ? 'public_mandate' : 'private_market';
     plan.fundingTransactionId = transactions[0]?.id || null;
     plan.fundingTransactions = transactions;
     plan.fundedCapital = { key: capitalKey, amount: constructionCost };

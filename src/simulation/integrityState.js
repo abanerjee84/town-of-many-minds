@@ -1,3 +1,5 @@
+import { PRIVATE_OPPORTUNITY_LIMIT } from './economicConfig.js';
+
 /** Versioned persistence for the integrity refactor's durable mechanic fields.
  * Apply to an already restored/generated town with matching stable entities. */
 export const INTEGRITY_STATE_VERSION = 3;
@@ -129,6 +131,7 @@ export function exportIntegrityState(town) {
     projects: [...(town.growth?.projectStates?.values() || [])].map((project) => plain(project)),
     districtQueue: town.growth?.districtQueue ? plain(town.growth.districtQueue) : null,
     lastDistrict: town.growth?.lastDistrict ? plain(town.growth.lastDistrict) : null,
+    privateOpportunities: (town.growth?.privateOpportunities || []).map((opportunity) => plain(opportunity)),
     economy: town.economy ? {
       ids: { ...town.economy.ids },
       accounts: Object.fromEntries(Object.entries(town.economy.accounts).map(([key, account]) => [key, account.cash])),
@@ -191,6 +194,13 @@ export function importIntegrityState(town, saved = {}) {
     town.growth.projectStates = new Map((saved.projects || []).map((project) => [project.projectId, plain(project)]));
     town.growth.districtQueue = saved.districtQueue ? plain(saved.districtQueue) : null;
     town.growth.lastDistrict = saved.lastDistrict ? plain(saved.lastDistrict) : null;
+    town.growth.privateOpportunities = Array.isArray(saved.privateOpportunities)
+      ? saved.privateOpportunities.map((opportunity) => plain(opportunity)).slice(0, PRIVATE_OPPORTUNITY_LIMIT)
+      : [];
+    town.growth.privateOpportunitySeq = town.growth.privateOpportunities.reduce((max, opportunity) => {
+      const n = Number(String(opportunity.id || '').match(/(\d+)$/)?.[1] || 0);
+      return Math.max(max, n);
+    }, 0);
   }
   if (saved.economy && town.economy) {
     const economy = town.economy;

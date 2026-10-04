@@ -1,6 +1,6 @@
 # TOMM construction and progression specification
 
-Updated 2026-10-04 after the catalogue-wide industrial-planning, residential-block, and KPI audit.
+Updated 2026-10-04 after the catalogue-wide industrial-planning, residential-block, KPI, and public/private agency audit.
 
 ## Scope
 
@@ -424,4 +424,16 @@ This section defines the target architecture for turning the current specialist 
 96. `npm run test:municipal-revenue` shall verify transit, business licence, land lease, and utility collection, stats/treasury-flow attribution, payer ledger use, and a clean economy audit. Tourism regression shall continue to verify visitor export settlement and lodging telemetry.
 
 97. Decision cards shall distinguish total project cost from the amount paid by the public treasury. Every recorded motion shall expose public and private ledger spend, and the UI shall label the funding source (`public treasury`, `private capital`, or a mixed split). A developer-financed public outcome such as `UPGRADE_RESOURCE` must not be presented as state expenditure. `npm run test:fiscal-funding` shall verify the resource-upgrade funding leg, treasury delta, funding label, and audit.
+
+## Public mandate and private agency boundary
+
+98. Project finance policy shall be versioned in `src/data/economyRules.json`. Public project types, private project types, explicit public programmes, private-opportunity expiry, and queue limits shall resolve through `economicConfig.js`; a project type shall not be reclassified by a Council actor or a stale ownership flag.
+
+98a. A Council motion for ordinary private housing, commerce, offices, factories, hotels/resorts, private landmarks, archetypes, renovations, tier-ups, wings, or private floors shall be a measured market signal. It shall create no construction project, reserve no treasury funds, and debit no account at the sitting. The signal shall be bounded, auditable, expiring, and visible in private-market telemetry.
+
+98b. An independent developer review shall decide whether to accept a private opportunity using developer cash above reserve, current demand/pressure, local staffing, legal site, materials, and project finance. Acceptance shall run through the existing quote/apply/fund/placement/rollback path with `commissionedBy=developer`; refusal or expiry shall leave no building, land claim, material debit, or treasury mutation. The review cadence shall not depend on Council sittings, Cabinet calls, Mayor approval, or Council learning.
+
+98c. Public expenditure shall remain valid only for public mandates and explicit public programmes. `DEVELOP_HOUSING program=social_housing` shall be the explicit municipal-housing exception; ordinary `DEVELOP_HOUSING` remains private. Roads, land acquisition, utilities, public transit, emergency services, public civic facilities, parks, and public schemes may use the government account subject to reserve, budget, and ledger checks. A public outcome may use a developer PPP leg only when the plan declares it explicitly; ownership and financing shall remain separately observable.
+
+98d. The finance boundary shall be enforced in the shared EconomySystem classifier and rechecked before affordability, acquisition compensation, funding, and owner assignment. Decision records shall distinguish `market signal`, `public mandate`, `public programme`, and `private PPP` outcomes. `npm run test:agency-boundary` shall prove that a Council private-housing/factory request creates a deferred opportunity with zero public spend, that the independent developer may later accept it through the normal ledger, that social housing may use public finance, and that public roads remain treasury-funded with a clean economy audit.
 

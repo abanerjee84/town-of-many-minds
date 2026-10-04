@@ -526,7 +526,7 @@ const PROMPT_BODY = [
   'Cabinet allocation: keep roughly 70% of selected work on the report\'s immediate Priority or mandatory remedies and reserve roughly 30% for longer-term vision. A long-term idea never displaces a feasible measured emergency.',
   'Choose one Priority/Feasible action. If it is Blocked, choose its named prerequisite or NO_ACTION; do not repeat it until evidence changes. Compare the strongest feasible alternative and state the number and horizon it should change.',
   'If the report contains MANDATORY COUNCIL REMEDY, that is a sequencing directive from the measured emergency: choose that exact remedy in this sitting unless TRADE_BUY or HIRE_WORKERS is the evidence-backed direct fix.',
-  'Prefer DEVELOP_HOUSING when homes are scarce, EXPAND_* when a utility is over capacity,',
+  'Prefer DEVELOP_HOUSING when homes are scarce: it signals private demand; use program=social_housing only for public housing,',
   'UPGRADE_BUILDING to raise an existing building a floor (especially one whose Load shows over capacity), IMAGINE_ARCHETYPE to commission a new design.',
   CREATIVE_ARCHETYPE_GUIDANCE,
   'RENOVATE lifts a building up the budget ladder (optional spec: budget=1..3), TIERUP moves a shop up a commerce rung (optional spec: tier=' +
@@ -539,9 +539,9 @@ const PROMPT_BODY = [
     ' — zone=civic adds facility=' +
     Object.keys(CIVIC_CATALOGUE).join('|') +
     '),',
-  'BUILD_FACTORY to commission a works when building materials run short',
+  'BUILD_FACTORY signals a private works opportunity when materials run short; the developer decides',
   '(optional spec: type=' + FACTORY_TYPES.map((f) => f.id).join('|') + '),',
-  'OPEN_SHOP when work is scarce (optional spec: tier=stall|kiosk|shop|store — the planner picks the lot size either way),',
+  'OPEN_SHOP when work is scarce (optional spec: tier=stall|kiosk|shop|store); this is private market work,',
   // Phase 20 — the office block, which is NOT a shop: it earns from the desks
   // it fills, so its revenue is capacity × staffed and it takes no share of the
   // day's footfall.
@@ -935,6 +935,12 @@ function parseHousingSpec(raw) {
     if (!block) issues.push(`unknown housing block "${blockM[1]}"`);
     else if (block.family !== 'housing') issues.push(`block ${block.id} is not a housing block`);
     else spec.blockId = block.id;
+  }
+  const programM = s.match(/\bprogram\s*[=:]\s*([a-z0-9_-]+)/i);
+  if (programM) {
+    const value = programM[1].toLowerCase().replace(/-/g, '_');
+    if (['social', 'social_housing', 'municipal_housing'].includes(value)) spec.publicProgram = 'social_housing';
+    else issues.push(`unknown housing programme "${programM[1]}" — use social_housing`);
   }
   if (issues.length) spec.issues = issues;
   return spec;
@@ -2251,6 +2257,34 @@ export class GovernanceSystem {
 
     // Two open sites is enough: council-ordered work waits its turn (probe
     // sources drive scripted scenarios and bypass this).
+    const financePolicy = t.economy?.projectFinancePolicy?.(committedPlan) || null;
+    if ((source === 'llm' || source === 'rules') && financePolicy?.privateActor && !unneeded) {
+      // The Council may identify a private need, but it cannot commission a
+      // household, shop, factory, or private progression project. Record an
+      // expiring opportunity for the independent developer review instead of
+      // creating a construction project or charging any account now.
+      const signal = t.growth?.submitPrivateOpportunity?.({
+        intent: parsed.intent,
+        type: committedPlan.type,
+        params: parsed.params || {},
+        reason: decision.detail || committedPlan.label,
+        source,
+        priority: decision.priority || decision.confidence || 0
+      });
+      decision.status = signal?.ok ? 'referred' : 'blocked';
+      decision.marketOpportunityId = signal?.opportunity?.id || null;
+      decision.quotedCost = quoted.quote.finalCost;
+      decision.committedCost = 0;
+      decision.actualSpend = 0;
+      decision.projectId = null;
+      decision.cost = 0;
+      decision.detail = signal?.ok
+        ? `${committedPlan.label} referred to the private market — developer decides at its next review`
+        : `private market did not accept the opportunity — ${signal?.reason || 'queue unavailable'}`;
+      this.record(decision);
+      return decision;
+    }
+
     if (
       (source === 'llm' || source === 'rules' || source === 'test') &&
       activePublicProjects(t.growth) >= MAX_ACTIVE &&
