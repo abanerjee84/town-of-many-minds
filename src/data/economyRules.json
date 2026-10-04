@@ -25,6 +25,13 @@
     "demolitionShare": 0.04
   },
   "property": { "landWeight": 0.75, "qualityPerBudgetTier": 0.12, "annualRentYield": 0.045 },
+  "municipalRevenue": {
+    "businessLicense": { "dailyBase": 12, "perFloor": 3, "perCell": 1.5, "turnoverRate": 0.01, "industrialMultiplier": 1.25, "lodgingMultiplier": 1.4 },
+    "landLease": { "annualRate": 0.006, "minimumDaily": 1.5, "industrialMultiplier": 1.1, "lodgingMultiplier": 1.5 },
+    "tourism": { "occupancyTax": 0.08 },
+    "transit": { "fare": 2.5, "collectionRate": 0.85 },
+    "utility": { "householdBaseDaily": 3, "perResidentDaily": 2, "businessBaseDaily": 8, "perFloorDaily": 2, "industrialMultiplier": 1.5, "lodgingMultiplier": 1.25 }
+  },
   "credit": {
     "businessRate": 0.065,
     "governmentBondRate": 0.05,

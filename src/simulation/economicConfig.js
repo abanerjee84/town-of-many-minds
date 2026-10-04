@@ -40,6 +40,10 @@ export const TRANSACTION_CATEGORIES = Object.freeze([
   // External capital and concession flows are separate from ordinary private
   // investment so the treasury and KPI ledgers can attribute FDI outcomes.
   'foreign_tax', 'foreign_investment',
+  // Municipal own-source revenue. These are distinct from broad taxes so
+  // the Council can see whether transit, tourism, private land use, and
+  // metered utilities are paying for the services they consume.
+  'transit_fare', 'business_license', 'land_lease', 'tourism_tax', 'utility_fee',
   // Banking. Moving cash between a household's wallet and its savings at the
   // bank is a real transfer between two accounts, so it goes through the ledger
   // like any other — but it is NOT income, expenditure or investment, and

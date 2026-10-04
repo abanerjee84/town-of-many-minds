@@ -347,3 +347,11 @@ Updated 2026-10-04 after the catalogue-wide industrial-planning audit.
 - [x] Allowed ordinary one-cell `DEVELOP_HOUSING` to quote and pave one connected street link inside the acquired envelope when serviced frontage is exhausted, then place the home on the frontage it creates. Catalogue housing blocks retain strict multi-cell land requirements.
 - [x] Preserved the planner RNG during housing expansion feasibility probes so `ranked()`/`wanted()` reads cannot change later site choices.
 - [x] Added `npm run test:housing-street-expansion` to verify the quote, connected street addition, successful one-cell house start, and no frontier land purchase.
+
+## Current sprint (2026-10-04, municipal revenue and fiscal resilience)
+
+- [x] Added data-driven municipal revenue rules for transit fares, private business licences, private site-value leases, lodging occupancy tax, and resident/private-floor utility charges.
+- [x] Routed every new charge through the EconomySystem ledger with payer affordability checks, municipal period categories, treasury-flow attribution, business operating expenses, and Council-visible revenue breakdowns.
+- [x] Added `scripts/_municipal_revenue_check.mjs` / `npm run test:municipal-revenue`; it verifies transit, licence, lease, and utility collection, treasury reconciliation, and a clean conservation audit.
+- [x] Ran the existing 300-day three-seed soak after the revenue changes: all seeds kept positive treasury and clean audits (`min $647,443`, `$990,860`, and `$923,351`), but each correctly remained in the `operating deficit` band, confirming that new revenue does not hide the structural public-spending gap.
+- [ ] Run a late-horizon fiscal probe at 300–1,000 residents and tune `economyRules.json` only from measured revenue/expenditure ratios; keep spending controls separate from revenue collection so the treasury is not balanced by hidden transfers.

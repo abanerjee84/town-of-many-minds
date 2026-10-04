@@ -411,3 +411,15 @@ This section defines the target architecture for turning the current specialist 
 
 91. A mandatory physical remedy shall never starve its own financing remedy. If `ACQUIRE_LAND` is the measured primary-resource action but its quote fails the government cash/reserve gate, Governance shall replace the temporary mandatory directive with `BOND_ISSUE` when a bond path exists, expose the funding reason, allow the Mayor to approve the bond, clear the bridge directive after issuance, and retry the land order at the next sitting. `ACQUIRE_LAND` may not remain mandatory while its own quote is unaffordable. `npm run test:land-funding-loop` shall verify the promotion, Mayor approval, non-remedy deferral, bond execution, directive clearing, and clean economy audit.
 
+## Municipal revenue and fiscal resilience
+
+92. The treasury shall receive only ledger-backed revenue. New own-source channels shall be configurable in `src/data/economyRules.json` and shall never mint money or bypass payer affordability: transit fares from recorded bus rides, private business licences based on floors/footprint/turnover, private site-value leases, lodging occupancy tax on settled visitor nights, and utility service charges based on residents and private floor area.
+
+93. Private businesses shall record municipal charges as operating expenses before corporate tax and profit/dividend settlement. Government-owned facilities shall not be charged a private licence, lease, or utility bill, and a payer with insufficient wallet/cash shall skip that day's optional charge without creating debt.
+
+94. `EconomySystem` shall expose municipal revenue by category in period data, `stats().municipalRevenue`/`revenueBreakdown`, `treasuryFlow().municipalFees`, and the Council economy report. Tax totals shall remain backward-compatible while a tax-only subtotal distinguishes taxes from municipal fees.
+
+95. The municipal revenue pass shall run after daily household/business/tourism turnover is known and before housing and close-of-books settlement. Tourism occupancy tax shall be paid only after external visitor revenue has reached the lodging business. All charges shall preserve the conservation and treasury reconciliation audits.
+
+96. `npm run test:municipal-revenue` shall verify transit, business licence, land lease, and utility collection, stats/treasury-flow attribution, payer ledger use, and a clean economy audit. Tourism regression shall continue to verify visitor export settlement and lodging telemetry.
+

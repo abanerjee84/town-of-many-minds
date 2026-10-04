@@ -525,7 +525,7 @@ export class Interaction {
         ec
           ? `<div class="kv grp"><span>💰 Economy</span><span>GDP ${fmtMoney(ec.gdp)} annualized · treasury ${fmtMoney(ec.treasury)}</span></div>
              <div class="kv"><span>Businesses</span><span>${ec.businesses} · ${fmtMoney(ec.revenue)}/day</span></div>
-             <div class="kv"><span>Daily budget</span><span>${fmtMoney(ec.governmentRevenue)} revenue · ${fmtMoney(ec.governmentExpenditure)} expenditure</span></div>
+             <div class="kv"><span>Daily budget</span><span>${fmtMoney(ec.governmentRevenue)} revenue · ${fmtMoney(ec.governmentExpenditure)} expenditure · municipal ${fmtMoney(ec.municipalRevenue || 0)}</span></div>
              <div class="kv"><span>Daily demand</span><span>C ${fmtMoney(ec.consumption)} · I ${fmtMoney(ec.privateFixedInvestment)} · G ${fmtMoney(ec.governmentConsumption + ec.governmentInvestment)}</span></div>
              <div class="kv"><span>Trade/day</span><span>${fmtMoney(ec.exports)} exports · ${fmtMoney(ec.imports)} imports</span></div>
              <div class="kv"><span>Household money</span><span>${fmtMoney(ec.householdCash)} in wallets · ${fmtMoney(ec.householdDeposits)} banked</span></div>

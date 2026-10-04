@@ -1658,6 +1658,7 @@ export class GovernanceSystem {
         ` · spending $${eco.spending.toLocaleString('en-US')} · businesses ${eco.businesses}` +
         ` · revenue $${eco.revenue.toLocaleString('en-US')}/day · land value ${eco.landValue}` +
         ` · avg income $${eco.avgIncome.toLocaleString('en-US')}` +
+        ` · municipal revenue $${(eco.municipalRevenue || 0).toLocaleString('en-US')}/day` +
         // Phase 21 — an unemployment rate alone does not say WHY. The council
         // needs the two numbers that explain it: posts no owner has filled, and
         // the townsfolk in their own account.
@@ -2781,7 +2782,7 @@ export class GovernanceSystem {
       const e = t.economy.stats();
       return (
         `GDP $${f(e.gdp)} · treasury $${f(e.treasury)} · reserve $${f(e.reserve)} · debt $${f(e.debt)} · ` +
-        `tax $${f(e.taxRevenue)} and spending $${f(e.spending)} to date (spending ×${e.spendingScale}) · ` +
+        `tax $${f(e.taxRevenueOnly ?? e.taxRevenue)} · municipal $${f(e.municipalRevenue)} and spending $${f(e.spending)} to date (spending ×${e.spendingScale}) · ` +
         `${e.businesses} businesses · avg income $${f(e.avgIncome)}`
       );
     }

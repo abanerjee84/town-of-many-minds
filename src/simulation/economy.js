@@ -89,6 +89,7 @@ function blankPeriod(day = 1) {
   return {
     day, wages: 0, sales: 0, incomeTax: 0, salesTax: 0, propertyTax: 0, corporateTax: 0,
     rent: 0, spending: 0, governmentRevenue: 0, governmentExpenditure: 0,
+    municipalRevenue: 0, transitFare: 0, businessLicense: 0, landLease: 0, tourismTax: 0, utilityFee: 0,
     householdConsumption: 0, privateFixedInvestment: 0, inventoryInvestment: 0,
     governmentConsumption: 0, governmentInvestment: 0, exports: 0, imports: 0,
     householdSaving: 0, businessRevenue: 0, businessProfit: 0, categories: Object.create(null)
@@ -450,7 +451,7 @@ export class EconomySystem {
       inventory: type === 'industry' ? {} : { goods: ECON.business.retailOpeningInventory },
       fixedCapital: propertyValue, propertyValue, debt: 0, revenue: 0, wageExpense: 0,
       inputExpense: 0, rentExpense: 0, utilityExpense: 0, interestExpense: 0,
-      depreciationExpense: 0, taxExpense: 0, profit: 0, retainedEarnings: 0,
+      depreciationExpense: 0, taxExpense: 0, municipalExpense: 0, profit: 0, retainedEarnings: 0,
       employees: 0, jobsRequired: 0, staffNeed: 0, vacancies: 0, customers: 0,
       rent: 0, open: true, status: 'active', production: 0, productionFactor: 0, utilityFactor: 1,
       rooms: Math.max(0, Math.floor(Number(building.tourism?.rooms || building.house?.spec?.tourism?.rooms) || 0)),
@@ -680,7 +681,18 @@ export class EconomySystem {
     if (category === 'sales_tax') this.period.salesTax += amount;
     if (category === 'property_tax') this.period.propertyTax += amount;
     if (category === 'corporate_tax') this.period.corporateTax += amount;
-    if (['income_tax', 'sales_tax', 'property_tax', 'corporate_tax', 'permit_fee', 'foreign_tax'].includes(category)) this.period.governmentRevenue += amount;
+    const municipalCategory = {
+      transit_fare: 'transitFare',
+      business_license: 'businessLicense',
+      land_lease: 'landLease',
+      tourism_tax: 'tourismTax',
+      utility_fee: 'utilityFee'
+    }[category];
+    if (municipalCategory) {
+      this.period[municipalCategory] += amount;
+      this.period.municipalRevenue += amount;
+    }
+    if (['income_tax', 'sales_tax', 'property_tax', 'corporate_tax', 'permit_fee', 'foreign_tax', 'transit_fare', 'business_license', 'land_lease', 'tourism_tax', 'utility_fee'].includes(category)) this.period.governmentRevenue += amount;
     if (['government_procurement', 'government_payroll'].includes(category)) { this.period.governmentConsumption += amount; this.period.governmentExpenditure += amount; this.period.spending += amount; }
     if (category === 'public_investment') { this.period.governmentInvestment += amount; this.period.governmentExpenditure += amount; this.period.spending += amount; }
     if (['subsidy', 'welfare', 'pension', 'bond_interest'].includes(category)) { this.period.governmentExpenditure += amount; this.period.spending += amount; }
@@ -717,6 +729,7 @@ export class EconomySystem {
       else if (category === 'rent') from.object.rentExpense += amount;
       else if (category === 'interest') from.object.interestExpense += amount;
       else if (category === 'corporate_tax') from.object.taxExpense += amount;
+      else if (['business_license', 'land_lease', 'tourism_tax', 'utility_fee'].includes(category)) from.object.municipalExpense += amount;
     }
   }
 
@@ -1252,7 +1265,7 @@ export class EconomySystem {
     for (const b of this.businesses) {
       b.revenue = 0; b.wageExpense = 0; b.inputExpense = 0; b.rentExpense = 0;
       b.utilityExpense = 0; b.interestExpense = 0; b.depreciationExpense = 0;
-      b.taxExpense = 0; b.profit = 0; b.customers = 0; b.production = 0; b.tourismRevenue = 0;
+      b.taxExpense = 0; b.municipalExpense = 0; b.profit = 0; b.customers = 0; b.production = 0; b.tourismRevenue = 0;
     }
   }
 
@@ -1367,6 +1380,14 @@ export class EconomySystem {
         metadata: { tourism: true, businessId: business.id, rooms, nightlyRate: business.rate }
       });
       if (!paid.ok) continue;
+      const occupancyTaxRate = Math.max(0, Math.min(1, Number(ECON.municipalRevenue?.tourism?.occupancyTax) || 0));
+      if (occupancyTaxRate > 0) {
+        this.transfer({
+          from: { sector: SECTOR.BUSINESS, id: business.id }, to: 'government',
+          amount: amount * occupancyTaxRate, category: 'tourism_tax',
+          metadata: { tourism: true, businessId: business.id, rooms, occupancyTaxRate }
+        });
+      }
       business.customers = (business.customers || 0) + rooms;
       business.revenue += amount;
       business.tourismRevenue = (business.tourismRevenue || 0) + amount;
@@ -1382,6 +1403,125 @@ export class EconomySystem {
     this.tourism.occupancy = stats.roomCapacity ? booked / stats.roomCapacity : 0;
     this.tourism.visitors = booked;
     return { ...this.tourism };
+  }
+
+  /**
+   * Collect the town's own-source service charges. These are deliberately
+   * settled through transfer(), so every dollar is visible in the ledger and
+   * a private operator who cannot pay simply misses the charge for that day.
+   * Rates live in economyRules.json; this method only applies them to the
+   * measured scale of the service being used.
+   */
+  runMunicipalRevenue() {
+    const rules = ECON.municipalRevenue || {};
+    const transit = rules.transit || {};
+    const fare = Math.max(0, Number(transit.fare) || 0);
+    const collectionRate = Math.max(0, Math.min(1, Number(transit.collectionRate) || 0));
+    const citizens = (this.town.pedestrians?.citizens || [])
+      .filter((citizen) => citizen.p?.preferences?.transport === 'bus' && citizen.p?.age >= 16)
+      .sort((a, b) => String(a.p.id).localeCompare(String(b.p.id)));
+    const transportStats = this.town.transport?.stats?.() || {};
+    const serviceableRides = Math.min(
+      Math.max(0, Math.floor(Number(transportStats.dailyRides) || 0)),
+      Math.floor(citizens.length * 2 * collectionRate)
+    );
+    let transitFare = 0;
+    if (fare > 0 && serviceableRides > 0) {
+      let remaining = serviceableRides;
+      for (const citizen of citizens) {
+        if (remaining <= 0) break;
+        const rides = Math.min(2, remaining);
+        const amount = Math.min(Math.max(0, citizen.p.cash || 0), rides * fare);
+        if (amount <= 0) continue;
+        const paid = this.transfer({
+          from: { sector: SECTOR.HOUSEHOLD, id: citizen.p.id }, to: 'government',
+          amount, category: 'transit_fare',
+          metadata: { riderId: citizen.p.id, rides, fare }
+        });
+        if (paid.ok) {
+          transitFare += amount;
+          remaining -= rides;
+        }
+      }
+    }
+
+    const utility = rules.utility || {};
+    let utilityFee = 0;
+    const householdBase = Math.max(0, Number(utility.householdBaseDaily) || 0);
+    const perResident = Math.max(0, Number(utility.perResidentDaily) || 0);
+    for (const household of this.town.pedestrians?.households || []) {
+      const members = household.members || [];
+      const payer = members.find((member) => member.p.age >= 18) || members[0];
+      if (!payer?.p?.id) continue;
+      const due = householdBase + perResident * members.length;
+      const paid = this.transfer({
+        from: { sector: SECTOR.HOUSEHOLD, id: payer.p.id }, to: 'government',
+        amount: due, category: 'utility_fee',
+        metadata: { householdId: household.id, residents: members.length, service: 'water-energy-waste' }
+      });
+      if (paid.ok) utilityFee += due;
+    }
+
+    const licence = rules.businessLicense || {};
+    let businessLicense = 0;
+    for (const business of this.businesses) {
+      if (!business.open || business.operatorSector === SECTOR.GOVERNMENT || business.id === 'contractor' || !business.building) continue;
+      const building = business.building;
+      const floors = Math.max(1, Number(building.floors || building.house?.spec?.floors) || 1);
+      const cells = Math.max(1, Array.isArray(building.footprint) ? building.footprint.length : 1);
+      const turnover = Math.max(0, Number(business.revenue) || 0);
+      let multiplier = 1;
+      if (business.type === 'industry') multiplier = Number(licence.industrialMultiplier) || 1;
+      else if (business.type === 'lodging') multiplier = Number(licence.lodgingMultiplier) || 1;
+      const due = Math.max(0,
+        (Number(licence.dailyBase) || 0) +
+        (Number(licence.perFloor) || 0) * floors +
+        (Number(licence.perCell) || 0) * cells +
+        (Number(licence.turnoverRate) || 0) * turnover
+      ) * multiplier;
+      const paid = this.transfer({
+        from: { sector: SECTOR.BUSINESS, id: business.id }, to: 'government',
+        amount: due, category: 'business_license',
+        metadata: { businessId: business.id, floors, cells, turnover, multiplier }
+      });
+      if (paid.ok) businessLicense += due;
+    }
+
+    const lease = rules.landLease || {};
+    let landLease = 0;
+    const annualRate = Math.max(0, Number(lease.annualRate) || 0);
+    for (const business of this.businesses) {
+      if (!business.open || business.operatorSector === SECTOR.GOVERNMENT || business.id === 'contractor' || !business.building) continue;
+      let multiplier = 1;
+      if (business.type === 'industry') multiplier = Number(lease.industrialMultiplier) || 1;
+      else if (business.type === 'lodging') multiplier = Number(lease.lodgingMultiplier) || 1;
+      const value = Math.max(0, this.propertyValue(business.building));
+      const due = Math.max(Number(lease.minimumDaily) || 0, value * annualRate / 365) * multiplier;
+      const paid = this.transfer({
+        from: { sector: SECTOR.BUSINESS, id: business.id }, to: 'government',
+        amount: due, category: 'land_lease',
+        metadata: { businessId: business.id, assessedValue: value, annualRate, multiplier }
+      });
+      if (paid.ok) landLease += due;
+    }
+
+    const businessBase = Math.max(0, Number(utility.businessBaseDaily) || 0);
+    const perFloor = Math.max(0, Number(utility.perFloorDaily) || 0);
+    for (const business of this.businesses) {
+      if (!business.open || business.operatorSector === SECTOR.GOVERNMENT || business.id === 'contractor' || !business.building) continue;
+      const floors = Math.max(1, Number(business.building.floors || business.building.house?.spec?.floors) || 1);
+      let multiplier = 1;
+      if (business.type === 'industry') multiplier = Number(utility.industrialMultiplier) || 1;
+      else if (business.type === 'lodging') multiplier = Number(utility.lodgingMultiplier) || 1;
+      const due = (businessBase + perFloor * floors) * multiplier;
+      const paid = this.transfer({
+        from: { sector: SECTOR.BUSINESS, id: business.id }, to: 'government',
+        amount: due, category: 'utility_fee',
+        metadata: { businessId: business.id, floors, service: 'water-energy-waste', multiplier }
+      });
+      if (paid.ok) utilityFee += due;
+    }
+    return { transitFare, businessLicense, landLease, tourismTax: this.period.tourismTax, utilityFee };
   }
 
   runConsumption() {
@@ -1431,11 +1571,11 @@ export class EconomySystem {
       const depreciation = b.fixedCapital * ECON.business.depreciationRate / 365;
       b.depreciationExpense += depreciation;
       b.fixedCapital = Math.max(0, b.fixedCapital - depreciation);
-      const beforeTax = b.revenue - b.wageExpense - b.inputExpense - b.rentExpense - b.utilityExpense - b.interestExpense - b.depreciationExpense;
+      const beforeTax = b.revenue - b.wageExpense - b.inputExpense - b.rentExpense - b.utilityExpense - b.interestExpense - b.depreciationExpense - b.municipalExpense;
       if (beforeTax > 0) {
         this.transfer({ from: { sector: SECTOR.BUSINESS, id: b.id }, to: 'government', amount: beforeTax * ECON.tax.corporate * this.policyTaxScale(), category: 'corporate_tax', metadata: { taxpayerId: b.id, taxableProfit: beforeTax } });
       }
-      b.profit = b.revenue - b.wageExpense - b.inputExpense - b.rentExpense - b.utilityExpense - b.interestExpense - b.depreciationExpense - b.taxExpense;
+      b.profit = b.revenue - b.wageExpense - b.inputExpense - b.rentExpense - b.utilityExpense - b.interestExpense - b.depreciationExpense - b.municipalExpense - b.taxExpense;
       b.retainedEarnings += b.profit;
       this.period.businessProfit += b.profit;
       // The developer supplied opening equity; profitable firms return a
@@ -1478,6 +1618,10 @@ export class EconomySystem {
     // appears in the same daily ledger as exports and is visible to the next
     // council sitting.
     this.runTourism();
+    // Transit, private business licences, and site-value leases are settled
+    // after the day's turnover is known. This keeps the charge proportional to
+    // actual activity while preserving a complete day-level ledger.
+    this.runMunicipalRevenue();
     this.runHousing();
     this.runGovernmentConsumption();
     this.serviceDebt();
@@ -1847,6 +1991,7 @@ export class EconomySystem {
     const outflows = paid.reduce((n, tx) => n + tx.amount, 0);
     const closing = this.treasuryDailyClose.get(day) ?? this.treasury;
     const taxes = sum(received, ['income_tax', 'sales_tax', 'property_tax', 'corporate_tax', 'foreign_tax']);
+    const municipalFees = sum(received, ['transit_fare', 'business_license', 'land_lease', 'tourism_tax', 'utility_fee']);
     const permitFees = sum(received, ['permit_fee']);
     const operations = sum(paid, ['government_procurement']);
     const payrollServices = sum(paid, ['government_payroll']);
@@ -1856,7 +2001,7 @@ export class EconomySystem {
     const first = rows[0];
     const opening = first ? (first.from?.sector === SECTOR.GOVERNMENT ? first.balances?.fromBefore : first.balances?.toBefore) : closing;
     return { day, opening, inflows, outflows, closing,
-      taxes, permitFees, otherPublicRevenue: inflows - taxes - permitFees,
+      taxes, municipalFees, permitFees, otherPublicRevenue: inflows - taxes - municipalFees - permitFees,
       operations, payrollServices, publicConstruction, subsidiesPrograms, debtService,
       otherPublicOutflow: outflows - operations - payrollServices - publicConstruction - subsidiesPrograms - debtService,
       reconciled: Math.abs(closing - (opening + inflows - outflows)) < 0.01,
@@ -2345,6 +2490,14 @@ export class EconomySystem {
     const privateCapital = this.capital.privateResidential + this.capital.privateCommercial + this.capital.privateIndustrial;
     const publicCapital = this.capital.publicInfrastructure + this.capital.publicBuildings;
     const tourism = this.tourismStats();
+    const municipalRevenue = Math.round(p.municipalRevenue ||
+      ['transit_fare', 'business_license', 'land_lease', 'tourism_tax', 'utility_fee']
+        .reduce((sum, category) => sum + (p.categories[category] || 0), 0));
+    const taxRevenueOnly = Math.round(
+      (p.categories.income_tax || 0) + (p.categories.sales_tax || 0) +
+      (p.categories.property_tax || 0) + (p.categories.corporate_tax || 0) +
+      (p.categories.foreign_tax || 0)
+    );
     return {
       treasury: Math.round(this.treasury), gdp: Math.round(dailyGDP * 365), gdpDaily: Math.round(dailyGDP),
       gdpPerCapita: Math.round((dailyGDP * 365) / Math.max(1, citizens.length)),
@@ -2353,6 +2506,18 @@ export class EconomySystem {
         inventoryInvestment: p.inventoryInvestment, governmentConsumption: p.governmentConsumption,
         governmentInvestment: p.governmentInvestment, exports: p.exports, imports: p.imports, period: 'daily' },
       taxRevenue: Math.round(p.governmentRevenue), governmentRevenue: Math.round(p.governmentRevenue),
+      taxRevenueOnly, municipalRevenue,
+      revenueBreakdown: {
+        taxes: taxRevenueOnly,
+        municipal: municipalRevenue,
+        transitFare: Math.round(p.categories.transit_fare || 0),
+        businessLicense: Math.round(p.categories.business_license || 0),
+        landLease: Math.round(p.categories.land_lease || 0),
+        tourismTax: Math.round(p.categories.tourism_tax || 0),
+        utilityFee: Math.round(p.categories.utility_fee || 0),
+        permits: Math.round(p.categories.permit_fee || 0),
+        foreignInvestment: Math.round(p.categories.foreign_tax || 0)
+      },
       governmentExpenditure: Math.round(p.governmentExpenditure), budgetBalance: Math.round(p.governmentRevenue - p.governmentExpenditure),
       wages: Math.round(p.wages), rent: Math.round(p.rent), spending: Math.round(p.spending),
       unemployment: Math.round(this.unemployment * 1000) / 10, participation: Math.round(this.participation * 1000) / 10,
@@ -2398,6 +2563,7 @@ export class EconomySystem {
       owner: b.operatorSector === SECTOR.GOVERNMENT ? 'State' : (b.owner ? b.owner.name : null),
       ownerId: b.ownerId,
       inventory: { ...b.inventory }, customers: b.customers, revenue: Math.round(b.revenue), profit: Math.round(b.profit),
+      municipalExpense: Math.round(b.municipalExpense || 0),
       rooms: b.type === 'lodging' ? b.rooms : undefined,
       nightlyRate: b.type === 'lodging' ? b.rate : undefined,
       tourismRevenue: b.type === 'lodging' ? Math.round(b.tourismRevenue || 0) : undefined,

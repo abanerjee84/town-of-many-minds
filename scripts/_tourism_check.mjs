@@ -32,6 +32,7 @@ const result = await page.evaluate(async () => {
   town.economy.lastDay = 2;
   town.economy.runTourism();
   if (town.economy.tourism.nights <= 0 || town.economy.tourism.revenue <= 0) fail('tourism night settlement produced no visitor revenue');
+  if (!(town.economy.period.categories.tourism_tax > 0)) fail('tourism occupancy tax did not reach the municipal ledger');
   const report = town.governance.report();
   if (!report.includes('Tourism:')) fail('council report omitted tourism evidence');
   const resort = buildHouse({
@@ -46,7 +47,7 @@ const result = await page.evaluate(async () => {
   if (!(constructionBlockQuote('commerce.resort')?.cost > constructionBlockQuote('commerce.hotel')?.cost)) fail('resort quote should exceed hotel quote');
   return {
     hotel: { cell: hotel.cell, rooms: hotel.tourism.rooms, businessType: business.type, staffNeed: business.staffNeed },
-    tourism: { roomCapacity: evidence.roomCapacity, demand: evidence.demand, nights: town.economy.tourism.nights, revenue: town.economy.tourism.revenue },
+    tourism: { roomCapacity: evidence.roomCapacity, demand: evidence.demand, nights: town.economy.tourism.nights, revenue: town.economy.tourism.revenue, occupancyTax: town.economy.period.categories.tourism_tax || 0 },
     resort: { modules: [...resortModules] }
   };
 });
