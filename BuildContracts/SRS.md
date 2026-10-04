@@ -332,3 +332,21 @@ This section defines the target architecture for turning the current specialist 
 - The campus regression shall reject nearby and across-road school/college/university/conservatory footprints, accept a separated campus, and leave ordinary civic facilities eligible. The weather regression shall verify visible rain streaks and snow flakes as well as deterministic seasons and Council evidence.
 - The tourism regression shall place a hotel on an acquired legal site, preserve its room/tourism metadata, classify it as lodging, derive positive floor-area staffing, settle visitor nights as external export revenue, expose the tourism Council line, and verify the resort pool/service-wing kit and larger quote.
 
+## Runtime performance and observability
+
+62. The render loop shall not construct a deep town diagnostic snapshot on every animation frame. HUD and inspector schedulers shall advance independently, and `Town.stats()` shall be requested only when at least one consumer is due. A due HUD and inspector update shall share the same snapshot rather than recomputing subsystem statistics independently.
+
+63. `Town.stats()` shall cache the immutable-by-convention snapshot for the current simulation/build version. Simulation advancement and structural mutations shall invalidate that version; repeated reads without a mutation shall return the same snapshot object. A `force` option shall remain available to diagnostics and regression probes that explicitly need a fresh read.
+
+64. Performance tuning shall be data-driven through `src/data/performance.json`. UI refresh intervals, agent fixed-step size, adaptive agent budget, population budget share, pedestrian LOD thresholds, and neighbour-bucket size shall be versioned there rather than scattered as unrelated literals.
+
+65. Traffic and pedestrians shall use an adaptive agent-time budget. At high clock speeds a small town may consume the requested agent time up to the configured ceiling; as population grows the budget remains bounded and pedestrian LOD reduces inactive-agent work. Every frame shall expose requested, simulated, dropped, cumulative dropped, step count, budget, and lag ratio telemetry. Dropped time shall remain observable and shall never be silently presented as equivalent to simulated time.
+
+66. Pedestrian social-neighbour queries shall use a spatial bucket index rather than scanning the full citizen roster. Walking, crossing, chatting, and driving agents shall retain priority updates; inactive indoor/idle residents may be updated on a bounded stride once the configured LOD population threshold is reached.
+
+67. Render-path colour constants shall be reused between frames. Weather/sky updates may mutate scratch colours in place, but shall not allocate a new palette per frame. Existing pixel-ratio, geometry disposal, static batching, and weather-particle reuse safeguards shall remain intact.
+
+68. Performance diagnostics shall be regression-tested in a browser with no provider/network dependency. The probe shall verify snapshot reuse and invalidation, adaptive 100× agent budget with no founding-town dropped time, performance telemetry presence, no page errors, and preservation of deterministic tree coverage. UI, road-horizon, and metropolis probes shall continue to pass after the scheduler changes.
+
+69. Future performance work may add route-job queues/cache, spatially chunked static foliage batches, dynamic shadow resolution, and distant-prop shadow LOD. These are measured follow-ups; they shall not be enabled by guesswork if the current draw-call, triangle, or frame-time telemetry does not show a regression.
+

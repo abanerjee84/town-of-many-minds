@@ -10,6 +10,7 @@ import { buildingLoad } from '../simulation/growth.js';
 import { constructionPalette } from '../simulation/constructionPalette.js';
 import { events } from '../core/events.js';
 import { esc } from './escape.js';
+import performanceRules from '../data/performance.json' with { type: 'json' };
 
 /** Player-facing labels + why-lines for the unified decisions feed. */
 const PLAYER_WHY = {
@@ -457,8 +458,9 @@ export class Interaction {
     this._acc = 1;
   }
 
-  townOverview() {
+  townOverview(snapshot = null) {
     const t = this.town;
+    const stats = snapshot || t.stats();
     const v = t.validation;
     const col = (st) => (st === 'ok' ? '#7ee787' : st === 'warn' ? '#d29922' : '#ff7b72');
 
@@ -472,20 +474,20 @@ export class Interaction {
       : '';
 
     const summary = t.pipelineSummary;
-    const fleet = t.traffic.fleetStats();
-    const stock = t.stats().vehicleStock;
-    const lc = t.lifecycle ? t.lifecycle.stats() : null;
-    const ec = t.economy ? t.economy.stats() : null;
-    const mb = t.traffic ? t.traffic.mobilityStats() : null;
-    const ut = t.utilities ? t.utilities.stats() : null;
-    const gr = t.growth ? t.growth.stats() : null;
-    const gv = t.governance ? t.governance.stats() : null;
-    const rs = t.resources ? t.resources.stats() : null;
-    const ind = t.industry ? t.industry.stats() : null;
-    const society = t.society ? t.society.stats() : null;
-    const transit = t.transport ? t.transport.stats() : null;
-    const forest = t.forest ? t.forest.stats() : null;
-    const perimeter = t.perimeter ? t.perimeter.stats() : null;
+    const fleet = stats.fleet || null;
+    const stock = stats.vehicleStock;
+    const lc = stats.lifecycle;
+    const ec = stats.economy;
+    const mb = stats.mobility;
+    const ut = stats.utilities;
+    const gr = stats.growth;
+    const gv = stats.governance;
+    const rs = stats.resources;
+    const ind = stats.industry;
+    const society = stats.society;
+    const transit = stats.transport;
+    const forest = stats.forest;
+    const perimeter = stats.perimeter;
     const unitStr = Object.entries(fleet.units)
       .map(([k, n]) => `${n} ${k}`)
       .join(' · ');
@@ -709,11 +711,11 @@ export class Interaction {
     $('insp-modal').classList.remove('hidden');
   }
 
-  renderInspector() {
+  renderInspector(stats = null) {
     const el = $('inspector');
     const s = this.selection;
     if (!s) {
-      el.innerHTML = INSPECTOR_TOP +this.townOverview();
+      el.innerHTML = INSPECTOR_TOP + this.townOverview(stats);
       return;
     }
 
@@ -988,9 +990,16 @@ export class Interaction {
     }
   }
 
-  update(dt) {
-    this._acc += dt;
-    if (this._acc <= 0.5) return;
+  needsUpdate(dt) {
+    this._acc += Math.max(0, Number(dt) || 0);
+    return this._acc > performanceRules.ui.inspectorIntervalSeconds;
+  }
+
+  update(dt, stats = null) {
+    if (stats == null) {
+      this._acc += Math.max(0, Number(dt) || 0);
+      if (this._acc <= performanceRules.ui.inspectorIntervalSeconds) return false;
+    }
     this._acc = 0;
     // Refresh BOTH the selection panel and the idle town overview: with no
     // selection nothing else ever re-rendered the overview, so its numbers
@@ -998,8 +1007,9 @@ export class Interaction {
     // while the HUD kept moving — they visibly disagreed.
     const el = $('inspector');
     const top = el.scrollTop;
-    this.renderInspector();
+    this.renderInspector(stats);
     el.scrollTop = top;
+    return true;
   }
 }
 

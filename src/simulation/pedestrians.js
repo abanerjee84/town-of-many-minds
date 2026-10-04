@@ -14,6 +14,7 @@ import { resourceStress, SITE_CREW } from '../kits/resources/resourceKit.js';
 import { roadRoute, sampleAt } from './routes.js';
 import { events } from '../core/events.js';
 import { disposeObject } from '../world/scene.js';
+import performanceRules from '../data/performance.json' with { type: 'json' };
 
 const tmp = new THREE.Vector3();
 
@@ -1046,6 +1047,8 @@ export class CitizenSystem {
     this.moodTarget = 0;
     this.patienceDrift = 0;
     this.policyDay = null;
+    this.neighborBuckets = new Map();
+    this.agentStepIndex = 0;
   }
 
   tripStats() {
@@ -1371,15 +1374,22 @@ export class CitizenSystem {
     let best = null;
     let bd = radius * radius;
     const p = agent.group.position;
-    for (const o of this.citizens) {
-      if (o === agent) continue;
-      if (!o.rig.group.visible) continue;
-      const dx = o.group.position.x - p.x;
-      const dz = o.group.position.z - p.z;
-      const d = dx * dx + dz * dz;
-      if (d < bd) {
-        bd = d;
-        best = o;
+    const bucketSize = performanceRules.agents.chatBucketSize;
+    const bx = Math.floor(p.x / bucketSize);
+    const bz = Math.floor(p.z / bucketSize);
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const bucket = this.neighborBuckets.get(`${bx + dx},${bz + dz}`) || [];
+        for (const o of bucket) {
+          if (o === agent || !o.rig.group.visible) continue;
+          const ox = o.group.position.x - p.x;
+          const oz = o.group.position.z - p.z;
+          const d = ox * ox + oz * oz;
+          if (d < bd) {
+            bd = d;
+            best = o;
+          }
+        }
       }
     }
     return best;
@@ -1417,7 +1427,34 @@ export class CitizenSystem {
         };
       }
     }
-    for (const c of this.citizens) c.update(stepDt, clk, this);
+    // Rebuild a small spatial index once per micro-step. Chat lookups now
+    // inspect at most the surrounding nine buckets instead of scanning every
+    // resident, while walking/crossing agents remain fully updated.
+    this.neighborBuckets.clear();
+    const bucketSize = performanceRules.agents.chatBucketSize;
+    for (const c of this.citizens) {
+      if (!c.rig?.group?.visible) continue;
+      const bx = Math.floor(c.group.position.x / bucketSize);
+      const bz = Math.floor(c.group.position.z / bucketSize);
+      const key = `${bx},${bz}`;
+      const bucket = this.neighborBuckets.get(key);
+      if (bucket) bucket.push(c);
+      else this.neighborBuckets.set(key, [c]);
+    }
+    const population = this.citizens.length;
+    const lodStart = performanceRules.agents.lodStartPopulation;
+    const maxStride = performanceRules.agents.lodMaxStride;
+    const stride = population <= lodStart
+      ? 1
+      : Math.min(maxStride, Math.max(1, Math.ceil(population / lodStart)));
+    const phase = this.agentStepIndex++ % stride;
+    for (let i = 0; i < this.citizens.length; i++) {
+      const c = this.citizens[i];
+      const critical = c.state === 'walking' || c.state === 'waiting-crossing' ||
+        c.state === 'chatting' || c.state === 'driving' || c.inCrossing;
+      if (stride > 1 && !critical && i % stride !== phase) continue;
+      c.update(stepDt, clk, this);
+    }
     if (clk && clk.day !== this.policyDay) {
       this.policyDay = clk.day;
       this.policyTick();
@@ -1536,6 +1573,8 @@ export class CitizenSystem {
     this.tripCompletions = 0;
     this.tripCancellations = 0;
     this.time = 0;
+    this.neighborBuckets.clear();
+    this.agentStepIndex = 0;
   }
 }
 

@@ -1,0 +1,18 @@
+{
+  "version": "1.0.0",
+  "ui": {
+    "statsIntervalSeconds": 0.25,
+    "inspectorIntervalSeconds": 0.5
+  },
+  "agents": {
+    "fixedStepSeconds": 0.05,
+    "baseBudgetSeconds": 0.8,
+    "maxBudgetSeconds": 1.8,
+    "targetBudgetFrameFraction": 1.15,
+    "populationReference": 180,
+    "minimumPopulationBudgetShare": 0.5,
+    "lodStartPopulation": 120,
+    "lodMaxStride": 4,
+    "chatBucketSize": 2.6
+  }
+}

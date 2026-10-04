@@ -8,6 +8,7 @@ import { createPersonality } from '../kits/citizens/personality.js';
 import { roadRoute, sampleAt, curvatureAt } from './routes.js';
 import { events } from '../core/events.js';
 import { disposeObject } from '../world/scene.js';
+import performanceRules from '../data/performance.json' with { type: 'json' };
 
 const forwardVec = new THREE.Vector3();
 const tmpVec = new THREE.Vector3();
@@ -1897,6 +1898,12 @@ export class TrafficSystem {
     this.teleportT = 0;
     // Fixed-step accumulator for the shared simulation step (P-E04).
     this.acc = 0;
+    this.droppedSeconds = 0;
+    this.timeDroppedTotal = 0;
+    this.lastAgentBudget = performanceRules.agents.baseBudgetSeconds;
+    this.lastAgentWanted = 0;
+    this.lastAgentUsable = 0;
+    this.lastAgentSteps = 0;
   }
 
   /** Completed private trips, kept as a plain field for existing readers. */
@@ -3104,7 +3111,8 @@ export class TrafficSystem {
     const peds = this.town.pedestrians;
     peds?.beginFrame?.(dt, clock);
 
-    const FIXED = 0.05;
+    const agentRules = performanceRules.agents;
+    const FIXED = agentRules.fixedStepSeconds;
     // A catch-up BUDGET in agent-time, not a step count. The old `MAX_STEPS = 64`
     // was 3.2 s of simulation per frame, which sounds generous until you notice
     // what `dt` is: `main.js` passes `simDt = dt * speed`, so at the default 100×
@@ -3118,13 +3126,35 @@ export class TrafficSystem {
     // The budget is now explicit, the overflow is reported rather than
     // discarded, and the step count is derived from it — so the loss is a
     // visible number instead of a silent divergence.
-    const STEP_BUDGET = 0.8;      // agent-seconds of catch-up per frame
+    const population = peds?.citizens?.length || 0;
+    const populationShare = population <= agentRules.populationReference
+      ? 1
+      : Math.max(
+          agentRules.minimumPopulationBudgetShare,
+          agentRules.populationReference / population
+        );
+    // At high clock speeds, spend more of the available render frame on
+    // agents while the town is small. As population grows, keep a hard upper
+    // bound and let pedestrian LOD protect the frame instead of allowing an
+    // unbounded catch-up spiral.
+    const requestedBudget = Math.max(
+      agentRules.baseBudgetSeconds,
+      Math.max(0, dt) * agentRules.targetBudgetFrameFraction
+    );
+    const STEP_BUDGET = Math.min(
+      agentRules.maxBudgetSeconds,
+      requestedBudget * populationShare
+    );
     const wanted = Math.max(0, this.acc + dt);
     const usable = Math.min(wanted, STEP_BUDGET);
     this.acc = usable - Math.floor(usable / FIXED) * FIXED;
     this.droppedSeconds = (wanted - usable);
+    this.lastAgentBudget = STEP_BUDGET;
+    this.lastAgentWanted = wanted;
+    this.lastAgentUsable = usable;
     if (this.droppedSeconds > 0.01) this.timeDroppedTotal = (this.timeDroppedTotal || 0) + this.droppedSeconds;
     const steps = Math.floor(usable / FIXED);
+    this.lastAgentSteps = steps;
     if (steps > 0) {
       const stepDt = FIXED;
       const list = this.vehicles;
@@ -3142,6 +3172,22 @@ export class TrafficSystem {
     this.computeCongestion(dt);
     peds?.endFrame?.(dt, clock);
     this.trips = this.tripCompletions;
+  }
+
+  /** Compact telemetry for the performance panel and long-horizon probes. */
+  performanceStats() {
+    return {
+      fixedStepSeconds: performanceRules.agents.fixedStepSeconds,
+      budgetSeconds: this.lastAgentBudget,
+      wantedSeconds: this.lastAgentWanted,
+      simulatedSeconds: this.lastAgentUsable,
+      steps: this.lastAgentSteps,
+      droppedSeconds: this.droppedSeconds,
+      timeDroppedTotal: this.timeDroppedTotal || 0,
+      lagRatio: this.lastAgentWanted > 0
+        ? Math.max(0, Math.min(1, this.droppedSeconds / this.lastAgentWanted))
+        : 0
+    };
   }
 
   update(dt, clock = null) {
@@ -3189,6 +3235,13 @@ export class TrafficSystem {
     this.demandTime = 0;
     this.demandBuckets = [];
     this.demandTrips = [];
+    this.acc = 0;
+    this.droppedSeconds = 0;
+    this.timeDroppedTotal = 0;
+    this.lastAgentBudget = performanceRules.agents.baseBudgetSeconds;
+    this.lastAgentWanted = 0;
+    this.lastAgentUsable = 0;
+    this.lastAgentSteps = 0;
   }
 }
 

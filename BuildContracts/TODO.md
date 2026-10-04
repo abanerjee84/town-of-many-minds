@@ -287,3 +287,20 @@ Updated 2026-10-03 after the dynamic-market and build-duration audit.
 - [ ] Run a normal-council 800-day matrix with congestion snapshots and compare EXTEND_STREET/ROADUP response latency after the emergency priority band.
 - [x] Made the light playable ground follow the acquired perimeter envelope. The outer skirt remains future land, and a successful land acquisition expands the light plane so the boundary is visible during growth.
 
+## Current sprint (2026-10-04, runtime performance)
+
+- [x] Added versioned `src/data/performance.json` for UI refresh intervals, agent stepping, adaptive budgets, population LOD, and pedestrian neighbour buckets.
+- [x] Stopped the render loop from eagerly building `Town.stats()` on every RAF callback. HUD and inspector schedules now run before the deep snapshot is requested, and both surfaces share one snapshot when due.
+- [x] Added same-version `Town.stats()` caching with invalidation after simulation and structural mutations plus an explicit `force` diagnostic read.
+- [x] Added adaptive traffic/pedestrian agent-time budgeting and exposed budget, requested, simulated, dropped, cumulative-dropped, step, and lag-ratio telemetry through `Town.stats().performance`.
+- [x] Added a pedestrian spatial neighbour index and bounded inactive-agent LOD for larger populations while preserving full updates for walking, crossing, chatting, and driving agents.
+- [x] Reused sky/lighting palette colours between frames to reduce render-loop garbage collection.
+- [x] Added `npm run test:performance`; it verifies stats cache reuse/invalidation, the adaptive 100× budget, zero founding-town agent lag, telemetry, deterministic tree coverage, and page-error safety.
+- [x] Re-ran `npm run build`, `npm run test:performance`, `APP_URL=http://127.0.0.1:5173 npm run test:ui`, `APP_URL=http://127.0.0.1:5173 npm run test:speed`, `APP_URL=http://127.0.0.1:5173 npm run test:road-horizon-fast`, and `APP_URL=http://127.0.0.1:5173 npm run test:metropolis-fast` successfully.
+
+### Measured follow-ups
+
+- [ ] Add a bounded route-job queue/cache after profiling route churn at the 1,000-resident cap.
+- [ ] Split large static foliage batches into spatial chunks if close-view GPU profiling shows coarse frustum culling.
+- [ ] Add dynamic shadow-map quality and distant-prop shadow LOD if renderer telemetry shows shadows dominating frame time.
+

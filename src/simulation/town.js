@@ -105,6 +105,11 @@ export class Town {
     this.pipelineSummary = null;
     this.validation = null;
     this.priceHistory = [];
+    // Deep diagnostics are consumed by several UI surfaces. Keep one snapshot
+    // per simulation/build version so the HUD, inspector and external probes
+    // do not each repeat the same industry/research/growth work.
+    this._statsVersion = 0;
+    this._statsCache = null;
 
     this.traffic = new TrafficSystem(this);
     // The vehicle register. TrafficSystem owns the BEHAVIOUR of whatever is
@@ -142,6 +147,12 @@ export class Town {
     );
     this._kitClockDay = null;
     this.kits?.invoke?.('create', this, { clock: null });
+  }
+
+  /** Invalidate the shared diagnostic snapshot after a state mutation. */
+  invalidateStats() {
+    this._statsVersion++;
+    this._statsCache = null;
   }
 
   generate(seed) {
@@ -219,6 +230,7 @@ export class Town {
     // households that can afford one buy it. Nobody is handed a car.
     this.vehicles.releaseToMarket();
     this.vehicles.settleMarket({ onlyBuyers: true });
+    this.invalidateStats();
   }
 
   fullReset(seed) {
@@ -329,6 +341,7 @@ export class Town {
     this.swapGrid();
     this.roadKit = new RoadKit(this.grid, this.rng);
     this.roadKit.manualStops = new Set(this.transport?.manualStops || []);
+    this.invalidateStats();
   }
 
   /**
@@ -408,6 +421,7 @@ export class Town {
       this.traffic?.onRoadGraphChanged?.();
     }
     if (validate) this.validation = validateTown(this);
+    this.invalidateStats();
   }
 
   rebuildBuildings() {
@@ -800,6 +814,7 @@ export class Town {
     // transport, society, and forest adapters above remain available through
     // their existing public systems for compatibility.
     this.kits?.invoke('updateHour', this, { dt, clock });
+    if (dt > 0) this.invalidateStats();
   }
 
   randomRoadCell(rng = this.rng) {
@@ -1514,7 +1529,8 @@ export class Town {
     return { x, y, point: pt };
   }
 
-  stats() {
+  stats({ force = false } = {}) {
+    if (!force && this._statsCache?.version === this._statsVersion) return this._statsCache.value;
     let houses = 0;
     let shops = 0;
     let civic = 0;
@@ -1536,7 +1552,7 @@ export class Town {
       if (floors >= 10 && out.firstSkyscraperDay == null) out.firstSkyscraperDay = b.milestones?.skyscraperDay ?? null;
       return out;
     }, { maxFloors: 0, maxFootprint: 0, firstSkyscraperDay: null });
-    return {
+    const snapshot = {
       roads: this.grid.roadCount,
       houses,
       shops,
@@ -1568,6 +1584,7 @@ export class Town {
       society: this.society ? this.society.stats() : null,
       governance: this.governance ? this.governance.stats() : null,
       mobility: this.traffic ? this.traffic.mobilityStats() : null,
+      performance: this.traffic?.performanceStats?.() || null,
       components: this.roadKit.stats.components || {},
       graph: this.roadKit.stats.graph || null,
       parcels: this.parcels.stats(),
@@ -1585,6 +1602,8 @@ export class Town {
         ? [...this.civicIndex.values()].map((id) => id)
         : []
     };
+    this._statsCache = { version: this._statsVersion, value: snapshot };
+    return snapshot;
   }
 
   get roadGraph() {

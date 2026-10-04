@@ -1,5 +1,6 @@
 import { events } from '../core/events.js';
 import { SPEEDS } from '../core/config.js';
+import performanceRules from '../data/performance.json' with { type: 'json' };
 // Phase 29 (S19a) — one shared escaper; this file's own copy did not cover `'`.
 import { esc } from './escape.js';
 
@@ -518,10 +519,21 @@ export class Hud {
     return 'Grumbling';
   }
 
-  update(stats, dt) {
-    this._acc += dt;
-    if (this._acc < 0.25) return;
+  /** Advance the UI scheduler without constructing a deep town snapshot. */
+  needsUpdate(dt) {
+    this._acc += Math.max(0, Number(dt) || 0);
+    return this._acc >= performanceRules.ui.statsIntervalSeconds;
+  }
+
+  update(stats, dt = null) {
+    // Keep the throttled public API for external callers. The main loop calls
+    // needsUpdate() first, then passes a snapshot with no dt on due frames.
+    if (dt != null) {
+      this._acc += Math.max(0, Number(dt) || 0);
+      if (this._acc < performanceRules.ui.statsIntervalSeconds) return false;
+    }
     this._acc = 0;
+    if (!stats) return false;
     const inside = stats.inside ?? (stats.population - stats.visible);
     this.el.pop.textContent = `${stats.population} (${stats.visible} out · ${inside} in)`;
     if (this.el.hhd) this.el.hhd.textContent = String(stats.households ?? 0);
@@ -662,5 +674,6 @@ export class Hud {
         this.el.comps.innerHTML = html;
       }
     }
+    return true;
   }
 }

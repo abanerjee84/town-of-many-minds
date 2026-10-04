@@ -54,6 +54,7 @@
     ,"test:bus-stuck": "node scripts/_bus_stuck_check.mjs"
     ,"test:cabinet": "node scripts/_cabinet_check.mjs"
     ,"test:developer-independence": "node scripts/_developer_independence_check.mjs"
+    ,"test:performance": "node scripts/_performance_check.mjs"
   },
   "dependencies": {
     "three": "^0.169.0"

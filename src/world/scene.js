@@ -2,6 +2,25 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CELL, PALETTE } from '../core/config.js';
 
+// Reused by updateLighting. Constructing a dozen Color objects per frame was
+// pure garbage on the render path; the values are immutable references and the
+// three scratch colours are copied/lerped in place below.
+const SKY_PALETTE = Object.freeze({
+  dayTop: new THREE.Color(0x4b91c4),
+  dayHorizon: new THREE.Color(0xbfe7f4),
+  dayBottom: new THREE.Color(0x8fb9c9),
+  duskTop: new THREE.Color(0x4a365f),
+  duskHorizon: new THREE.Color(0xf0a06b),
+  duskBottom: new THREE.Color(0xd9785a),
+  nightTop: new THREE.Color(0x020611),
+  nightHorizon: new THREE.Color(0x182b43),
+  nightBottom: new THREE.Color(0x0b1626),
+  overcast: new THREE.Color(0x71808a),
+  top: new THREE.Color(),
+  horizon: new THREE.Color(),
+  bottom: new THREE.Color()
+});
+
 function makeGrassTexture() {
   const size = 256;
   const canvas = document.createElement('canvas');
@@ -333,19 +352,10 @@ export class SceneManager {
     this.hemi.intensity = (0.28 + d * 0.95) * (1 - cloud * 0.12);
     this.ambient.intensity = 0.22 + d * 0.2;
 
-    const dayTop = new THREE.Color(0x4b91c4);
-    const dayHorizon = new THREE.Color(0xbfe7f4);
-    const dayBottom = new THREE.Color(0x8fb9c9);
-    const duskTop = new THREE.Color(0x4a365f);
-    const duskHorizon = new THREE.Color(0xf0a06b);
-    const duskBottom = new THREE.Color(0xd9785a);
-    const nightTop = new THREE.Color(0x020611);
-    const nightHorizon = new THREE.Color(0x182b43);
-    const nightBottom = new THREE.Color(0x0b1626);
-
-    const top = new THREE.Color();
-    const horizon = new THREE.Color();
-    const bottom = new THREE.Color();
+    const {
+      dayTop, dayHorizon, dayBottom, duskTop, duskHorizon, duskBottom,
+      nightTop, nightHorizon, nightBottom, overcast, top, horizon, bottom
+    } = SKY_PALETTE;
     if (d > 0.45) {
       top.copy(dayTop); horizon.copy(dayHorizon); bottom.copy(dayBottom);
     } else if (d > 0.12) {
@@ -363,7 +373,6 @@ export class SceneManager {
     // closer, giving rain and storms a visible atmospheric footprint without
     // replacing the deterministic day/night cycle.
     if (cloud > 0) {
-      const overcast = new THREE.Color(0x71808a);
       top.lerp(overcast, cloud * 0.25);
       horizon.lerp(overcast, cloud * 0.32);
       bottom.lerp(overcast, cloud * 0.18);

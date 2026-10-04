@@ -502,8 +502,22 @@ function frame(now) {
     step('lighting', () => sceneMgr.updateLighting(clock, town.weather?.stats?.()));
     step('glow', () => setGlowLevel(sceneMgr.nightFactor * getSettings().glowIntensity));
 
-    step('hud', () => hud.update(town.stats(), rawDt));
-    step('interaction', () => interaction.update(rawDt));
+    // Deep town diagnostics are expensive. Advance the two UI schedulers
+    // first, then build one shared snapshot only when at least one surface is
+    // due. This keeps the HUD's 250 ms throttle meaningful instead of eagerly
+    // evaluating town.stats() on every RAF callback.
+    const hudDue = hud.needsUpdate(rawDt);
+    const interactionDue = interaction.needsUpdate(rawDt);
+    let uiStats = null;
+    step('stats', () => {
+      if (hudDue || interactionDue) uiStats = town.stats();
+    });
+    step('hud', () => {
+      if (hudDue) hud.update(uiStats);
+    });
+    step('interaction', () => {
+      if (interactionDue) interaction.update(0, uiStats);
+    });
     step('camera-readout', updateCameraReadout);
     step('render', () => sceneMgr.render());
   } finally {
