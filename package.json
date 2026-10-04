@@ -57,6 +57,7 @@
     ,"test:developer-independence": "node scripts/_developer_independence_check.mjs"
     ,"test:performance": "node scripts/_performance_check.mjs"
     ,"test:kpi": "node scripts/_kpi_check.mjs"
+    ,"test:citizen-render": "node scripts/_citizen_render_check.mjs"
     ,"mapnow:capture": "node scripts/_mapnow_capture.mjs"
   },
   "dependencies": {

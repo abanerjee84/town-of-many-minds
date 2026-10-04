@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { PALETTE } from '../../core/config.js';
 import { box, cyl, sphere, merge } from '../geometry.js';
+import performanceRules from '../../data/performance.json' with { type: 'json' };
 
 export const CITIZEN_SCALE = 0.82;
 
@@ -47,7 +48,7 @@ function getBubbleTexture() {
   return bubbleTexture;
 }
 
-export function buildCitizen(personality) {
+function buildDetailedCitizen(personality) {
   const a = personality.avatar;
   const s = CITIZEN_SCALE * a.scale * (a.build === 'slim' ? 0.95 : a.build === 'sturdy' ? 1.06 : 1);
   const skin = PALETTE.skin[a.skin];
@@ -173,6 +174,65 @@ export function buildCitizen(personality) {
     height: 1.85 * s,
     headY
   };
+}
+
+/**
+ * A population marker is viewed from the town camera, not inspected as a
+ * character model. The simple rig keeps the pick target, age scale, speech
+ * bubble and walk bob, while reducing each visible resident to one low-poly
+ * vertex-coloured mesh (a cylinder body and spherical head). This also avoids
+ * per-resident limbs, hair, accessories and shadow-map work at the 1,000-person
+ * cap. The detailed rig remains available for close-up experiments through the
+ * data-driven performance setting.
+ */
+function buildSimpleCitizen(personality) {
+  const a = personality.avatar;
+  const s = CITIZEN_SCALE * a.scale * (a.build === 'slim' ? 0.95 : a.build === 'sturdy' ? 1.06 : 1);
+  const skin = PALETTE.skin[a.skin];
+  const shirt = PALETTE.shirt[a.shirt];
+  const bodyW = (a.build === 'sturdy' ? 0.54 : a.build === 'slim' ? 0.42 : 0.48) * s;
+  const hipY = 0.78 * s;
+  const headY = hipY + 0.62 * s + 0.2 * s;
+  const pieces = [
+    cyl(bodyW * 0.52, bodyW * 0.66, 0.72 * s, shirt, 0, hipY + 0.34 * s, 0, 6),
+    sphere(0.195 * s, skin, 0, headY, 0, 6, 4)
+  ];
+  const geo = merge(pieces);
+  // merge() copies indexed inputs; release the two temporary source buffers so
+  // spawning and resetting residents does not retain hidden geometry copies.
+  pieces.forEach((piece) => piece.dispose());
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0 });
+  const bodyMesh = new THREE.Mesh(geo, mat);
+  bodyMesh.castShadow = !!performanceRules.agents.citizenCastShadows;
+  bodyMesh.receiveShadow = false;
+
+  const bubble = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.6, 0.45),
+    new THREE.MeshBasicMaterial({ map: getBubbleTexture(), transparent: true, depthTest: false })
+  );
+  bubble.position.set(0, headY + 0.55 * s, 0);
+  bubble.renderOrder = 10;
+  bubble.visible = false;
+
+  const group = new THREE.Group();
+  group.add(bodyMesh, bubble);
+  group.scale.setScalar(ageScale(personality.age));
+  group.userData.pick = { type: 'citizen', title: personality.name };
+  group.userData.bubble = bubble;
+  return {
+    group,
+    // Keep the animation contract without adding limb scene nodes.
+    pivots: [new THREE.Group(), new THREE.Group()],
+    bubble,
+    height: 1.85 * s,
+    headY
+  };
+}
+
+export function buildCitizen(personality) {
+  return performanceRules.agents.citizenRenderMode === 'detailed'
+    ? buildDetailedCitizen(personality)
+    : buildSimpleCitizen(personality);
 }
 
 export function animateWalk(rig, phase, speedFactor, moving, baseY = 0) {

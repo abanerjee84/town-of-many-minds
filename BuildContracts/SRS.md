@@ -378,3 +378,9 @@ This section defines the target architecture for turning the current specialist 
 
 79. KPI collection shall remain cheap on the render path: decision records are written at the existing governance boundary, daily snapshots are sampled at the day boundary, and the collector shall not call the full recursive `Town.stats()` snapshot from inside itself.
 
+## Citizen render budget
+
+80. The default citizen renderer shall use a low-poly cylindrical body and spherical head with one visible body mesh, retain age scaling, walking bob, pick metadata, and speech-bubble behavior, and disable per-citizen shadow casting. A detailed rig may remain available through the versioned performance JSON for close-up experiments, but the default must remain bounded for the 1,000-resident cap.
+
+81. Citizen simulation behavior, employment, mood, routing, collision avoidance, and lifecycle shall remain independent of render detail. `npm run test:citizen-render` shall verify the simple mesh budget, inspection contract, animation contract, and absence of page errors.
+

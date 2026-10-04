@@ -13,6 +13,8 @@
     "minimumPopulationBudgetShare": 0.5,
     "lodStartPopulation": 120,
     "lodMaxStride": 4,
-    "chatBucketSize": 2.6
+    "chatBucketSize": 2.6,
+    "citizenRenderMode": "simple",
+    "citizenCastShadows": false
   }
 }
