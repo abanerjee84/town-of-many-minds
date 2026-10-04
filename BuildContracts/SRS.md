@@ -1,6 +1,6 @@
 # TOMM construction and progression specification
 
-Updated 2026-10-04 after the catalogue-wide industrial-planning audit.
+Updated 2026-10-04 after the catalogue-wide industrial-planning and residential-block audit.
 
 ## Scope
 
@@ -53,6 +53,7 @@ This specification defines the shared construction vocabulary and the progressio
 
 6. HouseKit shall support accessible entrances, balconies, solar roofs, and planted roofs with role-tagged geometry and module records.
 7. IMAGINE_ARCHETYPE block=<id> shall validate the block, infer a compatible zone/facility, merge module flags with explicit flags, and reject unrelated kit families. A facility=<id> request may infer the matching civic.<id> block; a bare request without a block or facility shall be rejected before synthesis. The planner shall expose it from measured design opportunities with an executable catalogue block: overloaded civic capacity or low approval may promote a matching archetype into Priority, while comfortable-town experiments remain Feasible-now amenity work with a population-earned allowance.
+7a. The housing catalogue shall include a multi-cell `house.gated.community` block (3×2 tiles) with gate, courtyard, parking, corridor, balcony, and unit modules. `IMAGINE_ARCHETYPE block=house.gated.community` and `DEVELOP_HOUSING block=house.gated.community` shall share the same quote, full-footprint placement, proportional residential capacity, and inspection block ID. Ordinary housing growth may offer one block after the town reaches 45 residents and beds are under pressure, with an allowance of at most one block per 120 residents; it shall never degrade to a 1×1 house when the 3×2 site cannot fit.
 8. Project and decision records shall retain blockId, modules, materials, and labourHours. Buildings shall retain blockId and climate/access flags.
 9. Residential occupancy shall be three residents per tiled footprint per floor, except for the founding contract's explicit five-bed homes. A three-storey one-tile home therefore holds nine residents; multi-cell homes multiply by their tile count. Commerce and factory occupancy shall be monotone in footprint area and floors; office desks shall follow the same floor-area rule.
 10. A building's staffing requirement shall be derived from floor area × floors at the shared `AREA_PER_STAFF` rate. Public civic buildings shall contribute posts to Lifecycle, Governance, settler pull, and hiring; civic hires shall be placed at civic buildings only. Government-owned industrial buildings shall preserve their public operator during economy registration and fill vacancies from unemployed residents or credentialed newcomers without displacing private-firm workers; public-industry payroll shall use the government account and the operating-reserve floor.

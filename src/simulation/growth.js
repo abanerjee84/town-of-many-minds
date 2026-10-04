@@ -776,15 +776,54 @@ export function planFor(town, type, opts = {}) {
   const lm = LANDMARKS[type] || (type === 'landmark' ? LANDMARKS[opts.landmark] : null);
   if (lm) return landmarkPlan(town, lm, opts);
   switch (type) {
-    case 'house':
+    case 'house': {
+      // Normal housing can commission a catalogue block as well as the
+      // one-tile family shell. Keeping this on the same DEVELOP_HOUSING plan
+      // means private/ordinary housing growth gets the same footprint,
+      // occupancy and bill-of-quantities contract as IMAGINE_ARCHETYPE.
+      const block = opts.blockId ? constructionBlock(opts.blockId) : null;
+      const footprintCandidates = opts.footprintCandidates || (block ? [block.footprint] : undefined);
+      const area = block ? block.footprint[0] * block.footprint[1] : 1;
+      const catalogueBill = block
+        ? (town.kits?.catalogueQuote?.(block.id, town, { area }) ?? constructionBlockQuote(block.id, { area, town }))
+        : null;
+      const overrides = {};
+      if (block) {
+        for (const module of block.modules || []) {
+          if (module === 'ramp') overrides.accessible = true;
+          if (module === 'balcony') overrides.balcony = true;
+          if (module === 'solar-roof') overrides.solar = true;
+          if (module === 'green-roof') overrides.greenRoof = true;
+        }
+      }
       const plan = {
         type: 'house',
-        label: 'A new family needs a home',
-        cost: dynamicCost(town, 'house'),
-        materials: MATERIALS.house,
-        run: (c) => !!c && !town.buildingAt(c[0], c[1]) && town.placeBuilding(c[0], c[1], ZONE.RESIDENTIAL)
+        zone: 'house',
+        wantZone: ZONE.RESIDENTIAL,
+        blockId: block?.id || null,
+        footprint: opts.footprint || undefined,
+        footprintCandidates,
+        requireFootprint: !!block || !!opts.requireFootprint,
+        acquire: !!opts.acquire,
+        label: block ? `${block.label} provides new family homes` : 'A new family needs a home',
+        cost: catalogueBill?.cost ?? dynamicCost(town, 'house'),
+        materials: catalogueBill?.materials ?? MATERIALS.house,
+        labourHours: catalogueBill?.labourHours || null,
+        need: opts.need ?? 0.5
       };
+      plan.run = (c) =>
+        !!c &&
+        !town.buildingAt(c[0], c[1]) &&
+        town.placeBuilding(c[0], c[1], ZONE.RESIDENTIAL, {
+          footprint: plan.footprint && plan.footprint.cols * plan.footprint.rows > 1 ? plan.footprint : undefined,
+          footprintCells: plan.cells?.length > 1 ? plan.cells : undefined,
+          acquire: !!plan.acquire,
+          overrides,
+          blockId: plan.blockId || undefined,
+          name: opts.name || null
+        });
       return plan;
+    }
     case 'office': {
       // Phase 20 (C3b) — an OFFICE BLOCK: commercial land, but a building that
       // earns from desks rather than footfall. It is sited like a shop and
@@ -2215,6 +2254,25 @@ export class GrowthSystem {
   }
 
   /**
+   * A measured opportunity for a larger ordinary housing commission. The
+   * block is intentionally occasional: small towns still get individual
+   * homes, while a settled town can earn a horizontal residential community
+   * as beds fill. The same site probe used by apply() prevents a proposal
+   * that cannot fit its complete footprint from entering the board.
+   */
+  residentialBlockOptions(input = null, need = 0.5) {
+    const s = input || this.inputs();
+    const block = constructionBlock('house.gated.community');
+    if (!block || !housingNeedsBuild(s.pop, s.capacity, s.pressure) || s.pop < 45) return null;
+    const built = this.town.buildings.filter((building) => building.blockId === block.id).length;
+    const allowance = Math.max(1, Math.floor((s.pop || 0) / 120));
+    if (built >= allowance) return null;
+    const probe = planFor(this.town, 'house', { blockId: block.id, need });
+    if (!probe || !this.siteForFootprint(probe)) return null;
+    return { blockId: block.id, need, requireFootprint: true };
+  }
+
+  /**
    * Fiscal runway gate for the Council's automatic finance option. A bond is
    * offered only when the treasury is below the protected operating reserve
    * plus two weeks of measured government burn, and only while debt remains
@@ -2680,8 +2738,12 @@ export class GrowthSystem {
         add('resource', 1, { resource: resourceTarget });
       }
     }
-    if (housingNeedsBuild(s.pop, s.capacity, s.pressure) && this.findCell('house'))
-      add('house', (s.pressure - HOUSE_PRESSURE_GATE) / (1 - HOUSE_PRESSURE_GATE));
+    const housingNeed = housingNeedsBuild(s.pop, s.capacity, s.pressure)
+      ? (s.pressure - HOUSE_PRESSURE_GATE) / (1 - HOUSE_PRESSURE_GATE)
+      : 0;
+    const residentialBlock = housingNeed > 0 ? this.residentialBlockOptions(s, housingNeed) : null;
+    if (housingNeed > 0 && (residentialBlock || this.findCell('house')))
+      add('house', housingNeed, residentialBlock || undefined);
     if (unemployment > UNEMPLOYMENT_GATE) {
       const need = (unemployment - UNEMPLOYMENT_GATE) / (1 - UNEMPLOYMENT_GATE);
       if (this.findCell('shop')) add('shop', need, { need }); // need rides the commerce-ladder chooser
@@ -2932,7 +2994,8 @@ export class GrowthSystem {
       case 'sewage':
         return strained.includes(type);
       case 'house':
-        return housingNeedsBuild(s.pop, s.capacity, s.pressure) && !!this.findCell('house');
+        return housingNeedsBuild(s.pop, s.capacity, s.pressure) &&
+          (!!this.findCell('house') || !!this.residentialBlockOptions(s, Math.max(0.25, s.pressure - HOUSE_PRESSURE_GATE)));
       case 'shop':
         return unemployment > UNEMPLOYMENT_GATE && !!this.findCell('shop');
       case 'office':
@@ -4889,7 +4952,18 @@ export class GrowthSystem {
           const [cols, rows] = Array.isArray(e) ? e : [e.cols, e.rows];
           return cols * rows > 1;
         })));
-    const strictFootprint = strictCivicFootprint || strictFactoryFootprint;
+    // Catalogue-backed residential blocks are deliberate horizontal designs,
+    // so falling back to a 1x1 shell would silently erase the block's
+    // capacity and gated-community frontage. Treat them like civic and
+    // industrial campuses: acquire/find the full lot or report the real
+    // placement blocker.
+    const strictHousingFootprint = plan.type === 'house' && !!plan.requireFootprint &&
+      ((plan.footprint && plan.footprint.cols * plan.footprint.rows > 1) ||
+        (plan.footprintCandidates && plan.footprintCandidates.some((e) => {
+          const [cols, rows] = Array.isArray(e) ? e : [e.cols, e.rows];
+          return cols * rows > 1;
+        })));
+    const strictFootprint = strictCivicFootprint || strictFactoryFootprint || strictHousingFootprint;
     let cell = null;
     let block = null;
     if (needsCell && (plan.footprintCandidates || plan.footprint)) {

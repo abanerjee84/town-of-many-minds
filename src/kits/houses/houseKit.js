@@ -133,7 +133,10 @@ export const BUILDING_MODULE = [
   'ramp',
   'solar-roof',
   'green-roof',
-  'unit'
+  'unit',
+  'gate',
+  'courtyard',
+  'parking'
 ];
 
 function sink(arr, parts, role) {
@@ -306,6 +309,23 @@ export function buildHouse(params = {}) {
     }
     P('porch', box(pw + 0.2, 0.12, 1.2, roofColor, doorX, 2.4, d / 2 + 0.52));
     modules.push({ kind: 'porch', at: [doorX, 0, d / 2 + 0.5], width: pw });
+  }
+
+  // RESIDENTIAL BLOCK KIT: a broad gated community gets a readable frontage
+  // instead of looking like a stretched one-cell house. The low gate and
+  // posts sit just beyond the entrance, so the footprint remains a single
+  // buildable block while the visual language communicates a shared private
+  // court and controlled access.
+  if (params.blockId === 'house.gated.community') {
+    const gateW = Math.min(w * 0.72, 4.6);
+    const gateZ = d / 2 + 0.72;
+    P('other', box(gateW, 0.12, 0.14, trim, doorX, 0.28, gateZ));
+    for (const side of [-1, 1]) {
+      P('column', box(0.18, 0.82, 0.18, trim, doorX + side * gateW / 2, 0.41, gateZ));
+    }
+    modules.push({ kind: 'gate', at: [doorX, 0.28, gateZ], width: gateW });
+    modules.push({ kind: 'courtyard', at: [0, 0, -d * 0.16], area: Math.max(1, w - 0.8) * Math.max(1, d * 0.28) });
+    modules.push({ kind: 'parking', at: [0, 0, d / 2 + 1.05], spaces: Math.max(2, Math.floor(w / 1.2)) });
   }
 
   // ACCESSIBILITY BLOCK: an entrance ramp and handrails are authored as part

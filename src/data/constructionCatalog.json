@@ -99,6 +99,26 @@
       ]
     },
     {
+      "id": "house.gated.community",
+      "kit": "houses",
+      "family": "housing",
+      "label": "Gated residential community",
+      "footprint": [
+        3,
+        2
+      ],
+      "modules": [
+        "gate",
+        "courtyard",
+        "parking",
+        "entrance",
+        "corridor",
+        "balcony",
+        "unit",
+        "green-roof"
+      ]
+    },
+    {
       "id": "mixed.use",
       "kit": "houses",
       "family": "commerce",

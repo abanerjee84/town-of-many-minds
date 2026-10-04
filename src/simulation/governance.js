@@ -148,6 +148,9 @@ export function planCode(plan) {
   if (plan.type === 'archetype') {
     return `IMAGINE_ARCHETYPE zone=${plan.zone || 'house'}${plan.blockId ? ` block=${plan.blockId}` : ''}`;
   }
+  if (plan.type === 'house' && plan.blockId) {
+    return `DEVELOP_HOUSING block=${plan.blockId}`;
+  }
   // Phase 20 — an office replays with its name when the council pinned one, so
   // a replayed order builds the same tenant rather than a different one.
   if (plan.type === 'office') return plan.name ? `BUILD_OFFICE name=${plan.name}` : 'BUILD_OFFICE';
@@ -509,7 +512,7 @@ const COUNCIL_ETHOS = [
   'Treat the report as evidence: identify the binding constraint, distinguish a symptom from a cause, consider second-order effects, and choose one feasible action. State affected residents or places only when the report supports that inference.',
   'The Learning record is fallible empirical memory from prior enacted choices. Use repeated before/after results as clues, do not confuse correlation with causation, and do not let one surprising result override the current report.',
   'The action registry, catalogue, placement, progression, accounting, and reserve rules are fixed interfaces. Select among them; never invent an action, coordinate, budget, or rule.',
-  'Provider comparisons use the same report, constraints, learning record, and one-line output contract; do not optimize for prose.',
+  'Provider comparisons share the report, constraints, learning record, and output contract; do not optimize for prose.',
   'A good decision is a short causal bet: name the measured constraint, choose the legal action that changes it, and leave a falsifiable trace for the next sitting.'
 ].join(' ');
 
@@ -918,6 +921,22 @@ function parseArchetypeSpec(raw) {
   return spec;
 }
 
+/** Parse the optional catalogue variant on ordinary DEVELOP_HOUSING. */
+function parseHousingSpec(raw) {
+  const s = String(raw || '');
+  const spec = {};
+  const issues = [];
+  const blockM = s.match(/\b(?:block|kit)\s*[=:]\s*([a-z0-9_.-]+)/i);
+  if (blockM) {
+    const block = constructionBlock(blockM[1]);
+    if (!block) issues.push(`unknown housing block "${blockM[1]}"`);
+    else if (block.family !== 'housing') issues.push(`block ${block.id} is not a housing block`);
+    else spec.blockId = block.id;
+  }
+  if (issues.length) spec.issues = issues;
+  return spec;
+}
+
 /** Pull a BUILD_FACTORY spec (type/name) from raw text — same strict rules
  *  as the archetype spec: a bad value rejects the decision outright. */
 function parseFactorySpec(raw) {
@@ -1045,6 +1064,7 @@ function parseShopSpec(raw) {
 export function parseIntent(text) {
   const r = parseIntentCore(text);
   if (r.intent === 'IMAGINE_ARCHETYPE') r.params = parseArchetypeSpec(text);
+  else if (r.intent === 'DEVELOP_HOUSING') r.params = parseHousingSpec(text);
   else if (r.intent === 'BUILD_FACTORY') r.params = parseFactorySpec(text);
   else if (r.intent === 'BUILD_LANDMARK' || r.intent === 'EXPAND_LANDMARK') r.params = parseLandmarkSpec(text);
   else if (r.intent === 'OPEN_SHOP') r.params = parseShopSpec(text);
@@ -1902,6 +1922,7 @@ export class GovernanceSystem {
     // A bad trade spec is refused outright — same rule as the factory spec.
     if (
       (parsed.intent === 'IMAGINE_ARCHETYPE' ||
+        parsed.intent === 'DEVELOP_HOUSING' ||
         parsed.intent === 'BUILD_FACTORY' ||
         parsed.intent === 'BUILD_LANDMARK' ||
         parsed.intent === 'OPEN_SHOP' ||

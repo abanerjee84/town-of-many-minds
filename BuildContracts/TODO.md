@@ -12,6 +12,7 @@ Updated 2026-10-04 after the catalogue-wide industrial-planning audit.
 
 ## Completed in this pass
 
+- [x] Added the catalogue-backed `house.gated.community` residential block. The 3×2 block is available to both `IMAGINE_ARCHETYPE block=house.gated.community` and normal `DEVELOP_HOUSING block=house.gated.community`; ordinary housing can earn it once beds are under pressure, with strict full-footprint placement, six-tile occupancy accounting, gate/courtyard/parking module records, and regression coverage across the parser, planner, quote, and HouseKit geometry.
 - [x] Added `src/data/priceChart.json` and one resolver module. Construction families, land, vehicles, commodities, and commerce rungs now have inspectable base values and bounded live factors instead of scattered fixed quotes.
 - [x] Linked price responses to measured scarcity, housing/industrial pressure, congestion, treasury runway, and fiscal stress. The Council report exposes price-chart version and current construction, land, and commodity indices.
 - [x] Added `src/data/buildtime.json` and `buildHoursFor()`. Project duration now derives from external base hours plus footprint, floors, pressure, congestion, and fiscal capacity; active projects retain their quoted duration.

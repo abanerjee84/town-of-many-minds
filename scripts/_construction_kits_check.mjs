@@ -20,6 +20,10 @@ const PROBE = async () => {
   };
   const threeStoreyTile = houseKit.buildHouse({ ...capacityProbeStyle, w: 3.2, d: 3.0, floors: 3 });
   const twoByTwoHouse = houseKit.buildHouse({ ...capacityProbeStyle, w: 7.4, d: 7.4, floors: 1, footprintTiles: 4 });
+  const gatedCommunity = houseKit.buildHouse({
+    ...capacityProbeStyle, blockId: 'house.gated.community', w: 7.4, d: 5.0,
+    floors: 3, footprintTiles: 6, balcony: true, greenRoof: true
+  });
   const roles = new Set(house.parts.map((part) => part.role));
   const publicPlan = t.publicPlan || {};
   const blockAudit = window.auditConstructionBlocks();
@@ -38,7 +42,9 @@ const PROBE = async () => {
       modules: house.modules.map((module) => module.kind),
       twoFloorTileCapacity: house.capacity,
       threeFloorTileCapacity: threeStoreyTile.capacity,
-      twoByTwoTileCapacity: twoByTwoHouse.capacity
+      twoByTwoTileCapacity: twoByTwoHouse.capacity,
+      gatedModules: gatedCommunity.modules.map((module) => module.kind),
+      gatedCapacity: gatedCommunity.capacity
     },
     civic: {
       catalogue: Object.keys(civicKit.CIVIC_CATALOGUE),
@@ -54,6 +60,13 @@ const PROBE = async () => {
       return { facility, cols, rows, area: cols * rows, blockId: plan?.blockId || null };
     }),
     housePlanType: growth.planFor(t, 'house')?.type || null,
+    residentialBlock: {
+      catalogue: window.listConstructionBlocks().find((block) => block.id === 'house.gated.community'),
+      normalPlan: growth.planFor(t, 'house', { blockId: 'house.gated.community', need: 1 }),
+      archetype: governance.parseIntent('INTENT: IMAGINE_ARCHETYPE block=house.gated.community name=Maple Court'),
+      housingIntent: governance.parseIntent('INTENT: DEVELOP_HOUSING block=house.gated.community'),
+      normalCode: governance.planCode(growth.planFor(t, 'house', { blockId: 'house.gated.community', need: 1 }))
+    },
     creativeArchetype: governance.parseIntent(
       'INTENT: IMAGINE_ARCHETYPE facility=college name=River Labs accessible=true solar=true'
     ),
@@ -89,6 +102,10 @@ for (const seed of SEEDS) {
   if (result.houseBlocks.twoFloorTileCapacity !== 6) problems.push('two-floor one-tile house is not 6 residents');
   if (result.houseBlocks.threeFloorTileCapacity !== 9) problems.push('three-floor one-tile house is not 9 residents');
   if (result.houseBlocks.twoByTwoTileCapacity !== 12) problems.push('two-by-two one-floor house is not 12 residents');
+  for (const module of ['gate', 'courtyard', 'parking']) {
+    if (!result.houseBlocks.gatedModules.includes(module)) problems.push(`gated community kit omitted ${module}`);
+  }
+  if (result.houseBlocks.gatedCapacity !== 54) problems.push('three-floor 3x2 gated community is not 54 residents');
   if (result.civic.missingOrderRows.length) problems.push(...result.civic.missingOrderRows.map((id) => `missing civic row ${id}`));
   if (result.civic.missingBlockRows.length) problems.push(...result.civic.missingBlockRows.map((id) => `missing construction block ${id}`));
   for (const row of result.horizontalCivic) {
@@ -96,6 +113,11 @@ for (const seed of SEEDS) {
     if (!row.blockId) problems.push(`${row.facility} plan lost its construction block ID`);
   }
   if (result.housePlanType !== 'house') problems.push('house plan fell through to another plan type');
+  if (!result.residentialBlock.catalogue || result.residentialBlock.catalogue.footprint.join('x') !== '3x2') problems.push('gated residential block is missing or has the wrong footprint');
+  if (result.residentialBlock.normalPlan?.blockId !== 'house.gated.community' || result.residentialBlock.normalPlan?.footprintCandidates?.[0]?.join('x') !== '3x2') problems.push('normal housing plan did not carry the gated block footprint');
+  if (result.residentialBlock.archetype.params?.blockId !== 'house.gated.community' || result.residentialBlock.archetype.params?.zone !== 'house') problems.push('creative archetype did not accept the gated housing block');
+  if (result.residentialBlock.housingIntent.params?.blockId !== 'house.gated.community' || result.residentialBlock.housingIntent.params?.issues?.length) problems.push('DEVELOP_HOUSING did not parse the gated housing block');
+  if (result.residentialBlock.normalCode !== 'DEVELOP_HOUSING block=house.gated.community') problems.push('normal housing block did not round-trip through DEVELOP_HOUSING');
   if (result.creativeArchetype.params?.zone !== 'civic' || result.creativeArchetype.params?.blockId !== 'civic.college') {
     problems.push('facility-only creative archetype did not infer its civic block');
   }
