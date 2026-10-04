@@ -2438,10 +2438,10 @@ export class GrowthSystem {
   }
 
   /**
-   * Submit a Council request to the private market without constructing it.
-   * The request is a bounded, expiring opportunity; the developer evaluates
-   * it during its own review cadence using cash, demand, staffing and site
-   * evidence. This is the free-will boundary for ordinary private projects.
+   * Submit a bounded private-market opportunity. Council referrals are
+   * evaluated immediately by evaluatePrivateOpportunityNow(); unsolicited
+   * developer opportunities may remain here until the next developer review.
+   * This is the free-will boundary for ordinary private projects.
    */
   submitPrivateOpportunity({ intent, type, params = {}, reason = '', source = 'council', priority = 0 } = {}) {
     const kind = String(type || '').trim();
@@ -2533,9 +2533,11 @@ export class GrowthSystem {
     return plan.target ? { ok: true, reason: 'existing private asset has a legal progression target' } : { ok: true, reason: 'private plan passed site and finance quote' };
   }
 
-  privateOpportunityPlan() {
+  privateOpportunityPlan(opportunityId = null) {
     this.prunePrivateOpportunities();
-    const ordered = [...this.privateOpportunities].sort((a, b) => b.priority - a.priority || a.submittedDay - b.submittedDay);
+    const ordered = [...this.privateOpportunities]
+      .filter((entry) => !opportunityId || entry.id === opportunityId)
+      .sort((a, b) => b.priority - a.priority || a.submittedDay - b.submittedDay);
     for (const opportunity of ordered) {
       const plan = planFor(this.town, opportunity.type, opportunity.params || {});
       if (!plan) {
@@ -2558,6 +2560,79 @@ export class GrowthSystem {
       return { plan, opportunity, viability };
     }
     return null;
+  }
+
+  /**
+   * Evaluate a Council referral synchronously. A private referral is a
+   * market request, so the developer gets the same measured viability and
+   * funding checks as its scheduled pass, but the Council card receives the
+   * final accept/reject result in the same enactment turn.
+   */
+  evaluatePrivateOpportunityNow(opportunityId) {
+    this.prunePrivateOpportunities();
+    const opportunity = this.privateOpportunities.find((entry) => entry.id === opportunityId);
+    if (!opportunity) return { status: 'rejected', reason: 'opportunity no longer available' };
+    const reject = (reason) => {
+      opportunity.attempts = (opportunity.attempts || 0) + 1;
+      opportunity.lastBlock = reason;
+      this.privateOpportunities = this.privateOpportunities.filter((entry) => entry.id !== opportunity.id);
+      this.developerLastBlock = reason;
+      events.emit('developer-opportunity', {
+        source: opportunity.source || 'council',
+        actor: 'Developer',
+        opportunityId: opportunity.id,
+        intent: opportunity.intent,
+        type: opportunity.type,
+        status: 'rejected',
+        detail: reason
+      });
+      return { status: 'rejected', opportunity, reason };
+    };
+    if (!this.developer) return reject('private market is unavailable');
+    this.developerReviews = (this.developerReviews || 0) + 1;
+    const active = this.activeDeveloperProjects();
+    if (active >= DEVELOPER_MAX_ACTIVE) return reject(`private contractors busy (${active}/${DEVELOPER_MAX_ACTIVE})`);
+    const queued = this.privateOpportunityPlan(opportunity.id);
+    if (!queued) return reject(opportunity.lastBlock || 'developer rejected the opportunity');
+    const result = this.apply(queued.plan);
+    if (!result) return reject(this.lastBlock || 'private project validation failed');
+    this.privateOpportunities = this.privateOpportunities.filter((entry) => entry.id !== opportunity.id);
+    this.commitDeveloperProject(queued.plan, result);
+    events.emit('developer-opportunity', {
+      source: opportunity.source || 'council',
+      actor: 'Developer',
+      opportunityId: opportunity.id,
+      intent: opportunity.intent,
+      type: opportunity.type,
+      status: 'accepted',
+      detail: queued.viability?.reason || 'private project accepted'
+    });
+    return { status: 'accepted', result, plan: queued.plan, opportunity, viability: queued.viability };
+  }
+
+  commitDeveloperProject(plan, result) {
+    this.developerCooldown = 0;
+    this.developerBuilt = (this.developerBuilt || 0) + 1;
+    this.developerLastBlock = '';
+    this.developerLastAction = {
+      action: `BUILD_${String(plan.type || 'project').toUpperCase()}`,
+      label: plan.label,
+      cost: plan.cost || 0,
+      projectId: plan.projectId || null,
+      opportunityId: plan.privateOpportunityId || null
+    };
+    this.developerHistory.push({ ...this.developerLastAction });
+    if (this.developerHistory.length > 24) this.developerHistory.shift();
+    events.emit('log', { text: `A private developer commissions ${plan.label.toLowerCase()}.` });
+    events.emit('developer-action', {
+      source: 'developer',
+      actor: 'Developer',
+      action: `BUILD_${String(plan.type || 'project').toUpperCase()}`,
+      status: 'started',
+      detail: `private capital — ${plan.label} to meet demand`,
+      cost: plan.cost || 0
+    });
+    return result;
   }
 
   activeDeveloperProjects() { return activeDeveloperProjects(this); }
@@ -2585,28 +2660,7 @@ export class GrowthSystem {
       return null;
     }
     if (queued) this.privateOpportunities = this.privateOpportunities.filter((entry) => entry.id !== queued.opportunity.id);
-    this.developerCooldown = 0;
-    this.developerBuilt = (this.developerBuilt || 0) + 1;
-    this.developerLastBlock = '';
-    this.developerLastAction = {
-      action: `BUILD_${String(plan.type || 'project').toUpperCase()}`,
-      label: plan.label,
-      cost: plan.cost || 0,
-      projectId: plan.projectId || null,
-      opportunityId: plan.privateOpportunityId || null
-    };
-    this.developerHistory.push({ ...this.developerLastAction });
-    if (this.developerHistory.length > 24) this.developerHistory.shift();
-    events.emit('log', { text: `A private developer commissions ${plan.label.toLowerCase()}.` });
-    events.emit('developer-action', {
-      source: 'developer',
-      actor: 'Developer',
-      action: `BUILD_${String(plan.type || 'project').toUpperCase()}`,
-      status: 'started',
-      detail: `private capital — ${plan.label} to meet demand`,
-      cost: plan.cost || 0
-    });
-    return result;
+    return this.commitDeveloperProject(plan, result);
   }
 
   update(dt) {

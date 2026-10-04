@@ -2260,9 +2260,11 @@ export class GovernanceSystem {
     const financePolicy = t.economy?.projectFinancePolicy?.(committedPlan) || null;
     if ((source === 'llm' || source === 'rules') && financePolicy?.privateActor && !unneeded) {
       // The Council may identify a private need, but it cannot commission a
-      // household, shop, factory, or private progression project. Record an
-      // expiring opportunity for the independent developer review instead of
-      // creating a construction project or charging any account now.
+      // household, shop, factory, or private progression project. Refer the
+      // opportunity to the independent developer and resolve that referral in
+      // this same enactment turn. The developer still owns viability, siting,
+      // capital and the right to refuse; the Council card must not remain in a
+      // misleading pending state while the town waits for another sitting.
       const signal = t.growth?.submitPrivateOpportunity?.({
         intent: parsed.intent,
         type: committedPlan.type,
@@ -2271,16 +2273,34 @@ export class GovernanceSystem {
         source,
         priority: decision.priority || decision.confidence || 0
       });
-      decision.status = signal?.ok ? 'referred' : 'blocked';
       decision.marketOpportunityId = signal?.opportunity?.id || null;
       decision.quotedCost = quoted.quote.finalCost;
-      decision.committedCost = 0;
+      if (!signal?.ok) {
+        decision.status = 'rejected';
+        decision.developerDecision = 'rejected';
+        decision.committedCost = 0;
+        decision.actualSpend = 0;
+        decision.projectId = null;
+        decision.cost = 0;
+        decision.detail = `private market did not accept the opportunity — ${signal?.reason || 'market unavailable'}`;
+        this.record(decision);
+        return decision;
+      }
+      const evaluation = t.growth?.evaluatePrivateOpportunityNow?.(signal.opportunity.id);
+      const accepted = evaluation?.status === 'accepted';
+      const privatePlan = evaluation?.plan || null;
+      const privateResult = evaluation?.result || null;
+      decision.status = accepted
+        ? privateResult?.status === 'started' ? 'started' : privateResult?.status === 'queued' ? 'queued' : 'done'
+        : 'rejected';
+      decision.developerDecision = accepted ? 'accepted' : 'rejected';
+      decision.committedCost = accepted ? privatePlan?.cost || 0 : 0;
       decision.actualSpend = 0;
-      decision.projectId = null;
+      decision.projectId = accepted ? privatePlan?.projectId || null : null;
       decision.cost = 0;
-      decision.detail = signal?.ok
-        ? `${committedPlan.label} referred to the private market — developer decides at its next review`
-        : `private market did not accept the opportunity — ${signal?.reason || 'queue unavailable'}`;
+      decision.detail = accepted
+        ? `${committedPlan.label} accepted by the private developer${privateResult?.hours ? ` — ${privateResult.hours}h build` : ''}`
+        : `${committedPlan.label} rejected by the private developer — ${evaluation?.reason || 'private viability gate failed'}`;
       this.record(decision);
       return decision;
     }
