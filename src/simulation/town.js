@@ -236,6 +236,10 @@ export class Town {
     // households that can afford one buy it. Nobody is handed a car.
     this.vehicles.releaseToMarket();
     this.vehicles.settleMarket({ onlyBuyers: true });
+    // The configured opening treasury is a post-founding balance. The fleet
+    // and any other founding public assets remain visible ledger outflows, then
+    // the explicit capitalization settles the account before day one opens.
+    this.economy.settleOpeningTreasury();
     this.invalidateStats();
   }
 

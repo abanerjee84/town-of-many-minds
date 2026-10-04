@@ -31,6 +31,11 @@ export const TRANSACTION_CATEGORIES = Object.freeze([
   'interest', 'import', 'export', 'bond_issue', 'bond_interest',
   'bond_repayment', 'reserve_allocation', 'project_reversal', 'owner_distribution',
   'immigration_capital_inflow', 'emigration_capital_outflow',
+  // Opening capitalization is the explicit settlement that makes the
+  // configured day-one treasury a post-founding balance. It is not revenue,
+  // spending, or GDP; it only reconciles the opening balance after founding
+  // fleet/assets have been booked.
+  'opening_capitalization',
   'inheritance', 'pension', 'dividend', 'reserve_transfer',
   // External capital and concession flows are separate from ordinary private
   // investment so the treasury and KPI ledgers can attribute FDI outcomes.

@@ -114,7 +114,7 @@ export class EconomySystem {
     this.loans = [];
     this.bonds = [];
     this.accounts = {
-      government: { id: 'government', cash: 1000000 },
+      government: { id: 'government', cash: this.initialTreasuryTarget() },
       bank: { id: 'bank', cash: 1000000, deposits: 0, loans: 0, reserves: 1000000, equity: 1000000, interestIncome: 0 },
       external: { id: 'external', cash: 0 },
       developer: { id: 'developer', cash: ECON.business.developerCash, debt: 0, inventory: {} },
@@ -170,6 +170,41 @@ export class EconomySystem {
     this.householdCashLedger = (this.town.pedestrians?.citizens || []).reduce((s, c) => s + (c.p.cash || 0), 0);
     this.syncEntities();
     this._resetExpectedMoney();
+  }
+
+  /**
+   * The configured treasury is the balance residents see when day one opens,
+   * after the founding pipeline has booked its public assets. Keeping this in
+   * data makes the opening policy tunable without scattering a magic number.
+   */
+  initialTreasuryTarget() {
+    const value = Number(ECON.government?.initialTreasury);
+    return Number.isFinite(value) && value >= 0 ? Math.round(value) : 1000000;
+  }
+
+  /**
+   * Reconcile the founding account to the configured day-one opening balance.
+   * The founding fleet is still paid for through the normal public-investment
+   * path; this separate, explicit transfer records only the opening capital
+   * needed to make the configured value a post-founding balance.
+   */
+  settleOpeningTreasury() {
+    const target = this.initialTreasuryTarget();
+    const delta = Math.round((target - this.treasury) * 100) / 100;
+    if (Math.abs(delta) < 0.01) return { ok: true, target, amount: 0, treasury: this.treasury };
+    const result = delta > 0
+      ? this.transfer({
+        from: 'external', to: 'government', amount: delta,
+        category: 'opening_capitalization',
+        metadata: { openingTreasury: true, target }
+      })
+      : this.transfer({
+        from: 'government', to: 'external', amount: -delta,
+        category: 'opening_capitalization',
+        metadata: { openingTreasury: true, target, surplus: true, allowBelowOperatingFloor: true }
+      });
+    if (!result.ok) return { ...result, target, treasury: this.treasury };
+    return { ok: true, target, amount: delta, treasury: this.treasury, transaction: result.transaction };
   }
 
   /**

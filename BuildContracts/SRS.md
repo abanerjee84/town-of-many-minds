@@ -404,3 +404,7 @@ This section defines the target architecture for turning the current specialist 
 
 89. `Town.stats().foreignInvestment` and the Council report shall expose offers, active/completed projects, investor/project identity, committed and incoming capital, jobs, infrastructure points, tax revenue, repatriation, cap, and blocked reasons. Integrity save/restore shall retain this bounded state. `npm run test:fdi` shall verify offer selection, parser/registry visibility, solicitation, approval, real project start/completion, external tax, and a clean economy audit.
 
+## Opening fiscal state
+
+90. The government opening treasury shall be configured as `government.initialTreasury` in `src/data/economyRules.json` and shall default to $1,000,000. The value is the post-founding day-one balance: founding public assets, including the initial fleet, must still use the normal auditable ledger path, followed by one explicit `opening_capitalization` settlement before the first simulation tick. The day-one balance shall be exact to cents, and the settlement shall not be counted as tax revenue, GDP, operating expenditure, or a hidden construction subsidy. `npm run test:treasury-start` shall verify the configured value immediately after generation and after a day-one tick, across deterministic seeds, while confirming later day-boundary economics still runs.
+
