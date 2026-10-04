@@ -1639,10 +1639,12 @@ export class GovernanceSystem {
       ? (() => {
           const rows = Object.entries(ind.commodities);
           const fullest = rows.slice().sort((a, b) => b[1].percent - a[1].percent)[0];
+          const factoryNeed = t.industry.producerPressureSnapshot?.(3)?.[0] || null;
           const defBuy = (t.industry.strainedProduct && t.industry.strainedProduct()) || 'goods';
           return `Stocks: ${rows
             .map(([k, c]) => `${k} ${c.stock}/${c.capacity} (${c.percent}%) buy $${c.buy} sell $${c.sell}`)
-            .join(' · ')} · default buy ${defBuy} · default sell ${fullest ? fullest[0] : 'goods'}`;
+            .join(' · ')} · default buy ${defBuy} · default sell ${fullest ? fullest[0] : 'goods'}` +
+            (factoryNeed ? ` · factory priority ${factoryNeed.product} (${factoryNeed.reason})` : ' · factory priorities balanced');
         })()
       : '';
     // The short HUD summary is not enough for an LLM to plan a town. These

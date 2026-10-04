@@ -2076,8 +2076,8 @@ export class GrowthSystem {
     const s = this.inputs();
     const industry = this.town.industry;
     const noWorksAtMilestone = s.pop >= 80 && !this.town.buildings.some((b) => b.purpose === 'industrial');
-    const materialNeed = !!industry?.missingConstructionProduct?.() ||
-      !!industry?.deficitProduct?.() || !!industry?.strainedProduct?.();
+    const materialNeed = !!industry?.mostUrgentProducer?.() ||
+      !!industry?.missingConstructionProduct?.() || !!industry?.deficitProduct?.();
     return this.factoryRoom() && (noWorksAtMilestone || materialNeed) && !this.factorySiteAvailable(opts);
   }
 
@@ -2758,8 +2758,9 @@ export class GrowthSystem {
     // the quote still enforces the real lot, cash, utility and material rules.
     const industrialCount = this.town.buildings.filter((b) => b.purpose === 'industrial').length;
     if (s.pop >= 80 && industrialCount === 0 && this.factoryRoom() && this.factorySiteAvailable()) {
-      const starter = this.town.industry?.missingConstructionProduct?.() ||
-        this.town.industry?.deficitProduct?.() || this.town.industry?.strainedProduct?.() || 'lumber';
+      const starter = this.town.industry?.mostUrgentProducer?.() ||
+        this.town.industry?.missingConstructionProduct?.() ||
+        this.town.industry?.deficitProduct?.() || 'lumber';
       const def = FACTORY_TYPES.find((f) => f.product === starter) || FACTORY_TYPES[0];
       out.push({ type: 'factory', need: 1, score: 15, opts: { factory: def.id }, amenity: false });
     }
@@ -2786,16 +2787,17 @@ export class GrowthSystem {
       const gap = this.bridgeTarget();
       if (gap && gap.joins) add('bridge', gap.cells.length / MAX_BRIDGE_GAP);
     }
-    // Materials run short: commission the works that produces the weakest
-    // commodity — but only while the works count stays proportional to the
-    // population (Day-81: 26 works for 32 citizens tripled primary-resource
-    // demand and ran the town dry — see factoryRoom()). Phase 12: the weakest
-    // row is sought across EVERY commodity, ties → most understocked.
+    // Materials or downstream inputs run short: commission the works that
+    // produces the most urgent output across the complete catalogue — but
+    // only while the works count stays proportional to the population
+    // (Day-81: 26 works for 32 citizens tripled primary-resource demand and
+    // ran the town dry — see factoryRoom()). The IndustrySystem pressure board
+    // keeps raw inputs import-only and follows live dependency demand.
     if (this.town.industry && this.factoryRoom()) {
-      const starter = this.town.industry.missingConstructionProduct?.();
-      const strained = starter || (this.town.industry.factories().length === 0
-        ? this.town.industry.deficitProduct?.() || this.town.industry.strainedProduct()
-        : null);
+      const strained = this.town.industry.mostUrgentProducer?.() ||
+        (this.town.industry.factories().length === 0
+          ? this.town.industry.deficitProduct?.()
+          : null);
       const def = strained && FACTORY_TYPES.find((f) => f.product === strained);
       if (def && this.factorySiteAvailable({ factory: def.id })) add('factory', 0.9, { factory: def.id });
     }
@@ -3007,13 +3009,13 @@ export class GrowthSystem {
         // actually chooses its cell.
         return !!this.footwayTarget({ verifyRoute: false });
       case 'factory': {
-        // Wanted while room exists AND some commodity is actually strained —
-        // a healthy storehouse never invents a works (Phase 12: any row).
-        const starter = this.town.industry?.missingConstructionProduct?.();
-        const strained = this.town.industry && (starter || (this.town.industry.factories().length === 0
-          ? this.town.industry.deficitProduct?.() || this.town.industry.strainedProduct()
-          : null));
-        return this.factoryRoom() && !!strained && this.factorySiteAvailable();
+        // Wanted while room exists AND the complete industry pressure board
+        // identifies an actionable catalogue output. This intentionally
+        // includes advanced/downstream products after the first works instead
+        // of silently restricting growth to lumber, steel, and cement.
+        const strained = this.town.industry?.mostUrgentProducer?.() ||
+          (this.town.industry?.factories?.().length === 0 ? this.town.industry?.deficitProduct?.() : null);
+        return this.factoryRoom() && !!strained && this.factorySiteAvailable({ factory: strained && FACTORY_TYPES.find((f) => f.product === strained)?.id });
       }
       case 'resource': {
         const rs = this.town.resources;
@@ -3137,13 +3139,11 @@ export class GrowthSystem {
       case 'restructure':
         return 'no occupied building has a safe higher floor to add';
       case 'factory': {
-        const starter = this.town.industry?.missingConstructionProduct?.();
-        const strained = this.town.industry && (starter || (this.town.industry.factories().length === 0
-          ? this.town.industry.deficitProduct?.() || this.town.industry.strainedProduct()
-          : null));
+        const strained = this.town.industry?.mostUrgentProducer?.() ||
+          (this.town.industry?.factories?.().length === 0 ? this.town.industry?.deficitProduct?.() : null);
         if (!this.factoryRoom()) return 'no room — works already outnumber the workforce';
         if (!this.factorySiteAvailable()) return 'no acquired industrial campus — ACQUIRE_LAND first';
-        return `storehouse is healthy${strained ? '' : ' — no strained commodity'}`;
+        return `industrial pressure is ${strained || 'healthy'}${strained ? ` — ${this.town.industry.producerPressure?.(strained)?.reason || 'producer needed'}` : ' — no strained or downstream-constrained product'}`;
       }
       case 'resource':
         return 'no strained resource left to upgrade';

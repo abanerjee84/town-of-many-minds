@@ -1,6 +1,6 @@
 ﻿# Construction and metropolis roadmap
 
-Updated 2026-10-03 after the dynamic-market and build-duration audit.
+Updated 2026-10-04 after the catalogue-wide industrial-planning audit.
 
 ## Completed in the developer-independence pass
 
@@ -35,6 +35,15 @@ Updated 2026-10-03 after the dynamic-market and build-duration audit.
 - [x] Added the sixth-call Council synthesis stage: five independent minister responses are aggregated into ID-keyed candidates, a dedicated Council prompt selects the priority batch, and only those selected motions reach Mayor/planner validation. Synthesis failures are visible in Cabinet stats and use the recorded deterministic fallback. `npm run test:cabinet` covers five minister calls plus the two synthesis calls across two sittings.
 - [x] Audited the live local-model path and fixed silent Cabinet starvation caused by context overflow: department calls now receive dense, remit-specific report projections, minister output is bounded to the JSON contract, and the Council synthesis report is bounded separately. The regression now stays at 1,630 approximate context tokens, and a live three-sitting seed-1337 probe completed decisions across Land, Services, Treasury, and Infrastructure without Society monopolising selection.
 - [x] Audited high unemployment decision starvation: the growth planner now promotes legal job capacity work once unemployment reaches the configured 25% priority gate; the Council report exposes labour-force counts, private/public vacancy gaps, and explicit job remedies; Cabinet prompts forbid using `HIRE_WORKERS` as a substitute for resident jobs. Added a configurable 70/30 immediate-priority versus long-term-vision mix guard so a valid synthesis cannot spend the whole slate on schemes, studies, or designs while a measured priority waits.
+
+## Completed in the catalogue-wide industrial-planning pass (2026-10-04)
+
+- [x] Replaced the fixed `lumber → steel → cement` first-match rule with a fill-ratio-ranked construction-material selector; zero cement now outranks merely low lumber or steel.
+- [x] Added `IndustrySystem.productDemand()`, `producerCapacity()`, `producerPressure()`, `producerPressureSnapshot()`, and `mostUrgentProducer()` so all producible factory outputs share one evidence-backed selector.
+- [x] Included direct goods demand and downstream input recipes in factory pressure. Glassworks, refineries, chemical plants, electronics, machinery, polymers, medicine, batteries, and other catalogue factories can now become automatic priorities when their chains are actually constrained.
+- [x] Kept crude oil and other raw inputs import-only, and kept advanced factories out of automatic growth when their output has no measured town or downstream demand.
+- [x] Wired factory ranking, bare `BUILD_FACTORY` derivation, factory land prerequisites, and Council stock evidence to the same catalogue-wide pressure board.
+- [x] Added `npm run test:industry-planning` covering zero-cement priority, downstream electronics→glass demand, direct goods demand, raw-input exclusion, and the 18-factory catalogue.
 
 ## Hardcode extraction queue
 

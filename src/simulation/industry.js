@@ -256,7 +256,14 @@ export class IndustrySystem {
    */
   missingConstructionProduct() {
     const local = new Set(this.factories().map((building) => this.typeOf(building)?.product).filter(Boolean));
-    return MATERIAL_KEYS.find((key) => !local.has(key) && this.stocks[key] / CAPACITY[key] < STRAIN_GATE) || null;
+    // Do not let catalogue order decide which missing works is commissioned.
+    // A zero-cement store must beat a merely low lumber store even though
+    // lumber is the first row in MATERIAL_KEYS.  Use total stock so material
+    // already held by an operating works is not mistaken for a town shortage.
+    return MATERIAL_KEYS
+      .map((key) => ({ key, ratio: this.fillRatio(key), stock: this.totalStock(key) }))
+      .filter((row) => !local.has(row.key) && row.ratio < STRAIN_GATE)
+      .sort((a, b) => a.ratio - b.ratio || a.stock - b.stock || MATERIAL_KEYS.indexOf(a.key) - MATERIAL_KEYS.indexOf(b.key))[0]?.key || null;
   }
   /** 0..1 storehouse fill for one commodity (1 = full). */
   fillRatio(key) {
@@ -295,18 +302,119 @@ export class IndustrySystem {
   }
 
   /**
-   * Demand-driven pick for a commission with no pinned type: the strained
-   * product if any, else a BALANCED pick — the product with the fewest works
-   * producing it (ties → table order). Never a fixed default.
+   * Demand for a product that is consumed by the town or by another works.
+   * Goods have a direct resident/shop demand; every other demand is derived
+   * from the live input recipes and the rated output of downstream factories.
+   * Raw inputs deliberately remain import-only and never become phantom local
+   * factory candidates.
+   */
+  productDemand(key) {
+    if (!key || RAW_INPUTS.has(key)) return 0;
+    let demand = key === 'goods' ? this.goodsDemand() : 0;
+    for (const building of this.factories()) {
+      const downstream = this.typeOf(building);
+      const perUnit = INPUTS[downstream.product]?.[key] || 0;
+      if (perUnit > 0) demand += this.factoryProductionRate(building, { includeBonus: false }) * perUnit;
+    }
+    return Math.max(0, demand);
+  }
+
+  /** Rated local capacity for one product, independent of current staffing. */
+  producerCapacity(key) {
+    return this.factories()
+      .filter((building) => this.typeOf(building)?.product === key)
+      .reduce((sum, building) => sum + this.factoryProductionRate(building, { includeBonus: false }), 0);
+  }
+
+  /**
+   * Explain the industrial pressure for every catalogue output. A row is
+   * actionable when a construction material is strained, or when a demanded
+   * product has insufficient stock/capacity. This keeps advanced plants out
+   * of the automatic queue when nothing consumes their output, while allowing
+   * a glassworks, refinery, chemical plant, or battery works to win when the
+   * dependency chain actually needs it.
+   */
+  producerPressure(key) {
+    if (!key || RAW_INPUTS.has(key) || !CAPACITY[key]) return null;
+    const stock = this.totalStock(key);
+    const capacity = CAPACITY[key];
+    const ratio = stock / Math.max(1, capacity);
+    const demand = this.productDemand(key);
+    const producer = this.producerCapacity(key);
+    const stockStress = clamp01((STRAIN_GATE - ratio) / STRAIN_GATE);
+    const demandGap = demand > 0 ? clamp01((demand - producer) / Math.max(1, demand)) : 0;
+    const coverDays = demand > 0 ? stock / demand : Infinity;
+    const coverStress = demand > 0 ? clamp01((7 - coverDays) / 7) : 0;
+    const construction = MATERIAL_KEYS.includes(key);
+    // A missing advanced producer is not, by itself, a reason to build a
+    // plant while the store still carries weeks of stock. For non-material
+    // outputs, require actual stock/cover pressure or an existing producer
+    // whose rated capacity is demonstrably below live demand. Construction
+    // materials retain their stronger emergency gate because every build
+    // consumes them directly.
+    const actionable = construction
+      ? stockStress > 0 || demandGap > 0
+      : demand > 0 && (stockStress > 0 || coverStress > 0 || (producer > 0 && demandGap > 0));
+    if (!actionable) return null;
+    const missingProducer = producer <= 0;
+    const priority = Math.min(3,
+      stockStress * 1.7 +
+      demandGap * 1.1 +
+      coverStress * 0.8 +
+      (missingProducer ? 0.2 : 0) +
+      (stock <= 0 ? 1 : 0)
+    );
+    return {
+      product: key,
+      stock: Math.round(stock),
+      capacity,
+      ratio: Math.round(ratio * 1000) / 1000,
+      demand: Math.round(demand * 100) / 100,
+      producerCapacity: Math.round(producer * 100) / 100,
+      coverDays: Number.isFinite(coverDays) ? Math.round(coverDays * 10) / 10 : null,
+      stockStress: Math.round(stockStress * 1000) / 1000,
+      demandGap: Math.round(demandGap * 1000) / 1000,
+      missingProducer,
+      priority: Math.round(priority * 1000) / 1000,
+      reason: stock <= 0
+        ? `${key} stock is empty`
+        : stockStress > 0
+          ? `${key} stock is ${Math.round(ratio * 100)}% of capacity`
+          : demandGap > 0
+            ? `${key} demand exceeds rated local output`
+            : `${key} has ${Math.round(coverDays)} days of cover`
+    };
+  }
+
+  /**
+   * Ranked industrial candidates across the complete factory catalogue.
+   * `mostUrgentProducer()` returns the product for planner compatibility;
+   * this snapshot is used by reports and regression probes.
+   */
+  producerPressureSnapshot(limit = FACTORY_TYPES.length) {
+    return FACTORY_TYPES
+      .map((factory) => this.producerPressure(factory.product))
+      .filter(Boolean)
+      .sort((a, b) => b.priority - a.priority || a.ratio - b.ratio || a.product.localeCompare(b.product))
+      .slice(0, Math.max(1, limit));
+  }
+
+  mostUrgentProducer() {
+    return this.producerPressureSnapshot(1)[0]?.product || null;
+  }
+
+  /**
+   * Demand-driven pick for a commission with no pinned type: the most urgent
+   * output across the complete catalogue, else a BALANCED pick — the product
+   * with the fewest works producing it (ties → table order). Never a fixed
+   * default.
    */
   commissionProduct() {
-    // Keep the construction loop alive before balancing consumer goods: a
-    // town that has exhausted steel or cement cannot build the next factory
-    // unless that material's own works is commissioned first.
-    const construction = this.missingConstructionProduct() || this.deficitProduct();
-    if (construction) return construction;
-    const strained = this.strainedProduct();
-    if (strained) return strained;
+    // Use the same complete-catalogue pressure board as growth and Council
+    // evidence. The old path returned the first missing construction row and
+    // then stopped considering non-material factories after the first works.
+    const urgent = this.mostUrgentProducer();
+    if (urgent) return urgent;
     const counts = {};
     for (const key of PRODUCIBLE_COMMODITIES) counts[key] = 0;
     for (const b of this.factories()) {
