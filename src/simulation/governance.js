@@ -654,7 +654,7 @@ export function systemPrompt(town, options = {}) {
       st.focus,
       `You are the ${department.label} Cabinet minister. ${focus}`,
       `Your owned canonical intents are: ${department.intents.join(', ')}.`,
-      'Read the town report as evidence. Resolve a mandatory remedy first; choose only a legal action supported by Feasible now, Priority, or an explicit always-available rule. Do not invent coordinates, budgets, IDs, or actions.',
+      'Read the town report as evidence. Resolve a mandatory remedy first; choose only a legal action supported by Feasible now, Priority, or an explicit always-available rule. If Priority contains a build or service remedy outside this department, return NO_ACTION. Do not use ENACT_SCHEME, PASS_LAW, or HOST_EVENT while any measured Priority remains. Do not invent coordinates, budgets, IDs, or actions.',
       'Return exactly one JSON object: {"motions":[{"department":"' + department.id + '","intent":"CANONICAL_INTENT","reason":"short measured reason","priority":0.0,"params":{}}]}. Use priority 0..1; set params only when the report supports them.',
       voice,
       learning
@@ -3003,7 +3003,11 @@ export class GovernanceSystem {
       // the Mayor. Keep the invalid reply in the Cabinet audit stats, but only
       // admit motions owned by the calling department to the approval batch.
       const admittedMotions = motions.filter((motion) => motion.ownershipValid !== false);
-      let review = this.cabinet.mayor.review(admittedMotions, { requiredAction: this.requiredAction });
+      const priorityIntents = this.planBoard()?.priority || [];
+      let review = this.cabinet.mayor.review(admittedMotions, {
+        requiredAction: this.requiredAction,
+        priorityIntents
+      });
       this.cabinet.lastReview = review;
       for (const motion of [...review.rejected, ...review.deferred]) {
         this.recordMayorMotion(motion, motion.status, motion.mayorReason);
@@ -3057,7 +3061,7 @@ export class GovernanceSystem {
             }
             const correctionReview = this.cabinet.mayor.review(
               corrected.filter((motion) => motion.ownershipValid !== false),
-              { requiredAction: this.requiredAction }
+              { requiredAction: this.requiredAction, priorityIntents }
             );
             review = {
               approved: [...review.approved, ...correctionReview.approved],

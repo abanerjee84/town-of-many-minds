@@ -11,35 +11,35 @@
       "id": "treasury",
       "label": "Treasury & Economy",
       "remit": "Keep the town solvent, productive, employed, and supplied.",
-      "systemPrompt": "Protect solvency, production, jobs, and stock flow; prefer a measured financial or supply remedy before optional construction.",
+      "systemPrompt": "Protect solvency, production, jobs, and stock flow; choose an owned Priority remedy before optional studies or construction.",
       "intents": ["TRADE_BUY", "TRADE_SELL", "BUILD_FACTORY", "OPEN_SHOP", "BUILD_OFFICE", "BOND_ISSUE", "SET_ASIDE_RESERVE", "SLASH_SPENDING", "RAISE_TAX", "CUT_TAX", "HIRE_WORKERS", "SUBSIDY", "FUND_INNOVATION", "STUDY_ECONOMY"]
     },
     {
       "id": "land",
       "label": "Land & Housing",
       "remit": "Place homes and districts safely, acquire frontier land only when the serviced town is exhausted, and guide density.",
-      "systemPrompt": "Plan safe housing and land use; avoid resource, campus, and farm conflicts, and acquire frontier land only when serviced plots are exhausted.",
+      "systemPrompt": "Plan safe housing and land use; choose owned housing, land, or progression priorities first, avoid resource/campus/farm conflicts, and acquire frontier land only when serviced plots are exhausted.",
       "intents": ["ACQUIRE_LAND", "DEVELOP_HOUSING", "BUILD_DISTRICT", "REZONE", "UPZONE", "CLEAR_LOT", "ANNEX_EDGE", "RESTRUCTURE_BUILDING", "UPGRADE_BUILDING", "WING", "STUDY_DEMOGRAPHICS"]
     },
     {
       "id": "infrastructure",
       "label": "Infrastructure & Mobility",
       "remit": "Relieve measured congestion, connect destinations, and provide reliable transport.",
-      "systemPrompt": "Use measured congestion, connectivity, and demand; extend or upgrade only where a legal network change will produce useful relief.",
+      "systemPrompt": "Use measured congestion, connectivity, and demand; choose an owned road or transit priority first, and extend or upgrade only where a legal network change will produce useful relief.",
       "intents": ["EXTEND_STREET", "UPGRADE_ROAD", "BUILD_BRIDGE", "BUILD_TRANSIT", "ADD_PARKING", "EXTEND_FOOTWAY", "STUDY_ROAD", "STUDY_TRAFFIC"]
     },
     {
       "id": "services",
       "label": "Public Services & Utilities",
       "remit": "Maintain water, power, sewage, waste, emergency coverage, and civic capacity.",
-      "systemPrompt": "Keep utilities, waste, emergency coverage, and civic capacity reliable; fix measured capacity and station shortfalls before optional projects.",
+      "systemPrompt": "Keep utilities, waste, emergency coverage, and civic capacity reliable; choose an owned capacity or station priority before optional projects.",
       "intents": ["UPGRADE_RESOURCE", "EXPAND_WATER", "EXPAND_POWER", "EXPAND_SEWAGE", "BUILD_CIVIC", "BUILD_LANDMARK", "DISPATCH_UNITS", "DECLARE_EMERGENCY", "STUDY_INCIDENTS"]
     },
     {
       "id": "society",
       "label": "Society, Education & Culture",
       "remit": "Respond to mood, approval, education, safety, belonging, recreation, and cultural demand.",
-      "systemPrompt": "Read mood, approval, safety, education, culture, and recreation evidence; make civic choices proportionate to measured demand and capacity.",
+      "systemPrompt": "Read mood, approval, safety, education, culture, and recreation evidence; choose an owned civic build priority first, and use schemes, laws, or events only when no measured build priority remains.",
       "intents": ["BUILD_CIVIC", "BUILD_LANDMARK", "IMAGINE_ARCHETYPE", "PARK_LAND", "PAVE_PLAZA", "PLANT_TREES", "INSTALL_LAMP", "HOST_EVENT", "ENACT_SCHEME", "END_SCHEME", "PASS_LAW", "REPEAL_LAW", "TIERUP", "RENOVATE", "NO_ACTION"]
     }
   ]

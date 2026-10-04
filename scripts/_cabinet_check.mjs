@@ -27,7 +27,7 @@ try {
       land: { department: 'treasury', intent: 'STUDY_ECONOMY', reason: 'wrong department', priority: 0.8 },
       infrastructure: { department: 'treasury', intent: 'STUDY_ECONOMY', reason: 'wrong department', priority: 0.7 },
       services: { department: 'services', intent: 'STUDY_INCIDENTS', reason: 'valid', priority: 0.6 },
-      society: { department: 'society', intent: 'NO_ACTION', reason: 'valid', priority: 0.1 }
+      society: { department: 'society', intent: 'ENACT_SCHEME', reason: 'optional policy', priority: 0.1 }
     };
     const provider = {
       id: 'cabinet-check',
@@ -90,10 +90,10 @@ try {
   assert.equal(result.firstApproved, 5, JSON.stringify(result));
   assert.equal(result.firstExecuted, 5, JSON.stringify(result));
   assert.equal(result.motions, 5, JSON.stringify(result));
-  assert.equal(result.approved, 2, JSON.stringify(result));
+  assert.equal(result.approved, 1, JSON.stringify(result));
   assert.equal(result.rejected, 0, JSON.stringify(result));
-  assert.equal(result.deferred, 0, JSON.stringify(result));
-  assert.equal(result.executed, 2, JSON.stringify(result));
+  assert.equal(result.deferred, 1, JSON.stringify(result));
+  assert.equal(result.executed, 1, JSON.stringify(result));
   assert.equal(result.boundaryViolations, 3, JSON.stringify(result));
   assert.equal(result.wrongDepartment.valid, false, JSON.stringify(result));
   assert.equal(result.sittingIds.length, 2, JSON.stringify(result));

@@ -1,3 +1,5 @@
+const OPTIONAL_POLICY_INTENTS = new Set(['ENACT_SCHEME', 'PASS_LAW', 'HOST_EVENT']);
+
 /**
  * The Mayor is the final public approval gate for Cabinet motions. This module
  * deliberately does not invent a second action vocabulary or bypass the
@@ -19,6 +21,7 @@ export class MayorSystem {
 
   review(motions = [], context = {}) {
     const required = context.requiredAction?.intent || null;
+    const priorityIntents = Array.isArray(context.priorityIntents) ? context.priorityIntents : [];
     const approved = [];
     const rejected = [];
     const deferred = [];
@@ -51,6 +54,14 @@ export class MayorSystem {
       }
       if (required && motion.intent !== required) {
         deferred.push({ ...motion, status: 'mayor_deferred', mayorReason: `mandatory remedy ${required} takes priority` });
+        continue;
+      }
+      if (!required && priorityIntents.length && OPTIONAL_POLICY_INTENTS.has(motion.intent) && !motion.emergency) {
+        deferred.push({
+          ...motion,
+          status: 'mayor_deferred',
+          mayorReason: `measured build priority takes precedence over optional ${motion.intent}`
+        });
         continue;
       }
       if (approved.length >= this.maxApprovals) {
