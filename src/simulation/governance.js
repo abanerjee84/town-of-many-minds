@@ -4,7 +4,7 @@ import { MAX_FLOORS, CELL_KIND } from '../core/config.js';
 import { planFor, LANDMARKS, UTILITY_RESERVE, MAX_ACTIVE, BUILD_FLOOR, BUILD_HOURS,
   MAX_BRIDGE_GAP,
   civicLoads, civicExpansionNeed, HOUSE_PRESSURE_GATE, HOUSE_SPARE_BEDS, housingNeedsBuild, FILLER_PRESSURE_GATE,
-  UNEMPLOYMENT_GATE, UNEMPLOYMENT_PCT, UNEMPLOYMENT_PRIORITY_GATE, unemploymentRate, CIVIC_PER_POP, PARKS_PER_POP, roadCongestionGate, ROAD_EMERGENCY_GATE, CIVIC_LOAD_GATE } from './growth.js';
+  UNEMPLOYMENT_GATE, UNEMPLOYMENT_PCT, UNEMPLOYMENT_PRIORITY_GATE, unemploymentRate, CIVIC_PER_POP, PARKS_PER_POP, roadCongestionGate, ROAD_EMERGENCY_GATE, CIVIC_LOAD_GATE, activePublicProjects } from './growth.js';
 import { FACTORY_TYPES, COMMODITIES, MATERIAL_KEYS } from './industry.js';
 import { SHOP_TIERS } from './economy.js';
 import { CIVIC_CATALOGUE } from '../kits/civic/civicKit.js';
@@ -1799,7 +1799,11 @@ export class GovernanceSystem {
       per ? `Council manner: ${per.lines.join('; ')}` : '',
       this.learning ? `Council learning: ${this.learning.promptLine()}` : '',
       loadLine,
-      gr ? `Construction: ${gr.active} active${gr.next ? `, next finishes ~${gr.next}h` : ''} · ${gr.total} built${gr.active >= MAX_ACTIVE ? ' · crews busy — new work paused' : ''}` : '',      board ? `Feasible now (builds): ${board.feasible.length ? board.feasible.join(', ') : 'none'}` : '',
+      gr?.developerMarket
+        ? `Private market: ${gr.developerMarket.activeProjects}/${gr.developerMarket.maxActive} active · cash $${gr.developerMarket.cash.toLocaleString('en-US')} · review in ${gr.developerMarket.nextReviewHours}h${gr.developerMarket.blocked ? ` · blocked ${gr.developerMarket.blocked}` : ''}`
+        : '',
+      gr ? `Construction: ${gr.publicActive ?? gr.active} public active${gr.next ? `, next finishes ~${gr.next}h` : ''} · ${gr.total} built${(gr.publicActive ?? gr.active) >= MAX_ACTIVE ? ' · public crews busy — new work paused' : ''}` : '',
+      board ? `Feasible now (builds): ${board.feasible.length ? board.feasible.join(', ') : 'none'}` : '',
       board && board.blocked.length ? `Blocked: ${board.blocked.join(' · ')}` : '',
       board ? `Priority: ${board.priority.length ? board.priority.join(' → ') : 'none outstanding'}` : '',
       intentMapLine,
@@ -2130,11 +2134,11 @@ export class GovernanceSystem {
     // sources drive scripted scenarios and bypass this).
     if (
       (source === 'llm' || source === 'rules' || source === 'test') &&
-      t.growth.projects.length >= MAX_ACTIVE &&
+      activePublicProjects(t.growth) >= MAX_ACTIVE &&
       plan.type !== 'land'
     ) {
       decision.status = 'noop';
-      decision.detail = `building paused — ${t.growth.projects.length} projects already underway`;
+      decision.detail = `public building paused — ${activePublicProjects(t.growth)} public projects already underway`;
       this.record(decision);
       return decision;
     }

@@ -179,6 +179,10 @@ export class Hud {
 
     events.on('log', (e) => this.log(e.text, e.kind));
     events.on('council', (e) => this.council(e));
+    // Private commissioning is a separate simulation channel. It is rendered
+    // in the unified history for observability, but never enters Governance's
+    // Council ledger or sitting count.
+    events.on('developer-action', (e) => this.developerAction(e));
     events.on('resource-update', (e) => this.resourceUpdate(e));
     // Trade buttons: one delegated listener, results announced in the log.
     if (this.el.trade) {
@@ -314,6 +318,11 @@ export class Hud {
     this.feedFull.unshift(row);
     if (this.feedFull.length > 30) this.feedFull.pop();
     this.renderCouncil();
+  }
+
+  developerAction(decision) {
+    if (!decision) return;
+    this.council({ ...decision, source: 'developer' });
   }
 
   /** Surface a resource upgrade immediately, before the next HUD tick. */

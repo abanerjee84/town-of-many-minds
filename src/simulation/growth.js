@@ -399,6 +399,20 @@ export function unemploymentRate(town) {
 // it will put up a shop, and the balance it refuses to commit.
 const ECON_DEVELOPER_PER_SEAT = ECON.business.developerDemandPerSeat;
 const ECON_DEVELOPER_RESERVE = ECON.business.developerReserve;
+const DEVELOPER_REVIEW_HOURS = ECON.business.developerReviewHours || { min: 12, max: 24 };
+export const DEVELOPER_MAX_ACTIVE = Math.max(1, Math.floor(Number(ECON.business.developerMaxActive) || 1));
+
+/** Active construction lanes are explicit: private commissioning is not a
+ * Council motion, so its project slot must not consume a public crew slot. */
+export function activeDeveloperProjects(growth) {
+  return (growth?.projects || []).filter((project) => project?.plan?.commissionedBy === 'developer').length;
+}
+
+export function activePublicProjects(growth) {
+  return (growth?.projects || []).filter((project) => project?.plan?.commissionedBy !== 'developer').length;
+}
+
+const GAME_HOUR_SECONDS = 60 * SIM.secondsPerGameMinute;
 /**
  * Phase 20 (C3b) — office demand. One office per OFFICE_PER_POP citizens, and
  * none at all below OFFICE_MIN_POP: a hamlet's accountant is its shopkeeper,
@@ -1630,7 +1644,12 @@ export class GrowthSystem {
     // the Council-governed path.
     this.developer = true;
     this.developerCooldown = 0;
+    this.developerReviewRemaining = 0;
+    this.developerReviews = 0;
     this.developerBuilt = 0;
+    this.developerLastAction = null;
+    this.developerLastBlock = '';
+    this.developerHistory = [];
     this.history = [];
     this.built = { house: 0, shop: 0, civic: 0, park: 0, archetype: 0, road: 0, utility: 0, factory: 0, mall: 0, multiplex: 0 };
     this.metrics = { tierUps: 0, floorUpgrades: 0, wings: 0 };
@@ -1663,6 +1682,13 @@ export class GrowthSystem {
     this.built = { house: 0, shop: 0, civic: 0, park: 0, archetype: 0, road: 0, utility: 0, factory: 0, mall: 0, multiplex: 0, district: 0 };
     this.metrics = { tierUps: 0, floorUpgrades: 0, wings: 0 };
     this.cooldown = 6;
+    this.developerCooldown = 0;
+    this.developerReviewRemaining = 0;
+    this.developerReviews = 0;
+    this.developerBuilt = 0;
+    this.developerLastAction = null;
+    this.developerLastBlock = '';
+    this.developerHistory = [];
     this.projects = [];
     this.projectStates = new Map();
     this.claims = new Set();
@@ -2114,7 +2140,7 @@ export class GrowthSystem {
   archetypeOpportunity(input = null) {
     const s = input || this.inputs();
     const eco = s.economy;
-    if (!eco || this.projects.length >= MAX_ACTIVE || eco.treasury < BUILD_FLOOR) return null;
+    if (!eco || this.activePublicProjects() >= MAX_ACTIVE || eco.treasury < BUILD_FLOOR) return null;
     if (this.projects.some((project) => project.plan?.type === 'archetype')) return null;
 
     const clamp01 = (v) => Math.max(0, Math.min(1, Number(v) || 0));
@@ -2274,39 +2300,76 @@ export class GrowthSystem {
    */
   developerPlan() {
     const eco = this.town.economy;
-    if (!eco) return null;
+    if (!eco) { this.developerLastBlock = 'economy unavailable'; return null; }
     const cash = eco.accounts?.developer?.cash ?? 0;
-    if (cash < ECON_DEVELOPER_RESERVE) return null;
+    if (cash < ECON_DEVELOPER_RESERVE) {
+      this.developerLastBlock = `developer reserve protected ($${Math.round(cash).toLocaleString('en-US')} available)`;
+      return null;
+    }
     const s = this.inputs();
     const retail = this.town.buildings.filter((b) => b.purpose === 'commercial' && b.kind !== 'office');
     const seats = retail.reduce((n, b) => n + (b.capacity || 0), 0);
     const demand = s.pop - seats;
     // Any shortfall is demand: more people than customer seats. The seat ratio
     // only sizes the build (a bigger lot for a bigger gap), it does not gate.
-    if (demand < 1) return null;
-    // Profitable, staffed trade is the developer's brief: it will not open a
-    // shop in a town that cannot staff the one it already has.
-    if (eco.unemployment > 0.25) return null;
+    if (demand < 1) { this.developerLastBlock = 'retail demand is covered'; return null; }
     const plan = planFor(this.town, 'shop', { need: Math.min(1, demand / ECON_DEVELOPER_PER_SEAT) });
-    if (!plan) return null;
+    if (!plan) { this.developerLastBlock = 'no legal private shop site'; return null; }
+    // Town-wide unemployment is not a private-developer decision rule. A
+    // viable shop needs a local workforce and enough demand to support it;
+    // residents elsewhere being jobless must not suppress all private supply.
+    const jobless = typeof eco.employed === 'function' ? (eco.employed().jobless?.length || 0) : 0;
+    const footprint = plan.footprint || {};
+    const footprintTiles = Math.max(1, Number(footprint.cols || footprint.w || 1) * Number(footprint.rows || footprint.d || 1));
+    const expectedStaff = Math.max(1, Math.ceil(footprintTiles * 0.5));
+    if (jobless < expectedStaff && demand < expectedStaff * 2) {
+      this.developerLastBlock = `local staffing is short (${jobless}/${expectedStaff})`;
+      return null;
+    }
     plan.owner = 'private';
     plan.commissionedBy = 'developer';
     return plan;
   }
 
   /** The developer's own pass — private work, driven by private capital. */
+  developerReviewInterval() {
+    const min = Math.max(1, Number(DEVELOPER_REVIEW_HOURS.min) || 12);
+    const max = Math.max(min, Number(DEVELOPER_REVIEW_HOURS.max) || min);
+    return (min + this.rng.float(0, max - min)) * GAME_HOUR_SECONDS;
+  }
+
+  activeDeveloperProjects() { return activeDeveloperProjects(this); }
+  activePublicProjects() { return activePublicProjects(this); }
+
   developerPass() {
     if (!this.developer) return null;
-    if (this.projects.length >= MAX_ACTIVE) return null;
-    if (this.developerCooldown > 0) return null;
+    if (this.developerReviewRemaining > 0) return null;
+    this.developerReviews = (this.developerReviews || 0) + 1;
+    this.developerReviewRemaining = this.developerReviewInterval();
+    if (this.activeDeveloperProjects() >= DEVELOPER_MAX_ACTIVE) {
+      this.developerLastBlock = `private contractors busy (${this.activeDeveloperProjects()}/${DEVELOPER_MAX_ACTIVE})`;
+      return null;
+    }
     const plan = this.developerPlan();
     if (!plan) return null;
     const result = this.apply(plan);
-    if (!result) return null;
-    this.developerCooldown = 2;
+    if (!result) {
+      this.developerLastBlock = this.lastBlock || 'private project validation failed';
+      return null;
+    }
+    this.developerCooldown = 0;
     this.developerBuilt = (this.developerBuilt || 0) + 1;
+    this.developerLastBlock = '';
+    this.developerLastAction = {
+      action: `BUILD_${String(plan.type || 'project').toUpperCase()}`,
+      label: plan.label,
+      cost: plan.cost || 0,
+      projectId: plan.projectId || null
+    };
+    this.developerHistory.push({ ...this.developerLastAction });
+    if (this.developerHistory.length > 24) this.developerHistory.shift();
     events.emit('log', { text: `A private developer commissions ${plan.label.toLowerCase()}.` });
-    events.emit('council', {
+    events.emit('developer-action', {
       source: 'developer',
       actor: 'Developer',
       action: `BUILD_${String(plan.type || 'project').toUpperCase()}`,
@@ -2327,8 +2390,8 @@ export class GrowthSystem {
     this.lastDistrictDt = dt;
     this.walkDistrictQueue();
     if (this.developer) {
-      this.developerCooldown = Math.max(0, (this.developerCooldown || 0) - dt);
-      this.developerPass();
+      this.developerReviewRemaining = Math.max(0, (this.developerReviewRemaining || 0) - dt);
+      if (this.developerReviewRemaining <= 0) this.developerPass();
     }
     if (!this.auto) return;
     this.cooldown -= dt;
@@ -2352,7 +2415,7 @@ export class GrowthSystem {
   walkDistrictQueue() {
     const queue = this.districtQueue;
     if (!queue || !queue.steps.length) return null;
-    if (this.projects.length >= MAX_ACTIVE) return null;
+    if (this.activePublicProjects() >= MAX_ACTIVE) return null;
     // `districtQueue` is walked once per RENDER FRAME (this method takes no dt),
     // and the queue is advanced from `update`, which the loop calls with `simDt`.
     // Patience is therefore accumulated in GAME time, not frames. It used to be a
@@ -2748,7 +2811,7 @@ export class GrowthSystem {
     // Filler work: only for a comfortable town with spare housing AND free
     // crews — a town mid-build or with tight beds gets neither a floor nor a
     // new design, no matter how fat the treasury is.
-    const crewsFree = this.projects.length < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR;
+    const crewsFree = this.activePublicProjects() < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR;
     const filler = s.pressure > FILLER_PRESSURE_GATE && crewsFree;
     // Frontier acquisition and in-place renewal are discretionary projects:
     // expose them in Feasible now so a Council can choose them deliberately,
@@ -2888,7 +2951,7 @@ export class GrowthSystem {
         return (
           s.pressure > HOUSE_PRESSURE_GATE &&
           !this.districtQueue &&
-          this.projects.length < MAX_ACTIVE &&
+          this.activePublicProjects() < MAX_ACTIVE &&
           eco.treasury >= DISTRICT_FLOOR
         );
       case 'civic': {
@@ -2921,7 +2984,7 @@ export class GrowthSystem {
       case 'bond':
         return !!this.loanNeed();
       case 'restructure':
-        return this.projects.length < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR && !!this.town.buildings.some((b) => b.house && b.facility !== 'townhall' && (b.kind === 'civic' ? civicHasVerticalHeadroom(b) : b.floors < MAX_FLOORS));
+        return this.activePublicProjects() < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR && !!this.town.buildings.some((b) => b.house && b.facility !== 'townhall' && (b.kind === 'civic' ? civicHasVerticalHeadroom(b) : b.floors < MAX_FLOORS));
       case 'road':
         return !!(s.mobility && s.mobility.congestion > roadCongestionGate() && this.selectRoadExtension());
       case 'bridge':
@@ -2969,26 +3032,26 @@ export class GrowthSystem {
       case 'upgrade': {
         // Either filler timing (comfortable town, spare crews) or a facility
         // running over its designed load — the need gate, not the housing one.
-        const crews = this.projects.length < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR;
+        const crews = this.activePublicProjects() < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR;
         if (!crews) return false;
         return !!this.civicEvolutionTarget() || !!this.progressionTarget() || !!this.civicUpgradeTarget() || s.pressure > FILLER_PRESSURE_GATE;
       }
       case 'renovate': {
         // Quality work: wanted whenever a spare crew and savings exist and
         // some building still sits below the top budget rung.
-        const crews = this.projects.length < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR;
+        const crews = this.activePublicProjects() < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR;
         return crews && !!this.renovateTarget();
       }
       case 'tierup': {
         // A shop can still climb the commerce ladder (capacity rung).
-        const crews = this.projects.length < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR;
+        const crews = this.activePublicProjects() < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR;
         return crews && !!this.tierupTarget();
       }
       case 'wing': {
         // Footprint growth on a building that already exists: a spare crew,
         // savings above the floor, and either a plain wing site or a built
         // landmark with room to annex (EXPAND_LANDMARK shares this gate).
-        const crews = this.projects.length < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR;
+        const crews = this.activePublicProjects() < MAX_ACTIVE && eco.treasury >= BUILD_FLOOR;
         return crews && (!!this.wingTarget() || !!this.landmarkWingTarget());
       }
       case 'archetype':
@@ -3010,7 +3073,7 @@ export class GrowthSystem {
     const s = this.inputs();
     const eco = s.economy;
     const pct = (v) => `${Math.round(v * 100)}%`;
-    const crewsFree = this.projects.length < MAX_ACTIVE && eco && eco.treasury >= BUILD_FLOOR;
+    const crewsFree = this.activePublicProjects() < MAX_ACTIVE && eco && eco.treasury >= BUILD_FLOOR;
     switch (type) {
       case 'power':
       case 'water':
@@ -3032,7 +3095,7 @@ export class GrowthSystem {
       case 'district':
         if (!(s.pressure > HOUSE_PRESSURE_GATE)) return `housing pressure ${s.pressure.toFixed(2)} is below the ${HOUSE_PRESSURE_GATE} gate`;
         if (this.districtQueue) return 'a district is already being built';
-        if (!(this.projects.length < MAX_ACTIVE)) return 'all crews are busy';
+        if (!(this.activePublicProjects() < MAX_ACTIVE)) return 'all public crews are busy';
         return `treasury $${Math.round(eco.treasury).toLocaleString('en-US')} is below the $${DISTRICT_FLOOR.toLocaleString('en-US')} floor`;
       case 'civic':
         {
@@ -4726,7 +4789,10 @@ export class GrowthSystem {
     // Land is an instantaneous purchase and does not consume a construction
     // crew. Keeping it behind MAX_ACTIVE made a valid frontier prerequisite
     // disappear whenever two unrelated buildings were under construction.
-    if (this.projects.length >= MAX_ACTIVE && plan?.type !== 'land') return { ok: false, reason: 'crew cap reached' };
+    const privatePlan = plan?.commissionedBy === 'developer';
+    const active = privatePlan ? this.activeDeveloperProjects() : this.activePublicProjects();
+    const cap = privatePlan ? DEVELOPER_MAX_ACTIVE : MAX_ACTIVE;
+    if (active >= cap && plan?.type !== 'land') return { ok: false, reason: `${privatePlan ? 'private' : 'public'} crew cap reached` };
     const rngState = this.rng.getState();
     const previousBlock = this.lastBlock;
     try {
@@ -5264,9 +5330,21 @@ export class GrowthSystem {
       enabled: this.enabled,
       developer: this.developer,
       developerBuilt: this.developerBuilt || 0,
+      developerMarket: {
+        independent: true,
+        reviews: this.developerReviews || 0,
+        nextReviewHours: Math.max(0, Math.round((this.developerReviewRemaining || 0) / GAME_HOUR_SECONDS * 10) / 10),
+        activeProjects: this.activeDeveloperProjects(),
+        maxActive: DEVELOPER_MAX_ACTIVE,
+        cash: Math.round(this.town.economy?.accounts?.developer?.cash || 0),
+        lastAction: this.developerLastAction ? { ...this.developerLastAction } : null,
+        history: this.developerHistory.slice(-8).map((entry) => ({ ...entry })),
+        blocked: this.developerLastBlock || null
+      },
       built: { ...this.built },
       total: Object.values(this.built).reduce((a, b) => a + b, 0),
       active,
+      publicActive: this.activePublicProjects(),
       next,
       pressure: Math.round(s.pressure * 100) / 100,
       capacity: s.capacity,

@@ -11,7 +11,9 @@
     "depreciationRate": 0.04,
     "ownerCredit": 1.5,
     "developerDemandPerSeat": 90,
-    "developerReserve": 150000
+    "developerReserve": 150000,
+    "developerReviewHours": { "min": 12, "max": 24 },
+    "developerMaxActive": 1
   },
   "construction": {
     "labour": 0.35,

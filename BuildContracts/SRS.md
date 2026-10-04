@@ -224,6 +224,14 @@ The council system prompt is an epistemic contract for provider comparison: it d
 
 48h. Cabinet sittings shall use the versioned `priorityMix` configuration. The default target is 70% immediate Priority/mandatory work and 30% long-term vision when both classes are available. Each minister prompt and the sixth-call synthesis prompt shall state this target. The synthesis chamber may select only admitted minister candidates; after parsing, a deterministic mix guard may promote an admitted immediate candidate or replace an excess long-term candidate, but it may not invent an intent, parameter, coordinate, or build. Mix adjustments shall be recorded in `GovernanceSystem.stats().cabinet.lastCouncil.mixChanges`.
 
+48i. Private developer commissioning shall be an independent market actor. Its review cadence, private capital, demand tests, staffing tests, project ledger, and event stream shall not depend on Council sittings, Cabinet calls, public auto-growth, Council learning, Mayor approval, or public decision-term state. Developer actions shall remain observable in a unified history only through an explicit actor/source label and shall never increment Council sitting counts or enter the Council learning ledger.
+
+48j. Public and private construction shall use separate active-project lanes. Private developer projects shall have a configured private cap and shall not consume a public Council crew slot; public project admission shall count public projects only. Both lanes may still compete through shared acquired land, road access, materials, labour, treasury-market prices, and physical congestion, with those constraints reported explicitly rather than hidden behind a generic crew-cap refusal.
+
+48k. Private developer viability shall use local evidence: developer cash above reserve, measured unmet demand, legal private site, expected local staffing, and the quoted project budget. A town-wide unemployment percentage shall not veto every private build. If the local workforce or demand is insufficient, the developer review shall record a named block reason and schedule a later market review.
+
+48l. The developer market telemetry shall expose review count, next review time, cash, active private projects, private cap, last action, and last block reason through growth and Council evidence. A provider may use this as read-only context, but may not command, approve, cancel, or learn from private developer actions.
+
 The next social-system acceptance pass shall add a player-facing stop-placement tool, staffed court throughput, neighbourhood-specific budgets, and seeded provider comparisons for approval, fiscal runway, crime resolution, and land-use efficiency. These are follow-up experiments rather than hidden Council objectives.
 
 ## Kit modularity and extension architecture

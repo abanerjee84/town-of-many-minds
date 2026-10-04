@@ -2,6 +2,14 @@
 
 Updated 2026-10-03 after the dynamic-market and build-duration audit.
 
+## Completed in the developer-independence pass
+
+- [x] Added the private-developer independence contract to `BuildContracts/SRS.md`: private market decisions are outside Council sittings, Cabinet approval, public auto-growth, and Council learning while remaining observable as a separate actor.
+- [x] Added a configurable 12–24 game-hour private market review cadence and developer telemetry for reviews, next review, cash, active private projects, last action, and named block reason.
+- [x] Split developer notifications onto a `developer-action` event channel. The HUD still shows them in the unified history, but they cannot increment Council sitting counts or enter the Council decision ledger.
+- [x] Added separate public/private active-project accounting. A private developer project no longer consumes a public Council crew slot; both lanes continue to share land, access, materials, labour, and market constraints.
+- [x] Replaced the town-wide 25% unemployment veto for private shops with local demand and local staffing evidence, preserving cash reserve and legal-site checks.
+
 ## Completed in this pass
 
 - [x] Added `src/data/priceChart.json` and one resolver module. Construction families, land, vehicles, commodities, and commerce rungs now have inspectable base values and bounded live factors instead of scattered fixed quotes.
