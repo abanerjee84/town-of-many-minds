@@ -59,6 +59,14 @@ try {
     const wrongDepartment = t.governance.cabinet.parse(JSON.stringify({ motions: [
       { department: 'treasury', intent: 'EXTEND_STREET', reason: 'wrong remit' }
     ] }))[0];
+    const mixProbe = t.governance.cabinet.enforcePriorityMix(
+      [{ id: 'vision', intent: 'ENACT_SCHEME', priority: 1, index: 0 }],
+      [
+        { id: 'vision', intent: 'ENACT_SCHEME', priority: 1, index: 0 },
+        { id: 'urgent', intent: 'OPEN_SHOP', priority: 0.2, index: 1 }
+      ],
+      ['OPEN_SHOP']
+    );
     return {
       firstReturned: { intent: firstReturned.intent, status: firstReturned.status },
       firstMotions: firstCabinet.lastMotions.length,
@@ -81,6 +89,9 @@ try {
       ownSystemPrompt: messageMeta.every((row) => row.messages.filter((message) => message.role === 'system').length === 1),
       distinctSystemPrompts: new Set(messageMeta.filter((row) => row.sittingId === 'cabinet-1' && row.department !== 'council').map((row) => row.messages[0]?.content)).size,
       wrongDepartment: { valid: wrongDepartment.ownershipValid, reason: wrongDepartment.ownershipReason },
+      priorityMix: cabinet.priorityMix,
+      mixProbe,
+      reportHasEmployment: /Employment:/.test(t.governance.report()),
       sittingIds: [...new Set(t.governance.decisions.filter((row) => row.motionId).map((row) => row.sittingId))],
       execution: cabinet.lastExecution.map((row) => ({ intent: row.intent, status: row.status, mayor: row.mayor }))
     };
@@ -88,6 +99,11 @@ try {
   assert.equal(errors.length, 0, errors.join('\n'));
   assert.equal(result.departments, 5, JSON.stringify(result));
   assert.equal(result.max, 5, JSON.stringify(result));
+  assert.equal(result.priorityMix.immediateShare, 0.7, JSON.stringify(result));
+  assert.equal(result.priorityMix.longTermShare, 0.3, JSON.stringify(result));
+  assert.deepEqual(result.mixProbe.selected.map((row) => row.id), ['urgent'], JSON.stringify(result));
+  assert.ok(result.mixProbe.changes.length, JSON.stringify(result));
+  assert.equal(result.reportHasEmployment, true, JSON.stringify(result));
   assert.ok(result.cabinetPromptTokens <= 4000, JSON.stringify(result));
   assert.ok(result.cabinetContextTokens <= 4000, JSON.stringify(result));
   assert.ok(result.cabinetContextTokens <= 2200, JSON.stringify(result));

@@ -382,6 +382,7 @@ export function desiredFloorsForPopulation(population = 0) {
  */
 export const UNEMPLOYMENT_GATE = rules.unemploymentGate;
 export const UNEMPLOYMENT_PCT = rules.unemploymentPercent;
+export const UNEMPLOYMENT_PRIORITY_GATE = rules.unemploymentPriorityGate ?? Math.max(0.25, UNEMPLOYMENT_GATE * 2.5);
 
 /**
  * The town's unemployment as a FRACTION, always read from the one field that
@@ -2562,6 +2563,15 @@ export class GrowthSystem {
           (type === 'resource' && resourceEmergency?.kind === 'upgrade')
             ? 20
             : 0;
+        // Sustained joblessness is an immediate capacity failure, not a
+        // decorative growth opportunity. Once a quarter of the labour force is
+        // unemployed, put legal job-producing work (shops, offices, works,
+        // and shop tier-ups) above civic polish while preserving the stronger
+        // utility/resource emergency bands.
+        const employmentPriority = unemployment >= UNEMPLOYMENT_PRIORITY_GATE &&
+          ['shop', 'office', 'factory', 'tierup'].includes(type)
+          ? 9 + Math.min(6, Math.max(0, (unemployment - UNEMPLOYMENT_PRIORITY_GATE) * 10))
+          : 0;
         const servicePriority = opts?.serviceNeed ? 7 : 0;
         out.push({
           type,
@@ -2569,7 +2579,7 @@ export class GrowthSystem {
           // Once the first town cohort exists, earned progression competes
           // with ordinary civic infill. This keeps long runs from repeatedly
           // selecting new one-storey shells while floors/wings wait forever.
-          score: band + Math.min(1, need) + (earnedProgression ? 4 : 0) + (heightPriority ? 6 : 0) + (roadEmergency ? 20 : 0) + congestionPriority + primaryResourcePriority + designPriority + servicePriority,
+          score: band + Math.min(1, need) + (earnedProgression ? 4 : 0) + (heightPriority ? 6 : 0) + (roadEmergency ? 20 : 0) + congestionPriority + primaryResourcePriority + employmentPriority + designPriority + servicePriority,
           opts,
           amenity
         });

@@ -4,7 +4,7 @@ import { MAX_FLOORS, CELL_KIND } from '../core/config.js';
 import { planFor, LANDMARKS, UTILITY_RESERVE, MAX_ACTIVE, BUILD_FLOOR, BUILD_HOURS,
   MAX_BRIDGE_GAP,
   civicLoads, civicExpansionNeed, HOUSE_PRESSURE_GATE, HOUSE_SPARE_BEDS, housingNeedsBuild, FILLER_PRESSURE_GATE,
-  UNEMPLOYMENT_GATE, UNEMPLOYMENT_PCT, unemploymentRate, CIVIC_PER_POP, PARKS_PER_POP, roadCongestionGate, ROAD_EMERGENCY_GATE, CIVIC_LOAD_GATE } from './growth.js';
+  UNEMPLOYMENT_GATE, UNEMPLOYMENT_PCT, UNEMPLOYMENT_PRIORITY_GATE, unemploymentRate, CIVIC_PER_POP, PARKS_PER_POP, roadCongestionGate, ROAD_EMERGENCY_GATE, CIVIC_LOAD_GATE } from './growth.js';
 import { FACTORY_TYPES, COMMODITIES, MATERIAL_KEYS } from './industry.js';
 import { SHOP_TIERS } from './economy.js';
 import { CIVIC_CATALOGUE } from '../kits/civic/civicKit.js';
@@ -517,6 +517,7 @@ const PROMPT_BODY = [
   'Valid actions: ' + INTENTS.join(', '),
   'Reply on the first line as: INTENT: <ACTION>, then at most one short sentence of reasoning.',
   'Protocol: resolve measured emergencies/dependencies first (food, water, power, sewage, staffing, runway), then average congestion, housing, civic/transport capacity, jobs, progression, and optional work. Preserve solvency.',
+  'Cabinet allocation: keep roughly 70% of selected work on the report\'s immediate Priority or mandatory remedies and reserve roughly 30% for longer-term vision. A long-term idea never displaces a feasible measured emergency.',
   'Choose one Priority/Feasible action. If it is Blocked, choose its named prerequisite or NO_ACTION; do not repeat it until evidence changes. Compare the strongest feasible alternative and state the number and horizon it should change.',
   'If the report contains MANDATORY COUNCIL REMEDY, that is a sequencing directive from the measured emergency: choose that exact remedy in this sitting unless TRADE_BUY or HIRE_WORKERS is the evidence-backed direct fix.',
   'Prefer DEVELOP_HOUSING when homes are scarce, EXPAND_* when a utility is over capacity,',
@@ -540,7 +541,7 @@ const PROMPT_BODY = [
   // day's footfall.
   'BUILD_OFFICE when work is scarce and the town has no office block (optional spec: name=Some Name, floors=2..' + MAX_FLOORS + ') — an office earns from its desks, not from passing trade,',
   'UPGRADE_RESOURCE when the report shows a primary resource DRY or in DEFICIT — raises that resource\u2019s site output (optional spec: resource=' + ORDER.join('|') + '; pin the yard with kind=farm|husbandry|poultry, e.g. UPGRADE_RESOURCE resource=food kind=husbandry to grow the ranch rather than the first food site),' ,
-  'PLANT_TREES/INSTALL_LAMP for street improvements, EXTEND_FOOTWAY to lay a footpath that unlocks an inland lot, HIRE_WORKERS when Staff shows gaps at farms, power works, businesses, or civic buildings (civic posts scale with each building\'s footprint and floors),',
+  'PLANT_TREES/INSTALL_LAMP for street improvements, EXTEND_FOOTWAY to lay a footpath that unlocks an inland lot, HIRE_WORKERS only when Staff shows a fundable vacancy at farms, power works, businesses, or civic buildings and the town has spare beds; HIRE_WORKERS imports staff and is not an unemployment remedy for residents already in town,',
   // Phase 16 — arrivals are a function of a derived band, so the lever is the
   // pull, not a number. The Settlers line is the whole story.
     'ATTRACT_SETTLERS spends $' + CAMPAIGN.cost + ' to advertise the town for ' + CAMPAIGN.days +
@@ -646,8 +647,8 @@ export function systemPrompt(town, options = {}) {
       'You are the final Town Council synthesis chamber. Five independent ministers have reported; your job is to compare their evidence-backed candidate motions and set the town\'s priorities for this sitting.',
       st.opening,
       st.focus,
-      'Use the town report as ground truth. Resolve any mandatory remedy first. Prefer a measured Priority build, utility, housing, supply, staffing, or mobility action over optional policy when the report shows one. Select only candidate motion IDs supplied in the user message; never invent an intent, department, coordinate, budget, catalogue id, or action.',
-      'Return exactly one JSON object: {"selected":[{"id":"motion-1","priority":0.0,"reason":"short evidence-backed reason"}]}. Select at most five unique candidates, normally one per department. Select at least one candidate when any admitted candidate is feasible; return {"selected":[]} only when every candidate is infeasible or the report gives no defensible action.',
+      'Use the town report as ground truth. Resolve any mandatory remedy first. Prefer a measured Priority build, utility, housing, supply, staffing, employment, or mobility action over optional policy when the report shows one. Select only candidate motion IDs supplied in the user message; never invent an intent, department, coordinate, budget, catalogue id, or action.',
+      'Return exactly one JSON object: {"selected":[{"id":"motion-1","priority":0.0,"reason":"short evidence-backed reason"}]}. Select at most five unique candidates, normally one per department. Aim for roughly 70% immediate Priority/mandatory candidates and 30% longer-term candidates when both exist. Select at least one candidate when any admitted candidate is feasible; return {"selected":[]} only when every candidate is infeasible or the report gives no defensible action.',
       'The selected candidates are recommendations for the existing Mayor/planner validation boundary. Do not claim execution. Traits are emergent from evidence and outcomes; do not optimize for a prescribed personality.',
       voice,
       learning
@@ -666,7 +667,7 @@ export function systemPrompt(town, options = {}) {
       st.focus,
       `You are the ${department.label} Cabinet minister. ${focus}`,
       `Your owned canonical intents are: ${department.intents.join(', ')}.`,
-      'Read the town report as evidence. Resolve a mandatory remedy first; choose only a legal action supported by Feasible now, Priority, or an explicit always-available rule. If Priority contains a build or service remedy outside this department, return NO_ACTION. Do not use ENACT_SCHEME, PASS_LAW, or HOST_EVENT while any measured Priority remains. Do not invent coordinates, budgets, IDs, or actions.',
+      'Read the town report as evidence. Resolve a mandatory remedy first; choose only a legal action supported by Feasible now, Priority, or an explicit always-available rule. If this department owns a Priority remedy, submit it before a long-term study, scheme, design, or vision action. If Priority contains a build or service remedy outside this department, return NO_ACTION. Do not use ENACT_SCHEME, PASS_LAW, or HOST_EVENT while any measured Priority remains. Do not invent coordinates, budgets, IDs, or actions.',
       'Return exactly one JSON object: {"motions":[{"department":"' + department.id + '","intent":"CANONICAL_INTENT","reason":"short measured reason","priority":0.0,"params":{}}]}. Use priority 0..1; set params only when the report supports them.',
       voice,
       learning
@@ -682,16 +683,16 @@ export function systemPrompt(town, options = {}) {
 const CABINET_REPORT_PREFIXES = Object.freeze({
   common: [
     'TOWN REPORT', 'Construction kits:', 'Population ', 'Buildings:', 'Land:',
-    'Treasury ', 'Budget:', 'Feasible now', 'Blocked:', 'Priority:',
+    'Treasury ', 'Budget:', 'Employment:', 'Feasible now', 'Blocked:', 'Priority:',
     'Intent map:', 'Construction:', 'Warnings:', 'Last decision:'
   ],
-  treasury: ['Economy:', 'Industry:', 'Staff:', 'Primary resources:', 'Stocks:', 'Trade:', 'HIRE_WORKERS', 'TRADE_BUY', 'TRADE_SELL', 'BOND_ISSUE', 'FUND_INNOVATION'],
+  treasury: ['Economy:', 'Employment:', 'Industry:', 'Staff:', 'Primary resources:', 'Stocks:', 'Trade:', 'HIRE_WORKERS', 'TRADE_BUY', 'TRADE_SELL', 'BOND_ISSUE', 'FUND_INNOVATION'],
   land: ['Society:', 'Settlers:', 'Civic load:', 'Design opportunity:', 'Connectivity:'],
   infrastructure: ['Congestion average', 'Road planning:', 'Services:', 'Connectivity:'],
   services: ['Society:', 'Weather:', 'Emergency:', 'Services:', 'Industry:', 'Staff:', 'Utilities:', 'Electricity:', 'Primary resources:', 'Waste flow:'],
   society: ['Society:', 'Weather:', 'Settlers:', 'Civic load:', 'Tourism:', 'Design opportunity:', 'Research:', 'Schemes:', 'Laws:', 'Policy effects:'],
   council: [
-    'Society:', 'Weather:', 'Settlers:', 'Economy:', 'Industry:', 'Staff:',
+    'Society:', 'Weather:', 'Settlers:', 'Economy:', 'Employment:', 'Industry:', 'Staff:',
     'Primary resources:', 'Stocks:', 'Trade:', 'Congestion average', 'Road planning:',
     'Emergency:', 'Services:', 'Utilities:', 'Electricity:', 'Waste flow:',
     'District:', 'Connectivity:', 'Research:', 'Schemes:', 'Laws:', 'Policy effects:',
@@ -1613,6 +1614,19 @@ export class GovernanceSystem {
         // the townsfolk in their own account.
         ` · open posts ${eco.openPosts} · self-employed ${eco.selfEmployed} · owners ${eco.owners}`
       : '';
+    const employmentLine = (() => {
+      const roster = typeof t.economy?.employed === 'function' ? t.economy.employed() : null;
+      if (!eco || !roster) return '';
+      const labourForce = roster.adults?.length || 0;
+      const unemployed = roster.jobless?.length || 0;
+      const employed = Math.max(0, labourForce - unemployed);
+      const siteGap = staff
+        ? CREW_ROLES.reduce((sum, role) => sum + Math.max(0, (staff.want?.[role] || 0) - (staff.staff?.[role] || 0)), 0)
+        : 0;
+      const civicGap = staff?.civic?.open || 0;
+      const critical = eco.unemployment >= Math.round(UNEMPLOYMENT_PRIORITY_GATE * 100) ? ' · JOBS PRIORITY' : '';
+      return `Employment: ${unemployed}/${labourForce} jobless (${eco.unemployment}%) · employed ${employed} · self-employed ${eco.selfEmployed} · private vacancies ${eco.openPosts} · site gaps ${siteGap} · civic gaps ${civicGap}${critical} · remedies OPEN_SHOP/BUILD_OFFICE/BUILD_FACTORY/TIERUP/SUBSIDY`;
+    })();
     const tourism = eco?.tourism || t.economy?.tourismStats?.() || null;
     const tourismLine = tourism && (tourism.roomCapacity || tourism.demand)
       ? `Tourism: ${tourism.visitors} visitors · rooms ${tourism.occupiedRooms}/${tourism.roomCapacity} occupied (${Math.round(tourism.occupancy * 100)}%)` +
@@ -1710,6 +1724,7 @@ export class GovernanceSystem {
         ? `Treasury ${Math.round(eco.treasury)} · reserve ${Math.round(eco.reserve)} · debt ${Math.round(eco.debt)} · GDP ${Math.round(eco.gdp)} · unemployment ${eco.unemployment}% · tax ${eco.taxRate}%${eco.taxRate !== eco.effectiveTaxRate ? ` (${eco.effectiveTaxRate}% with law)` : ''}${eco.spendingScale !== 1 ? ` · spending ×${eco.spendingScale}` : ''}${eco.spendingScale !== eco.effectiveSpending ? ` (×${eco.effectiveSpending} with law)` : ''} · jurisdiction ${Math.round(eco.jurisdiction * 100)}%`
         : 'Treasury unknown',
       economyLine,
+      employmentLine,
       tourismLine,
       t.economy?.treasuryFlow ? (() => { const f = t.economy.treasuryFlow();
         return `Treasury ${eco?.fiscalBand || 'healthy'}: opening $${Math.round(f.opening)}, inflows $${Math.round(f.inflows)}, outflows $${Math.round(f.outflows)}, closing $${Math.round(f.closing)}`; })() : '',
@@ -3063,6 +3078,7 @@ export class GovernanceSystem {
         intent: motion.intent,
         priority: motion.priority,
         emergency: !!motion.emergency,
+        phase: this.cabinet.isImmediate(motion, priorityIntents) ? 'immediate' : 'long-term',
         reason: motion.reason,
         params: motion.params
       }));
@@ -3078,7 +3094,7 @@ export class GovernanceSystem {
             { role: 'system', content: systemPrompt(this.town, { cabinetCouncil: true }) },
             {
               role: 'user',
-              content: `${cabinetReportFor(report, 'council')}\n\nMINISTER CANDIDATES (select by id only):\n${JSON.stringify(candidateDigest)}`
+              content: `${cabinetReportFor(report, 'council')}\n\nCABINET MIX TARGET: ${Math.round(this.cabinet.priorityMix.immediateShare * 100)}% immediate Priority/mandatory work · ${Math.round(this.cabinet.priorityMix.longTermShare * 100)}% long-term vision.\nMINISTER CANDIDATES (select by id only):\n${JSON.stringify(candidateDigest)}`
             }
           ],
           town: this.town,
@@ -3095,10 +3111,14 @@ export class GovernanceSystem {
         this.councilCalls++;
         this.modelUsed = councilReply?.model || councilReply?.raw?.model || this.modelUsed;
         const parsedCouncil = this.cabinet.parseCouncil(councilReply?.text || '', admittedMotions);
+        const mixed = parsedCouncil.valid
+          ? this.cabinet.enforcePriorityMix(parsedCouncil.selected, admittedMotions, priorityIntents)
+          : { selected: [], changes: [] };
         councilResult = {
           status: parsedCouncil.valid ? 'ok' : 'invalid',
           valid: parsedCouncil.valid,
-          selected: parsedCouncil.selected.slice(0, this.cabinet.motionsPerSitting),
+          selected: mixed.selected,
+          mixChanges: mixed.changes,
           invalid: parsedCouncil.invalid,
           raw: parsedCouncil.raw,
           fallback: !parsedCouncil.valid
@@ -3122,7 +3142,8 @@ export class GovernanceSystem {
           text: `Council synthesis ${councilResult.status}; using the recorded priority fallback for this sitting.`
         });
       }
-      const selectedMotions = councilResult.valid ? councilResult.selected : admittedMotions;
+      const fallbackBatch = this.cabinet.enforcePriorityMix(admittedMotions, admittedMotions, priorityIntents).selected;
+      const selectedMotions = councilResult.valid ? councilResult.selected : fallbackBatch;
       let review = this.cabinet.mayor.review(selectedMotions, {
         requiredAction: this.requiredAction,
         priorityIntents,

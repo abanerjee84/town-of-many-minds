@@ -39,6 +39,7 @@
   ],
   "unemploymentGate": 0.1,
   "unemploymentPercent": 10,
+  "unemploymentPriorityGate": 0.25,
   "officePerPopulation": 90,
   "officeMinPopulation": 55,
   "districtFloor": 60000,

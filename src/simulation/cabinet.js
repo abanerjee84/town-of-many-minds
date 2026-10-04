@@ -4,6 +4,20 @@ import { actionFor } from './actionRegistry.js';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, Math.round(Number(value) || min)));
 
+// A motion is long-term only when it deliberately observes, designs, or
+// changes the town's future direction. Everything else remains eligible as an
+// immediate response when the report names it as a measured priority. This is
+// a mix guard, not a hidden action chooser: it only rearranges candidate IDs
+// already returned by the ministers and synthesis chamber.
+const LONG_TERM_INTENTS = new Set([
+  'NO_ACTION', 'IMAGINE_ARCHETYPE', 'BUILD_LANDMARK', 'EXPAND_LANDMARK',
+  'HOST_EVENT', 'ENACT_SCHEME', 'END_SCHEME', 'PASS_LAW', 'REPEAL_LAW',
+  'FUND_INNOVATION', 'STUDY_ECONOMY', 'STUDY_DEMOGRAPHICS', 'STUDY_INCIDENTS',
+  'STUDY_ROAD', 'STUDY_TRAFFIC'
+]);
+
+const intentHead = (value) => String(value || '').trim().split(/\s+/)[0].toUpperCase();
+
 function extractJson(text) {
   const raw = String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
   for (const candidate of [raw, raw.match(/\{[\s\S]*\}/)?.[0], raw.match(/\[[\s\S]*\]/)?.[0]]) {
@@ -25,6 +39,13 @@ export class CabinetSystem {
     this.governance = governance;
     this.config = options.config || cabinetConfig;
     this.motionsPerSitting = clamp(options.motionsPerSitting ?? this.config.motionsPerSitting, 1, 12);
+    const mix = options.priorityMix || this.config.priorityMix || {};
+    const immediateShare = Number(mix.immediateShare);
+    const longTermShare = Number(mix.longTermShare);
+    this.priorityMix = Object.freeze({
+      immediateShare: Number.isFinite(immediateShare) ? Math.max(0, Math.min(1, immediateShare)) : 0.7,
+      longTermShare: Number.isFinite(longTermShare) ? Math.max(0, Math.min(1, longTermShare)) : 0.3
+    });
     this.departments = (this.config.departments || []).map((department) => ({
       ...department,
       intents: [...(department.intents || [])].filter((intent) => actionFor(intent))
@@ -54,6 +75,7 @@ export class CabinetSystem {
     return [
       'CABINET MODE: return one JSON object {"motions":[]}; do not use the legacy one-line format unless the provider cannot emit JSON.',
       `Submit at most ${this.motionsPerSitting} motions, normally one per department. Each motion has department, canonical intent, reason, priority 0..1, emergency when measured, and optional parser params.`,
+      `Use a ${Math.round(this.priorityMix.immediateShare * 100)}/${Math.round(this.priorityMix.longTermShare * 100)} split: address listed Priority/mandatory evidence first, and use the remaining share for defensible long-term capacity or vision.`,
       'Use only the report evidence and the named department remit. The Mayor approves or rejects; do not claim execution or invent coordinates, budgets, IDs, or actions.'
     ].join('\n');
   }
@@ -70,7 +92,7 @@ export class CabinetSystem {
       return [
         `CABINET MINISTER ${department.id} — ${department.label}.`,
         focus,
-        `Own intents: ${intents}. Submit at most one motion for this department; use another department for another remit.`
+        `Own intents: ${intents}. Submit at most one motion for this department; use another department for another remit. When this department owns a listed Priority or mandatory remedy, choose it before a study, scheme, design, or other long-term option. The sitting target is ${Math.round(this.priorityMix.immediateShare * 100)}% immediate evidence and ${Math.round(this.priorityMix.longTermShare * 100)}% long-term vision across the Cabinet.`
       ].join(' ');
     });
   }
@@ -167,6 +189,7 @@ export class CabinetSystem {
     return {
       enabled: this.enabled,
       motionsPerSitting: this.motionsPerSitting,
+      priorityMix: { ...this.priorityMix },
       departments: this.departments.map(({ id, label, intents }) => ({ id, label, intents: [...intents] })),
       systemPrompts: this.systemPrompts().map((prompt, index) => ({
         department: this.departments[index]?.id || null,
@@ -193,7 +216,8 @@ export class CabinetSystem {
         })),
         invalid: [...(this.lastCouncil.invalid || [])],
         valid: this.lastCouncil.valid !== false,
-        fallback: !!this.lastCouncil.fallback
+        fallback: !!this.lastCouncil.fallback,
+        mixChanges: [...(this.lastCouncil.mixChanges || [])]
       } : null,
       lastReview: this.lastReview ? { ...this.lastReview } : null,
       lastExecution: this.lastExecution.map((decision) => ({
@@ -204,5 +228,83 @@ export class CabinetSystem {
         mayor: decision.mayor
       }))
     };
+  }
+
+  /**
+   * Mark a motion as immediate when it is one of the planner's named Priority
+   * rows, an emergency, or an action that is inherently operational. The
+   * remaining proposals are the long-term/vision share. This is intentionally
+   * based on candidate evidence, never on a new intent or an invented plan.
+   */
+  isImmediate(motion, priorityIntents = []) {
+    const priorities = new Set(priorityIntents.map(intentHead));
+    const intent = intentHead(motion?.intent);
+    return Boolean(motion?.emergency) || priorities.has(intent) || !LONG_TERM_INTENTS.has(intent);
+  }
+
+  /**
+   * Keep the final Council slate close to the configured 70/30 evidence mix.
+   * The synthesis model still chooses the candidates; this guard only fills a
+   * missing immediate slot or replaces an excess long-term candidate with a
+   * stronger admitted candidate. That prevents a sitting from spending all
+   * its approvals on studies, schemes, or designs while a Priority row waits.
+   */
+  enforcePriorityMix(selected = [], candidates = [], priorityIntents = []) {
+    const limit = Math.min(this.motionsPerSitting, candidates.length);
+    const byId = new Map(candidates.map((motion) => [motion.id, motion]));
+    const chosen = [];
+    const seen = new Set();
+    for (const motion of selected) {
+      const candidate = byId.get(motion?.id) || motion;
+      if (!candidate?.id || seen.has(candidate.id)) continue;
+      seen.add(candidate.id);
+      chosen.push(candidate);
+      if (chosen.length >= limit) break;
+    }
+    const rank = (a, b) =>
+      (Number(b.priority) || 0) - (Number(a.priority) || 0) ||
+      (Number(a.index) || 0) - (Number(b.index) || 0);
+    const available = candidates.filter((motion) => !seen.has(motion.id));
+    const immediate = available.filter((motion) => this.isImmediate(motion, priorityIntents)).sort(rank);
+    const immediateCount = () => chosen.filter((motion) => this.isImmediate(motion, priorityIntents)).length;
+    const changes = [];
+
+    // If synthesis returned no slate despite admitted candidates, one evidence
+    // backed motion must still reach the Mayor. This keeps a valid sitting from
+    // appearing as a silent three-day hold.
+    if (!chosen.length && candidates.length) {
+      const first = [...candidates].sort((a, b) => {
+        const ai = this.isImmediate(a, priorityIntents) ? 1 : 0;
+        const bi = this.isImmediate(b, priorityIntents) ? 1 : 0;
+        return bi - ai || rank(a, b);
+      })[0];
+      if (first) {
+        chosen.push(first);
+        seen.add(first.id);
+        changes.push(`added ${first.id} to avoid an empty admitted slate`);
+      }
+    }
+
+    // Replace the weakest long-term selection first. If there is no such row,
+    // append the immediate candidate while the approval cap still permits it.
+    while (immediateCount() < Math.min(limit, Math.ceil(chosen.length * this.priorityMix.immediateShare))) {
+      const next = immediate.shift();
+      if (!next) break;
+      const replaceAt = chosen
+        .map((motion, index) => ({ motion, index }))
+        .filter(({ motion }) => !this.isImmediate(motion, priorityIntents))
+        .sort((a, b) => rank(a.motion, b.motion))[0]?.index;
+      if (replaceAt == null) {
+        if (chosen.length >= limit) break;
+        chosen.push(next);
+      } else {
+        const replaced = chosen[replaceAt];
+        chosen[replaceAt] = next;
+        seen.delete(replaced.id);
+      }
+      seen.add(next.id);
+      changes.push(`promoted ${next.id} into the immediate share`);
+    }
+    return { selected: chosen.slice(0, limit), changes };
   }
 }

@@ -1,6 +1,10 @@
 {
   "version": 1,
   "motionsPerSitting": 5,
+  "priorityMix": {
+    "immediateShare": 0.7,
+    "longTermShare": 0.3
+  },
   "mayor": {
     "label": "Mayor",
     "maxApprovals": 5,
