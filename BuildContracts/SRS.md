@@ -384,3 +384,7 @@ This section defines the target architecture for turning the current specialist 
 
 81. Citizen simulation behavior, employment, mood, routing, collision avoidance, and lifecycle shall remain independent of render detail. `npm run test:citizen-render` shall verify the simple mesh budget, inspection contract, animation contract, and absence of page errors.
 
+82. The default vehicle renderer shall use eight-segment wheel cylinders without hub meshes and disable per-vehicle shadow casting. Four wheel pivots, wheel rotation, lane-sized physical footprints, lights, beacons, vehicle picking, and type-specific bodies shall remain unchanged. A detailed wheel mode may be enabled through the performance JSON for close-up experiments.
+
+83. Vehicle render simplification shall not change collision, parking, routing, fuel, or public-fleet behavior. `npm run test:vehicle-render` shall verify four rotating wheel pivots, the low-poly wheel budget, inspection metadata, shadow settings, and absence of page errors.
+

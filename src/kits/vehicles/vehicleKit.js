@@ -3,8 +3,10 @@ import { PALETTE } from '../../core/config.js';
 import { box, boxEuler, cyl, sphere, merge, jitterColor } from '../geometry.js';
 import { sharedVehicleGlow, sharedHeadlightGlow, sharedHeadlightBeam } from '../glow.js';
 import vehicleCatalog from '../../data/vehicleCatalog.json' with { type: 'json' };
+import performanceRules from '../../data/performance.json' with { type: 'json' };
 
-const wheelGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.24, 12);
+const detailedWheels = performanceRules.agents.vehicleWheelRenderMode === 'detailed';
+const wheelGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.24, detailedWheels ? 12 : 8);
 wheelGeo.rotateZ(Math.PI / 2);
 const hubGeo = new THREE.CylinderGeometry(0.14, 0.14, 0.26, 8);
 hubGeo.rotateZ(Math.PI / 2);
@@ -261,7 +263,7 @@ export function buildVehicle(params = {}) {
     merge(body),
     new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, metalness: 0.32 })
   );
-  bodyMesh.castShadow = true;
+  bodyMesh.castShadow = !!performanceRules.agents.vehicleCastShadows;
   bodyMesh.receiveShadow = true;
   group.add(bodyMesh);
 
@@ -314,12 +316,15 @@ export function buildVehicle(params = {}) {
   const wheels = [];
   for (const [x, y, z] of wheelPos) {
     const w = new THREE.Mesh(wheelGeo, tireMat);
-    w.castShadow = true;
-    const hub = new THREE.Mesh(hubGeo, hubMat);
-    hub.castShadow = false;
+    w.castShadow = !!performanceRules.agents.vehicleCastShadows;
     const pivot = new THREE.Group();
     pivot.position.set(x, y, z);
-    pivot.add(w, hub);
+    pivot.add(w);
+    if (detailedWheels) {
+      const hub = new THREE.Mesh(hubGeo, hubMat);
+      hub.castShadow = false;
+      pivot.add(hub);
+    }
     group.add(pivot);
     wheels.push(pivot);
   }
