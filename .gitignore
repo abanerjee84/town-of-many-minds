@@ -6,6 +6,8 @@ shots/
 *.log
 *.pid
 *.png
+MapNow/latest.map.txt
+MapNow/history/
 before.json
 after.json
 _ext_stress.mjs

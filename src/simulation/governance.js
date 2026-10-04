@@ -22,6 +22,7 @@ import { CouncilLearning, measureCouncilState } from './councilLearning.js';
 import { priceIndex } from './priceChart.js';
 import { BUILD_TIME_CHART } from './buildTime.js';
 import { CabinetSystem } from './cabinet.js';
+import { renderMapNow } from './mapNow.js';
 
 export { resolveLLMProvider, registerLLMProvider, listLLMProviders } from './llmProviders.js';
 
@@ -1365,6 +1366,7 @@ export class GovernanceSystem {
     this.lastSlot = -1;
     this.lastConveneDay = -1;
     this.lastSitKey = null;
+    this.lastClock = null;
     this.cycles = 0;
     this.lastReply = '';
     this.modelUsed = '';
@@ -2846,6 +2848,7 @@ export class GovernanceSystem {
     if (this.cabinet?.enabled) return this.askCabinet();
     if (this.pending) return { status: 'busy' };
     if (!this.enabled) return { status: 'disabled' };
+    this.captureMapNow();
     this.activeResponseId = null;
     const started = Date.now();
     const epoch = this.epoch;
@@ -2985,6 +2988,7 @@ export class GovernanceSystem {
   async askCabinet() {
     if (this.pending) return { status: 'busy' };
     if (!this.enabled) return { status: 'disabled' };
+    this.captureMapNow();
     this.activeResponseId = null;
     const started = Date.now();
     const epoch = this.epoch;
@@ -3303,6 +3307,7 @@ export class GovernanceSystem {
 
   update(dt, clock) {
     if (!this.enabled || !clock) return;
+    this.lastClock = clock;
     this.sampleCongestion(dt, clock);
     // Convene whenever the configured daily slot turns over. Day rollover is a
     // slot boundary too, so a 2/day setting means roughly 00:00 and 12:00.
@@ -3365,6 +3370,23 @@ export class GovernanceSystem {
     this.ask().catch((error) => {
       console.warn('[tomm] council sitting rejected:', error?.message || error);
     });
+  }
+
+  /**
+   * Emit the human-readable map snapshot immediately before a sitting. The
+   * event is handled by the local UI/dev-server writer only; this text is
+   * deliberately not passed to report(), a Cabinet prompt, or any provider.
+   */
+  captureMapNow() {
+    try {
+      events.emit('map-now', {
+        text: renderMapNow(this.town, { clock: this.lastClock || null }),
+        day: this.lastClock?.day ?? this.town.clockDay ?? null,
+        sitting: this.activeSittingId || null
+      });
+    } catch (error) {
+      events.emit('log', { kind: 'event', text: `MapNow export skipped: ${error?.message || error}` });
+    }
   }
 
   stats() {

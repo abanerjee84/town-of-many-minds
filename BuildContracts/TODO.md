@@ -304,3 +304,11 @@ Updated 2026-10-03 after the dynamic-market and build-duration audit.
 - [ ] Split large static foliage batches into spatial chunks if close-view GPU profiling shows coarse frustum culling.
 - [ ] Add dynamic shadow-map quality and distant-prop shadow LOD if renderer telemetry shows shadows dominating frame time.
 
+## Current sprint (2026-10-04, MapNow inspection export)
+
+- [x] Added `src/simulation/mapNow.js` with the `TOMM-MAP/1` layered ASCII format: coarse acquired-town matrix, stable legend, resource pressure, road graph, pressure cells, frontier candidates, and exact hotspot/frontier windows.
+- [x] Added a pre-sitting `map-now` governance event. It writes only to the local MapNow endpoint and is never included in Council, Cabinet, synthesis, learning, or provider messages.
+- [x] Added the Vite/preview MapNow writer with `MapNow/latest.map.txt` plus bounded 48-snapshot history.
+- [x] Added `npm run mapnow:capture` and `MapNow/README.md` for manual inspection and format documentation.
+- [x] Captured and inspected seed 1337 output: the map was 1,944 bytes / 104 lines with no page errors and readable pressure/frontier windows.
+

@@ -17,6 +17,7 @@ import { councilSnapshot, scoreCouncilRun, runCouncilBenchmark } from './simulat
 import { CONSTRUCTION_BLOCKS, listConstructionBlocks, constructionBlockStats, auditConstructionBlocks, constructionBlockDemand } from './kits/constructionBlocks.js';
 import { constructionPalette } from './simulation/constructionPalette.js';
 import { urbanProfile, edgeScore, INDUSTRIAL_MIN_EDGE, roadComponents, hasNetworkAccess } from './placement/placementController.js';
+import { renderMapNow } from './simulation/mapNow.js';
 
 const container = document.getElementById('app');
 const sceneMgr = new SceneManager(container);
@@ -69,6 +70,19 @@ const syncPlayableGround = () => {
 };
 events.on('land-acquired', syncPlayableGround);
 events.on('land-released', syncPlayableGround);
+
+// Governance emits a diagnostic map immediately before each sitting. The
+// local Vite middleware writes it to MapNow/latest.map.txt; the payload is
+// never added to a provider request or Council report.
+events.on('map-now', ({ text }) => {
+  if (!text) return;
+  fetch('/__mapnow', {
+    method: 'POST',
+    headers: { 'content-type': 'text/plain; charset=utf-8' },
+    body: text,
+    keepalive: true
+  }).catch((error) => console.warn('[tomm] MapNow writer unavailable:', error?.message || error));
+});
 
 function updateCameraReadout() {
   const controls = sceneMgr.controls;
@@ -538,6 +552,15 @@ setTimeout(() => {
 window.THREE = THREE;
 window.town = town;
 window.clock = clock;
+window.mapNow = {
+  capture: () => renderMapNow(town, { clock }),
+  save: () => fetch('/__mapnow', {
+    method: 'POST',
+    headers: { 'content-type': 'text/plain; charset=utf-8' },
+    body: renderMapNow(town, { clock }),
+    keepalive: true
+  }).then(() => true).catch(() => false)
+};
 window.events = events;
 window.sceneMgr = sceneMgr;
 window.interaction = interaction;

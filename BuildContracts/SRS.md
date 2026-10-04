@@ -350,3 +350,13 @@ This section defines the target architecture for turning the current specialist 
 
 69. Future performance work may add route-job queues/cache, spatially chunked static foliage batches, dynamic shadow resolution, and distant-prop shadow LOD. These are measured follow-ups; they shall not be enabled by guesswork if the current draw-call, triangle, or frame-time telemetry does not show a regression.
 
+## MapNow diagnostic export
+
+70. Immediately before every Council or Cabinet sitting, the runtime shall emit a `TOMM-MAP/1` diagnostic snapshot to the local MapNow writer. The snapshot shall contain a compact acquired-town matrix, legend, resource pressure, road-graph summary, measured pressure cells, frontier candidates, and focused windows around hotspots/frontier sites.
+
+71. MapNow shall be an inspection artifact only. Its text shall never be appended to `GovernanceSystem.report()`, minister prompts, Council synthesis prompts, learning context, provider messages, or decision parsing. The Council continues to receive its existing evidence contract until a later explicit integration decision.
+
+72. The local Vite/preview server shall write the latest snapshot to `MapNow/latest.map.txt` and retain a bounded history under `MapNow/history/`. A standalone `npm run mapnow:capture` script shall also capture the current browser state for manual inspection when no sitting is being tested.
+
+73. MapNow coordinates shall remain grid-cell coordinates with explicit bounds and scale. Empty frontier, acquired vacant land, land use, resources, roads, transit stops, footways, water, and measured pressure shall have stable legend symbols. High-resolution windows shall identify their center and coordinate range so an inspector can relate the text back to the world.
+
