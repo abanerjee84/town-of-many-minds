@@ -68,6 +68,8 @@ export class LifecycleSystem {
     // Resource pressure: mood target, need drain and illness odds all read it.
     this.resStress = null;
     this.stressAcc = 99;
+    this.trainingCapacity = 0;
+    this.training = { active: 0, completed: 0 };
   }
 
   reset() {
@@ -78,6 +80,8 @@ export class LifecycleSystem {
     this.illnessHours = 0;
     this.resStress = null;
     this.stressAcc = 99;
+    this.trainingCapacity = 0;
+    this.training = { active: 0, completed: 0 };
     // Phase 15 — written only by PolicySystem; zero here because a new town
     // carries no statutes.
     this.pullBonus = 0;
@@ -408,6 +412,7 @@ export class LifecycleSystem {
    * oscillating through it.
    */
   onDay() {
+    this.runTraining();
     const st = this.stability();
     const pop = st.population;
     this.campaignDay = (this.campaignDay || 0) + 1;
@@ -431,6 +436,59 @@ export class LifecycleSystem {
       return;
     }
     this.emigrateDiscontent(st);
+  }
+
+  /**
+   * Government-funded skilling is deliberately slower than changing a job
+   * title. It advances an unemployed adult one education rung after a short
+   * cohort, then the economy's normal vacancy matcher can place them. Adults
+   * without a legal next rung remain unemployed until a suitable programme or
+   * vacancy exists; self-employed residents are never pulled into a cohort.
+   */
+  runTraining() {
+    const slots = Math.max(0, Math.floor(Number(this.trainingCapacity) || 0));
+    if (!slots) {
+      this.training.active = 0;
+      return 0;
+    }
+    const levelRank = { none: 0, primary: 1, secondary: 2, tertiary: 3 };
+    const targetFor = (p) => {
+      const level = p.education?.level || 'none';
+      if (level === 'none') return 'primary';
+      if (level === 'primary') return 'secondary';
+      if (level === 'secondary' && hasHigherEducation(this.town)) return 'tertiary';
+      return null;
+    };
+    const candidates = (this.town.pedestrians?.citizens || [])
+      .filter((c) => {
+        const p = c.p;
+        return p && p.age >= MIN_AGE_WORK && p.age < RETIRE_AGE && !c.work &&
+          (p.employmentStatus === 'unemployed' || p.job?.id === 'student') &&
+          p.job?.work !== 'home' && p.job?.work !== 'road' && targetFor(p);
+      })
+      .sort((a, b) => (levelRank[a.p.education?.level] || 0) - (levelRank[b.p.education?.level] || 0));
+    let active = 0;
+    let completed = 0;
+    for (const citizen of candidates) {
+      if (active >= slots) break;
+      const p = citizen.p;
+      const target = targetFor(p);
+      if (!target) continue;
+      p.training ||= { target, days: 0 };
+      if (p.training.target !== target) p.training = { target, days: 0 };
+      p.training.days = (p.training.days || 0) + 1;
+      active++;
+      if (p.training.days < 7) continue;
+      p.education.level = target;
+      p.education.years = target === 'tertiary' ? 16 : target === 'secondary' ? 12 : 5;
+      p.education.field = 'Workforce training';
+      pushHistory(p, `Completed government workforce training (${target}).`);
+      p.training = null;
+      completed++;
+    }
+    this.training.active = active;
+    this.training.completed += completed;
+    return completed;
   }
 
   /**
@@ -810,6 +868,7 @@ export class LifecycleSystem {
       stability: st,
       pull: st.pull,
       campaign: this.campaign > 1 ? { daysLeft: Math.max(0, this.campaignDays - (this.campaignDay - this.campaignFrom)), multiplier: this.campaign } : null,
+      training: { ...this.training, capacity: this.trainingCapacity },
       medianAge: pop ? Math.round((ageSum / pop) * 10) / 10 : 0,
       stages,
       ...this.tallies,

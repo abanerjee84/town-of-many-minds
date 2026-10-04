@@ -1,7 +1,7 @@
 import { events } from '../core/events.js';
 import { CELL_KIND, ZONE } from '../core/config.js';
 import { ECON, PUBLIC_PROJECT_TYPES, PRIVATE_PROJECT_TYPES, PUBLIC_PROGRAM_TYPES, SECTOR, TRANSACTION_CATEGORIES } from './economicConfig.js';
-import { qualifies } from '../kits/citizens/personality.js';
+import { qualifies, qualifiedJobs, jobById } from '../kits/citizens/personality.js';
 import { setJob } from '../kits/citizens/citizenProfile.js';
 import { basePrice } from './priceChart.js';
 
@@ -82,6 +82,20 @@ const FACTORY_JOB = Object.freeze({
   batteries: 'assembler'
 });
 
+// A vacancy is a role at a workplace, not a demand for one particular
+// starting job.  These are the local job families that can legally transfer
+// into each building kind.  `qualifiedJobs` still applies the citizen's
+// education gate, so a transfer never manufactures a credential.
+const BUILDING_JOB_ROLES = Object.freeze({
+  shop: ['shopkeeper', 'baker', 'barista', 'chef', 'mechanic', 'carpenter', 'florist'],
+  office: ['officeclerk', 'accountant', 'designer'],
+  hotel: ['barista', 'chef', 'shopkeeper'],
+  resort: ['barista', 'chef', 'shopkeeper'],
+  factory: ['assembler'],
+  civic: ['clerk', 'teacher', 'nurse', 'librarian', 'councillor'],
+  park: ['gardener']
+});
+
 function isGovernmentBuilding(building) {
   return building?.ownerType === SECTOR.GOVERNMENT || building?.owner === 'state';
 }
@@ -158,6 +172,11 @@ export class EconomySystem {
     this.policyRevenue = 0;
     this.policyPropertyBase = 0;
     this.staffBonus = 0;
+    this.lastHiring = { local: 0, retrained: 0, imported: 0, public: 0, private: 0 };
+    // Accumulate public wages committed during one staffing pass. Checking
+    // only the first hire allowed a civic/resource sweep to fill an entire
+    // roster while proving that just one worker fit the operating reserve.
+    this.publicHiringCommitted = 0;
     this.eventHistory = [];
     this.treasuryDailyClose = new Map();
     // Citizens whose savings account has been opened. One-shot per citizen: it
@@ -815,7 +834,15 @@ export class EconomySystem {
     const tax = Math.round(grossWage * ECON.tax.income * this.policyTaxScale() * 100) / 100;
     const net = grossWage - tax;
     const category = account.sector === SECTOR.GOVERNMENT ? 'government_payroll' : 'wage';
-    const wage = this.transfer({ from: payer, to: { sector: SECTOR.HOUSEHOLD, id: p.id }, amount: grossWage, category, metadata: { workerId: p.id, gross: grossWage, net, tax } });
+    // Payroll is an existing public obligation. The reserve guard prevents
+    // creating new public posts, but once a worker is employed the government
+    // must settle that day's wage rather than silently leaving an unpaid
+    // worker on the roster. The account balance check above still prevents an
+    // actual overdraft; only the discretionary runway floor is bypassed.
+    const wage = this.transfer({ from: payer, to: { sector: SECTOR.HOUSEHOLD, id: p.id }, amount: grossWage, category, metadata: {
+      workerId: p.id, gross: grossWage, net, tax,
+      ...(account.sector === SECTOR.GOVERNMENT ? { allowBelowOperatingFloor: true } : {})
+    } });
     if (!wage.ok) return wage;
     const taxTx = this.transfer({ from: { sector: SECTOR.HOUSEHOLD, id: p.id }, to: 'government', amount: tax, category: 'income_tax', metadata: { taxpayerId: p.id, employerId: account.id, gross: grossWage } });
     if (!taxTx.ok) return taxTx;
@@ -1032,11 +1059,12 @@ export class EconomySystem {
   hireResidents(jobs) {
     const ped = this.town.pedestrians;
     if (!ped) return 0;
-    // Idle = an adult local with a trade and no post. A home/road trade has no
-    // workplace kind, so `canHire` refuses it and it keeps counting as its own
-    // account rather than being consumed by a shop's roster.
+    // Idle = an unemployed adult local with no post. Self-employed home/road
+    // trades are deliberately left alone: a vacancy must not erase an
+    // independent livelihood merely to fill a roster.
     const idle = (ped.citizens || []).filter(
-      (c) => c.p && c.p.age >= 18 && c.p.age < 66 && c.p.job?.id !== 'retired' && !c.work
+      (c) => c.p && c.p.age >= 18 && c.p.age < 66 && c.p.job?.id !== 'retired' && !c.work &&
+        (c.p.employmentStatus === 'unemployed' || !c.p.employmentStatus) && !EconomySystem.selfEmployed(c)
     );
     if (!idle.length) return 0;
     let hired = 0;
@@ -1047,12 +1075,23 @@ export class EconomySystem {
       // worker is ever turned into `business.employees`.
       let room = job.jobsRequired - (job.employees || 0);
       while (room > 0) {
-        const index = idle.findIndex((c) => this.canHire(c, job));
+        const index = idle.findIndex((c) => this.canHire(c, job, this.targetJobFor(c, job.building)));
         if (index < 0) break;
         const take = idle[index];
+        const target = this.targetJobFor(take, job.building);
+        if (!target || !this.canHire(take, job, target)) break;
         idle.splice(index, 1);
+        const previous = take.p.job?.id;
+        const changed = previous === target.id || setJob(take.p, target.id, this.rng);
+        if (!changed) continue;
         take.work = job.building;
         take.routeGoalKey = null;
+        this.lastHiring.local++;
+        if (previous !== target.id) this.lastHiring.retrained++;
+        if (job.operatorSector === SECTOR.GOVERNMENT || isGovernmentBuilding(job.building)) {
+          this.lastHiring.public++;
+          this.recordPublicHire(job.building);
+        } else this.lastHiring.private++;
         room--;
         hired++;
       }
@@ -1074,11 +1113,92 @@ export class EconomySystem {
     }
   }
 
-  /** A post is open at this business for this citizen's trade and schooling. */
-  canHire(citizen, job) {
-    if (!qualifies(citizen.p.education?.level, citizen.p.job?.id)) return false;
-    if (!this.buildingKinds(citizen.p).includes(job.building?.kind)) return false;
+  /**
+   * Return the legal target role for an unemployed resident at a workplace.
+   * The building advertises a job family; the citizen's education still
+   * decides which role in that family is legal.
+   */
+  targetJobFor(citizen, building) {
+    const p = citizen?.p;
+    if (!p || !building) return null;
+    const factoryId = this.town.industry?.typeOf?.(building)?.id || building.factoryType || building.subtype;
+    const facility = building.facility || building.house?.spec?.facility;
+    const civicRoles = facility && /school|college|university|campus/.test(facility)
+      ? ['teacher', 'clerk']
+      : facility && /clinic|hospital/.test(facility)
+        ? ['nurse', 'clerk']
+        : facility && /library|museum/.test(facility)
+          ? ['librarian', 'clerk']
+          : BUILDING_JOB_ROLES.civic;
+    const roles = building.kind === 'factory'
+      ? [FACTORY_JOB[factoryId] || 'assembler', 'assembler']
+      : building.kind === 'civic'
+        ? civicRoles
+        : (BUILDING_JOB_ROLES[building.kind] || []);
+    const eligible = qualifiedJobs(p.education?.level).filter((candidate) => roles.includes(candidate.id));
+    if (!eligible.length) return null;
+    // Preserve a compatible existing trade. A transfer is used only when the
+    // unemployed resident needs a role for this vacancy.
+    return eligible.find((candidate) => candidate.id === p.job?.id) || eligible[0];
+  }
+
+  /** Match local jobless residents to public civic vacancies before importing. */
+  staffPublicCivic() {
+    const ped = this.town.pedestrians;
+    const rows = this.town.lifecycle?.civicStaffing?.()?.rows || [];
+    if (!ped?.citizens || !rows.length) return 0;
+    let hired = 0;
+    for (const row of rows.sort((a, b) => b.open - a.open)) {
+      if (row.open <= 0 || !this.publicPayrollCanExpand(row.building)) continue;
+      let remaining = row.open;
+      while (remaining > 0) {
+        if (!this.publicPayrollCanExpand(row.building)) break;
+        const candidate = ped.citizens.find((c) =>
+          c.p && c.p.age >= 18 && c.p.age < 66 && c.p.job?.id !== 'retired' && !c.work &&
+          (c.p.employmentStatus === 'unemployed' || !c.p.employmentStatus) && !EconomySystem.selfEmployed(c) &&
+          this.targetJobFor(c, row.building)
+        );
+        if (!candidate) break;
+        const target = this.targetJobFor(candidate, row.building);
+        const previous = candidate.p.job?.id;
+        if (!target || !(previous === target.id || setJob(candidate.p, target.id, this.rng))) break;
+        candidate.work = row.building;
+        candidate.routeGoalKey = null;
+        this.recordPublicHire(row.building);
+        this.lastHiring.local++;
+        this.lastHiring.public++;
+        if (previous !== target.id) this.lastHiring.retrained++;
+        remaining--;
+        hired++;
+      }
+    }
+    return hired;
+  }
+
+  /** A post is open at this business for a legal target role. */
+  canHire(citizen, job, targetJob = null) {
+    const target = targetJob || this.targetJobFor(citizen, job?.building);
+    if (!target || !qualifies(citizen.p.education?.level, target.id)) return false;
+    if (job?.operatorSector === SECTOR.GOVERNMENT || isGovernmentBuilding(job?.building))
+      return this.publicPayrollCanExpand(job.building);
     return this.ownerCanPay(job);
+  }
+
+  /** Do not add a public post when the next day's payroll would consume the
+   * measured operating runway. Private payroll remains the owner's concern. */
+  publicPayrollCanExpand(building) {
+    const government = this._account('government');
+    if (!government) return false;
+    const dailyWage = this.publicDailyWage(building);
+    return government.balance - this.publicHiringCommitted - dailyWage + 1e-8 >= this.requiredPublicReserve(0);
+  }
+
+  publicDailyWage(building) {
+    return Math.max(ECON.wages.minimumAnnual, Number(building?.staffWage) || 0) / 365;
+  }
+
+  recordPublicHire(building) {
+    this.publicHiringCommitted += this.publicDailyWage(building);
   }
 
   /**
@@ -1120,25 +1240,33 @@ export class EconomySystem {
 
     let hired = 0;
     for (const business of factories) {
-      if (!this.ownerCanPay(business)) continue;
+      if (!this.publicPayrollCanExpand(business.building)) continue;
       const target = Math.max(0, business.jobsRequired - ped.citizens.filter((c) => c.work === business.building &&
         c.p?.age >= 18 && c.p?.age < 66 && c.p?.job?.id !== 'retired').length);
       let remaining = target;
       const factoryId = this.town.industry?.typeOf?.(business.building)?.id;
       const preferred = FACTORY_JOB[factoryId] || 'assembler';
       while (remaining > 0 && hired < limit) {
+        if (!this.publicPayrollCanExpand(business.building)) break;
         let candidate = ped.citizens.find((c) =>
           c.p && c.p.age >= 18 && c.p.age < 66 && c.p.job?.id !== 'retired' &&
           !c.work && (c.p.employmentStatus === 'unemployed' || !c.p.employmentStatus)
         );
         if (candidate) {
-          const jobId = qualifies(candidate.p.education?.level, preferred) ? preferred : 'assembler';
-          const changed = candidate.p.job?.id === jobId || setJob(candidate.p, jobId, this.rng);
+          const target = this.targetJobFor(candidate, business.building) ||
+            (qualifies(candidate.p.education?.level, preferred) ? jobById(preferred) : jobById('assembler'));
+          const jobId = target?.id;
+          const previous = candidate.p.job?.id;
+          const changed = !!jobId && (previous === jobId || setJob(candidate.p, jobId, this.rng));
           if (!changed) {
             candidate = null;
           } else {
             candidate.work = business.building;
             candidate.routeGoalKey = null;
+            this.lastHiring.local++;
+            if (previous !== jobId) this.lastHiring.retrained++;
+            this.lastHiring.public++;
+            this.recordPublicHire(business.building);
             remaining--;
             hired++;
             continue;
@@ -1154,6 +1282,9 @@ export class EconomySystem {
         if (!newcomer) break;
         newcomer.work = business.building;
         newcomer.routeGoalKey = null;
+        this.recordPublicHire(business.building);
+        this.lastHiring.imported++;
+        this.lastHiring.public++;
         remaining--;
         hired++;
       }
@@ -1164,9 +1295,12 @@ export class EconomySystem {
 
   assignEmployees() {
     this.syncEntities();
+    this.lastHiring = { local: 0, retrained: 0, imported: 0, public: 0, private: 0 };
+    this.publicHiringCommitted = 0;
     // New resource sites can appear after the founding pass. Give their
     // public crews a chance to claim idle locals before the business census.
     this.town.pedestrians?.staffWorkforce?.();
+    this.staffPublicCivic();
     const citizens = this.town.pedestrians?.citizens || [];
     const byBuilding = new Map(this.businesses.map((b) => [b.building, b]));
     for (const business of this.businesses) {
@@ -2627,6 +2761,7 @@ export class EconomySystem {
       tourism,
       owners: this.ownersById.size,
       openPosts: this.businesses.reduce((s, b) => s + (b.vacancies || 0), 0),
+      employmentChannels: { ...this.lastHiring },
       selfEmployed: this.selfEmployed || 0,
       profit: Math.round(this.businesses.reduce((s, b) => s + b.profit, 0)), dividend: Math.round(this.lastDividend || 0),
       avgIncome: Math.round(averageDailyWage * 365), averageWage: Math.round(averageDailyWage * 365),

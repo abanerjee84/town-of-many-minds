@@ -66,6 +66,9 @@
     ,"test:fiscal-funding": "node scripts/_fiscal_funding_check.mjs"
     ,"test:agency-boundary": "node scripts/_agency_boundary_check.mjs"
     ,"test:service-sector": "node scripts/_service_sector_check.mjs"
+    ,"test:unemployment-horizon": "node scripts/_unemployment_horizon_check.mjs"
+    ,"test:employment-mobility": "node scripts/_employment_mobility_check.mjs"
+    ,"test:workforce-training": "node scripts/_workforce_training_check.mjs"
     ,"test:housing-street-expansion": "node scripts/_housing_street_expansion_check.mjs"
     ,"mapnow:capture": "node scripts/_mapnow_capture.mjs"
   },

@@ -151,6 +151,14 @@ export const MODIFIERS = {
       if (t.economy) t.economy.policyStaffFloor = v;
     }
   },
+  trainingCapacity: {
+    field: 'lifecycle.trainingCapacity',
+    hint: 'unemployed residents entering a government training cohort each day',
+    get: (t) => t.lifecycle?.trainingCapacity || 0,
+    set: (t, v) => {
+      if (t.lifecycle) t.lifecycle.trainingCapacity = Math.max(0, v);
+    }
+  },
   businessRevenue: {
     field: 'economy.policyRevenue',
     hint: 'trade takings across the town',

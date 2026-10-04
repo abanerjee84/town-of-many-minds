@@ -56,6 +56,15 @@
       "effects": { "emigrationPull": -0.5, "moodTarget": -0.02, "staffingFloor": 0.25 }
     },
     {
+      "id": "workforce_training",
+      "label": "Workforce training",
+      "cost": 12000,
+      "per": 900,
+      "days": 35,
+      "needs": { "unemployment": 0.08 },
+      "effects": { "trainingCapacity": 2 }
+    },
+    {
       "id": "housing_push",
       "label": "Housing push",
       "cost": 22000,

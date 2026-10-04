@@ -2006,6 +2006,25 @@ export class GrowthSystem {
       : null;
   }
 
+  /**
+   * Retail is a customer-capacity decision, not a generic unemployment
+   * button. Keep the same measured gap for ranking, private viability, and
+   * the Council report so OPEN_SHOP cannot be offered and then rejected by the
+   * developer for the exact condition the planner ignored.
+   */
+  retailCapacityGap(population = this.town.pedestrians?.citizens?.length || 0) {
+    const seats = this.town.buildings
+      .filter((building) => building.purpose === 'commercial' && building.kind !== 'office')
+      .reduce((sum, building) => sum + (building.capacity || 0), 0);
+    const gap = Math.max(0, population - seats);
+    return {
+      population,
+      seats,
+      gap,
+      need: Math.min(1, gap / Math.max(1, population))
+    };
+  }
+
   /** Count genuinely usable empty plots inside the land the town already owns. */
   vacantAcquiredPlots(limit = Infinity) {
     const t = this.town;
@@ -2449,9 +2468,8 @@ export class GrowthSystem {
         return office;
       }
     }
-    const retail = this.town.buildings.filter((b) => b.purpose === 'commercial' && b.kind !== 'office');
-    const seats = retail.reduce((n, b) => n + (b.capacity || 0), 0);
-    const demand = s.pop - seats;
+    const retailGap = this.retailCapacityGap(s.pop);
+    const demand = retailGap.gap;
     // Any shortfall is demand: more people than customer seats. The seat ratio
     // only sizes the build (a bigger lot for a bigger gap), it does not gate.
     if (demand < 1) { this.developerLastBlock = 'retail demand is covered'; return null; }
@@ -2540,10 +2558,9 @@ export class GrowthSystem {
         : { ok: false, reason: 'private housing demand is covered' };
     }
     if (type === 'shop') {
-      const seats = this.town.buildings.filter((b) => b.purpose === 'commercial' && b.kind !== 'office')
-        .reduce((n, b) => n + (b.capacity || 0), 0);
-      return s.pop > seats
-        ? { ok: true, reason: 'customer capacity is below population' }
+      const gap = this.retailCapacityGap(s.pop);
+      return gap.gap > 0
+        ? { ok: true, reason: `customer capacity is short by ${gap.gap} seats` }
         : { ok: false, reason: 'retail demand is covered' };
     }
     if (type === 'office') {
@@ -3012,9 +3029,13 @@ export class GrowthSystem {
     const residentialBlock = housingNeed > 0 ? this.residentialBlockOptions(s, housingNeed) : null;
     if (housingNeed > 0 && (residentialBlock || this.findCell('house') || this.housingExpansionAvailable()))
       add('house', housingNeed, residentialBlock || undefined);
-    if (unemployment > UNEMPLOYMENT_GATE) {
-      const need = (unemployment - UNEMPLOYMENT_GATE) / (1 - UNEMPLOYMENT_GATE);
-      if (this.findCell('shop')) add('shop', need, { need }); // need rides the commerce-ladder chooser
+    const retailGap = this.retailCapacityGap(s.pop);
+    if (unemployment > UNEMPLOYMENT_GATE && retailGap.gap > 0) {
+      const jobNeed = (unemployment - UNEMPLOYMENT_GATE) / (1 - UNEMPLOYMENT_GATE);
+      const need = Math.max(jobNeed, retailGap.need);
+      if (this.findCell('shop')) {
+        add('shop', need, { need, retailGap: retailGap.gap }); // need rides the commerce-ladder chooser
+      }
     }
     // Offices are a service-sector capacity rung. Unemployment increases the
     // urgency, but a low unemployment rate must not suppress a measured
@@ -3196,13 +3217,17 @@ export class GrowthSystem {
     const design = this.archetypeOpportunity(s);
     if (design) add('archetype', design.need, design.opts, design.amenity);
     // In-place quality work (Phase 5): renovate the plainest building and
-    // lift a shop one commerce rung. Amenity while jobs are fine — polish,
-    // never the fallback answer; above the unemployment gate a tierup is real
-    // demand, because it grows retail capacity without taking a new lot.
+    // lift a shop one commerce rung. A tier-up is job-relevant only while the
+    // measured retail-capacity gap exists; unemployment by itself is not proof
+    // that residents need more customer seats.
     if (crewsFree && this.renovateTarget()) add('renovate', 0.4, undefined, true);
     if (crewsFree && this.tierupTarget()) {
-      if (unemployment > UNEMPLOYMENT_GATE) {
-        add('tierup', Math.min(1, (unemployment - UNEMPLOYMENT_GATE) / (1 - UNEMPLOYMENT_GATE)));
+      if (unemployment > UNEMPLOYMENT_GATE && retailGap.gap > 0) {
+        add('tierup', Math.min(1, Math.max(retailGap.need, (unemployment - UNEMPLOYMENT_GATE) / (1 - UNEMPLOYMENT_GATE))));
+      } else if (unemployment > UNEMPLOYMENT_GATE) {
+        // A tier-up changes customer capacity but does not create a job. Keep
+        // it available as optional polish, never as the unemployment remedy.
+        add('tierup', 0.25, undefined, true);
       } else {
         // Commerce tier-ups are earned capacity progression once the town has
         // its first cohort; keep them available to the fast deterministic
@@ -3270,7 +3295,7 @@ export class GrowthSystem {
         return housingNeedsBuild(s.pop, s.capacity, s.pressure) &&
           (!!this.findCell('house') || !!this.residentialBlockOptions(s, Math.max(0.25, s.pressure - HOUSE_PRESSURE_GATE)) || this.housingExpansionAvailable());
       case 'shop':
-        return unemployment > UNEMPLOYMENT_GATE && !!this.findCell('shop');
+        return this.retailCapacityGap(s.pop).gap > 0 && !!this.findCell('shop');
       case 'office':
         return !!this.officeDemand(s.pop) && !!this.findCell('office');
       case 'district':
@@ -3413,7 +3438,10 @@ export class GrowthSystem {
         return `${Math.max(0, Math.round(s.capacity - s.pop))} spare beds — no shortage`;
       case 'shop': {
         const u = unemploymentRate(this.town);
-        return `unemployment ${pct(u)} is below the ${pct(UNEMPLOYMENT_GATE)} gate — shops have staff`;
+        const gap = this.retailCapacityGap(s.pop);
+        if (gap.gap <= 0) return `retail capacity is covered (${gap.seats} seats for ${gap.population} residents) — unemployment needs a job-producing remedy`;
+        if (!(u > UNEMPLOYMENT_GATE)) return `retail capacity is short by ${gap.gap} seats, but unemployment ${pct(u)} is below the ${pct(UNEMPLOYMENT_GATE)} gate`;
+        return `retail capacity is short by ${gap.gap} seats`;
       }
       case 'office': {
         const u = unemploymentRate(this.town);

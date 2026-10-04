@@ -514,8 +514,7 @@ const COUNCIL_ETHOS = [
   'Treat the report as evidence: identify the binding constraint, distinguish a symptom from a cause, consider second-order effects, and choose one feasible action. State affected residents or places only when the report supports that inference.',
   'The Learning record is fallible empirical memory from prior enacted choices. Use repeated before/after results as clues, do not confuse correlation with causation, and do not let one surprising result override the current report.',
   'The action registry, catalogue, placement, progression, accounting, and reserve rules are fixed interfaces. Select among them; never invent an action, coordinate, budget, or rule.',
-  'Provider comparisons share the report, constraints, learning record, and output contract; do not optimize for prose.',
-  'A good decision is a short causal bet: name the measured constraint, choose the legal action that changes it, and leave a falsifiable trace for the next sitting.'
+  'Provider comparisons share the report, constraints, learning record, and output contract.'
 ].join(' ');
 
 /** The stage-free half of the prompt: everything after the identity line. */
@@ -541,13 +540,13 @@ const PROMPT_BODY = [
     '),',
   'BUILD_FACTORY signals a private works opportunity when materials run short; the developer decides',
   '(optional spec: type=' + FACTORY_TYPES.map((f) => f.id).join('|') + '),',
-  'OPEN_SHOP when work is scarce (optional spec: tier=stall|kiosk|shop|store); this is private market work,',
+  'OPEN_SHOP only when retail capacity is below population (optional spec: tier=stall|kiosk|shop|store); it is a private opportunity the developer may decline,',
   // Phase 20 — the office block, which is NOT a shop: it earns from the desks
   // it fills, so its revenue is capacity × staffed and it takes no share of the
   // day's footfall.
-  'BUILD_OFFICE when work is scarce and the town has no office block (optional spec: name=Some Name, floors=2..' + MAX_FLOORS + ') — an office earns from its desks, not from passing trade,',
+  'BUILD_OFFICE for a measured office-capacity gap (optional spec: name=Some Name, floors=2..' + MAX_FLOORS + ') — an office earns from its desks, not from passing trade,',
   'UPGRADE_RESOURCE when the report shows a primary resource DRY or in DEFICIT — raises that resource\u2019s site output (optional spec: resource=' + ORDER.join('|') + '; pin the yard with kind=farm|husbandry|poultry, e.g. UPGRADE_RESOURCE resource=food kind=husbandry to grow the ranch rather than the first food site),' ,
-  'PLANT_TREES/INSTALL_LAMP for street improvements, EXTEND_FOOTWAY to lay a footpath that unlocks an inland lot, HIRE_WORKERS only when Staff shows a fundable vacancy at farms, power works, businesses, or civic buildings and the town has spare beds; HIRE_WORKERS imports staff and is not an unemployment remedy for residents already in town,',
+  'PLANT_TREES/INSTALL_LAMP for street improvements, EXTEND_FOOTWAY to lay a footpath that unlocks an inland lot, vacant posts are filled by local matching/retraining first, HIRE_WORKERS only when Staff shows a fundable vacancy at farms, power works, businesses, or civic buildings and the town has spare beds; HIRE_WORKERS imports staff and is not an unemployment remedy for residents already in town,',
   // Phase 16 — arrivals are a function of a derived band, so the lever is the
   // pull, not a number. The Settlers line is the whole story.
     'ATTRACT_SETTLERS spends $' + CAMPAIGN.cost + ' to advertise the town for ' + CAMPAIGN.days +
@@ -623,7 +622,7 @@ const PROMPT_BODY = [
     ' the planner only lists PAVE_PLAZA/ADD_PARKING when a square or a bay is wanted and BUILD_BRIDGE when a gap would reconnect two road ends,',
   'ACQUIRE_LAND and RESTRUCTURE_BUILDING are discretionary Feasible-now rows only when the frontier is needed (all acquired serviced land is exhausted) or renewal candidates exist; they stay out of the demand fallback,',
   'PARK_LAND, PAVE_PLAZA, IMAGINE_ARCHETYPE, a filler floor, a comfortable-town RENOVATE and a WING are amenity work: they show up in Feasible now but never in Priority —',
-  'TIERUP only reaches Priority while unemployment is above ' + UNEMPLOYMENT_PCT + '%, since it grows shop capacity without a new lot,',
+  'TIERUP reaches Priority for a measured retail-capacity gap; unemployment alone never justifies extra shop capacity,',
   'when Priority reads "none outstanding", reply NO_ACTION rather than inventing work.',
   'Construction takes hours (' + buildTimesLine() + ').'
 ].join(' ');
@@ -1673,6 +1672,13 @@ export class GovernanceSystem {
     const serviceSectorLine = eco?.serviceSector
       ? `Service sector: private ${eco.serviceSector.private.offices} offices/${eco.serviceSector.private.businesses} firms · ${eco.serviceSector.private.employees} staff · ${eco.serviceSector.private.vacancies} vacancies · state ${eco.serviceSector.state.facilities} facilities · ${eco.serviceSector.state.employees} staff · ${eco.serviceSector.state.vacancies} vacancies`
       : '';
+    const publicFacilities = ['school', 'clinic', 'hospital'].map((facility) =>
+      `${facility} ${(t.buildings || []).filter((b) => b.kind === 'civic' && (b.facility || b.house?.spec?.facility) === facility).length}`
+    ).join(' · ');
+    const publicHousing = homes
+      .filter((b) => b.ownerType === 'government' || b.owner === 'state')
+      .reduce((sum, b) => sum + Math.max(0, b.capacity || 0), 0);
+    const publicServicesLine = `Public services: ${publicFacilities} · social-housing beds ${Math.round(publicHousing)}`;
     const employmentLine = (() => {
       const roster = typeof t.economy?.employed === 'function' ? t.economy.employed() : null;
       if (!eco || !roster) return '';
@@ -1684,7 +1690,15 @@ export class GovernanceSystem {
         : 0;
       const civicGap = staff?.civic?.open || 0;
       const critical = eco.unemployment >= Math.round(UNEMPLOYMENT_PRIORITY_GATE * 100) ? ' · JOBS PRIORITY' : '';
-      return `Employment: ${unemployed}/${labourForce} jobless (${eco.unemployment}%) · employed ${employed} · self-employed ${eco.selfEmployed} · private vacancies ${eco.openPosts} · site gaps ${siteGap} · civic gaps ${civicGap}${critical} · remedies OPEN_SHOP/BUILD_OFFICE/BUILD_FACTORY/TIERUP/SUBSIDY`;
+      const retailGap = t.growth?.retailCapacityGap?.(t.pedestrians?.citizens?.length || 0);
+      const channels = eco.employmentChannels || {};
+      const training = lc.training || {};
+      const trainingEligible = (t.pedestrians?.citizens || []).filter((citizen) => {
+        const p = citizen.p;
+        return p && p.age >= 18 && p.age < 66 && !citizen.work && p.employmentStatus === 'unemployed' &&
+          (p.education?.level === 'none' || p.education?.level === 'primary');
+      }).length;
+      return `Employment: ${unemployed}/${labourForce} jobless (${eco.unemployment}%) · employed ${employed} · self-employed ${eco.selfEmployed} · private vacancies ${eco.openPosts} · retail gap ${retailGap?.gap || 0} seats · site gaps ${siteGap} · civic gaps ${civicGap} · local matches ${channels.local || 0} (retrained ${channels.retrained || 0}) · training ${trainingEligible} eligible, ${training.active || 0}/${training.capacity || 0} active, ${training.completed || 0} completed${critical} · remedies local matching/training, BUILD_OFFICE/BUILD_FACTORY/civic/site work/SUBSIDY; OPEN_SHOP only for retail gap`;
     })();
     const tourism = eco?.tourism || t.economy?.tourismStats?.() || null;
     const tourismLine = tourism && (tourism.roomCapacity || tourism.demand)
@@ -1791,6 +1805,7 @@ export class GovernanceSystem {
         : 'Treasury unknown',
       economyLine,
       serviceSectorLine,
+      publicServicesLine,
       employmentLine,
       fdiLine,
       tourismLine,

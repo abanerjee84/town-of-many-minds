@@ -1315,25 +1315,52 @@ export class CitizenSystem {
       // Tier-aware: a ranch needs more hands than a paddock, so the target is
       // the sum of each site's own crew, not sites × the flat rate.
       const target = sites.reduce((n, s) => n + (resources.siteCrew ? resources.siteCrew(s) : w.crew), 0);
-      let have = this.citizens.filter((c) => c.p.job.work === w.work).length;
+      // Count workers actually posted at a connected site. Counting only the
+      // citizen's nominal job left farmers/power workers unemployed whenever
+      // their old site disappeared or a new site was added.
+      let have = this.citizens.filter((c) =>
+        c.work?.kind === 'site' && c.work.site?.work === w.work &&
+        c.p.job?.work === w.work && c.p.employmentStatus === 'employed'
+      ).length;
       let guard = 0;
       while (have < target && guard++ < 50) {
-        // A jobless local (adult student — the codebase's jobless) whose
-        // schooling covers the role; a placed worker is never touched.
+        // A jobless local whose schooling covers the role; a placed worker or
+        // self-employed resident is never touched. This is the primary-sector
+        // employment channel: farms, power, and fuel can absorb local jobless
+        // adults before the town imports a worker.
         const recruit = this.citizens.find(
           (c) =>
             c.p.age >= 18 &&
             c.p.age < 66 &&
-            c.p.job.id === 'student' &&
+            !c.work &&
+            (c.p.employmentStatus === 'unemployed' || !c.p.employmentStatus) &&
+            c.p.job?.work !== 'home' &&
+            c.p.job?.work !== 'road' &&
             qualifies(c.p.education?.level, w.job)
         );
         if (recruit) {
+          const economy = this.town.economy;
+          if (economy?.publicPayrollCanExpand && !economy.publicPayrollCanExpand()) break;
+          const previous = recruit.p.job?.id;
           if (!setJob(recruit.p, w.job, this.rng)) break;
           this.assignWork(recruit);
+          if (economy?.lastHiring) {
+            economy.lastHiring.local++;
+            if (previous !== w.job) economy.lastHiring.retrained++;
+            economy.lastHiring.public++;
+            economy.recordPublicHire?.();
+          }
           have++;
         } else {
           const job = jobById(w.job);
+          const economy = this.town.economy;
+          if (economy?.publicPayrollCanExpand && !economy.publicPayrollCanExpand()) break;
           if (!job || !this.town.lifecycle?.immigrate?.({ job })) break;
+          if (economy?.lastHiring) {
+            economy.lastHiring.imported++;
+            economy.lastHiring.public++;
+            economy.recordPublicHire?.();
+          }
           have++;
         }
       }
