@@ -645,11 +645,11 @@ export class EconomySystem {
     if (category === 'sales_tax') this.period.salesTax += amount;
     if (category === 'property_tax') this.period.propertyTax += amount;
     if (category === 'corporate_tax') this.period.corporateTax += amount;
-    if (['income_tax', 'sales_tax', 'property_tax', 'corporate_tax', 'permit_fee'].includes(category)) this.period.governmentRevenue += amount;
+    if (['income_tax', 'sales_tax', 'property_tax', 'corporate_tax', 'permit_fee', 'foreign_tax'].includes(category)) this.period.governmentRevenue += amount;
     if (['government_procurement', 'government_payroll'].includes(category)) { this.period.governmentConsumption += amount; this.period.governmentExpenditure += amount; this.period.spending += amount; }
     if (category === 'public_investment') { this.period.governmentInvestment += amount; this.period.governmentExpenditure += amount; this.period.spending += amount; }
     if (['subsidy', 'welfare', 'pension', 'bond_interest'].includes(category)) { this.period.governmentExpenditure += amount; this.period.spending += amount; }
-    if (category === 'private_investment' || category === 'permit_fee') this.period.privateFixedInvestment += amount;
+    if (category === 'private_investment' || category === 'permit_fee' || category === 'foreign_investment') this.period.privateFixedInvestment += amount;
     if (category === 'export') this.period.exports += amount;
     if (category === 'import') this.period.imports += amount;
   }
@@ -1811,7 +1811,7 @@ export class EconomySystem {
     const inflows = received.reduce((n, tx) => n + tx.amount, 0);
     const outflows = paid.reduce((n, tx) => n + tx.amount, 0);
     const closing = this.treasuryDailyClose.get(day) ?? this.treasury;
-    const taxes = sum(received, ['income_tax', 'sales_tax', 'property_tax', 'corporate_tax']);
+    const taxes = sum(received, ['income_tax', 'sales_tax', 'property_tax', 'corporate_tax', 'foreign_tax']);
     const permitFees = sum(received, ['permit_fee']);
     const operations = sum(paid, ['government_procurement']);
     const payrollServices = sum(paid, ['government_payroll']);

@@ -44,6 +44,7 @@ import { exportIntegrityState, importIntegrityState } from './integrityState.js'
 import { BUILTIN_KIT_REGISTRY } from '../kits/kitRuntime.js';
 import { recordPriceHistory, priceHistory } from './priceChart.js';
 import { KpiSystem } from './kpi.js';
+import { ForeignInvestmentSystem } from './foreignInvestment.js';
 
 export const GRID_W = EXTENT.w;
 export const GRID_H = EXTENT.h;
@@ -121,6 +122,7 @@ export class Town {
     this.pedestrians = new CitizenSystem(this);
     this.lifecycle = new LifecycleSystem(this);
     this.economy = new EconomySystem(this);
+    this.foreignInvestment = new ForeignInvestmentSystem(this);
     this.growth = new GrowthSystem(this);
     this.governance = new GovernanceSystem(this);
     this.kpi = new KpiSystem(this);
@@ -197,6 +199,7 @@ export class Town {
     this.lifecycle.reset();
     this.economy.rng = this.rng.fork(4407);
     this.economy.reset();
+    this.foreignInvestment.reset();
     // Reset the register before founding, so the founding fleet is seeded into
     // a clean one. The registry has no RNG of its own — it draws from the town's
     // — so there is nothing else to re-seed here.
@@ -311,6 +314,7 @@ export class Town {
     pruneGlows(this.scene);
     if (this.lifecycle) this.lifecycle.reset();
     if (this.economy) this.economy.reset();
+    if (this.foreignInvestment) this.foreignInvestment.reset();
     if (this.growth) this.growth.reset();
     if (this.governance) this.governance.reset();
     if (this.kpi) this.kpi.reset(this.seed || 1);
@@ -819,6 +823,7 @@ export class Town {
     // transport, society, and forest adapters above remain available through
     // their existing public systems for compatibility.
     this.kits?.invoke('updateHour', this, { dt, clock });
+    this.foreignInvestment?.update(dt, clock);
     if (dt > 0) this.invalidateStats();
   }
 
@@ -1574,6 +1579,7 @@ export class Town {
       mood: this.pedestrians.averageMood(),
       lifecycle: this.lifecycle ? this.lifecycle.stats() : null,
       economy: this.economy ? this.economy.stats() : null,
+      foreignInvestment: this.foreignInvestment ? this.foreignInvestment.stats() : null,
       industry: this.industry ? this.industry.stats() : null,
       forest: this.forest ? this.forest.stats() : null,
       weather: this.weather ? this.weather.stats() : null,

@@ -32,6 +32,9 @@ export const TRANSACTION_CATEGORIES = Object.freeze([
   'bond_repayment', 'reserve_allocation', 'project_reversal', 'owner_distribution',
   'immigration_capital_inflow', 'emigration_capital_outflow',
   'inheritance', 'pension', 'dividend', 'reserve_transfer',
+  // External capital and concession flows are separate from ordinary private
+  // investment so the treasury and KPI ledgers can attribute FDI outcomes.
+  'foreign_tax', 'foreign_investment',
   // Banking. Moving cash between a household's wallet and its savings at the
   // bank is a real transfer between two accounts, so it goes through the ledger
   // like any other — but it is NOT income, expenditure or investment, and

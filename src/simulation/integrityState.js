@@ -147,6 +147,7 @@ export function exportIntegrityState(town) {
     // KPI observations are evaluator data, not simulation inputs. They travel
     // with the integrity overlay so a saved run can be audited after reload.
     kpi: town.kpi?.serialize?.() || null,
+    foreignInvestment: town.foreignInvestment?.serialize?.() || null,
     ok: true
   };
 }
@@ -226,5 +227,6 @@ export function importIntegrityState(town, saved = {}) {
     if (!restored.ok) return { ok: false, reason: 'kit_restore_failed', detail: restored };
   }
   town.kpi?.restore?.(saved.kpi);
+  town.foreignInvestment?.restore?.(saved.foreignInvestment);
   return { ok: true, town };
 }

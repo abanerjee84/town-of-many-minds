@@ -489,6 +489,7 @@ export class Interaction {
     const transit = stats.transport;
     const forest = stats.forest;
     const perimeter = stats.perimeter;
+    const fdi = stats.foreignInvestment;
     const unitStr = Object.entries(fleet.units)
       .map(([k, n]) => `${n} ${k}`)
       .join(' · ');
@@ -538,6 +539,13 @@ export class Interaction {
              <div class="kv"><span>Materials</span><span>${ind.commodities.lumber.stock} lumber · ${ind.commodities.steel.stock} steel · ${ind.commodities.cement.stock} cement</span></div>
              <div class="kv"><span>Goods</span><span>${ind.goods.stock} in store · demand ${ind.goods.demand}/day · factor ×${ind.goods.factor}</span></div>
              <div class="kv"><span>Trade balance</span><span>exports ${fmtMoney(ind.exported)} · imports ${fmtMoney(ind.imported)} · net ${ind.net >= 0 ? '+' : '−'}${fmtMoney(Math.abs(ind.net))}</span></div>`
+          : ''
+      }
+      ${
+        fdi
+          ? `<div class="kv grp"><span>🌐 Foreign investment</span><span>${fdi.offers.length} offers · ${fdi.activeProjects}/${fdi.maxActive} active</span></div>
+             <div class="kv"><span>Capital/jobs</span><span>${fmtMoney(fdi.capitalCommitted)} committed · ${fdi.jobsCreated} jobs · ${fmtMoney(fdi.taxRevenue)} tax</span></div>
+             <div class="kv"><span>Infrastructure</span><span>${fdi.infrastructure} points · ${fdi.completed} completed · ${fmtMoney(fdi.repatriated)} repatriated</span></div>`
           : ''
       }
       ${

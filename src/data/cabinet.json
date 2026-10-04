@@ -16,7 +16,7 @@
       "label": "Treasury & Economy",
       "remit": "Keep the town solvent, productive, employed, and supplied.",
       "systemPrompt": "Prime directive: stabilise the treasury first and increase it sustainably whenever essential services and reserve safety are secure. Protect solvency, production, jobs, and stock flow; prefer measured revenue, productive capacity, trade, and high-return work over discretionary spending, and never improve the balance by starving food, utilities, or essential services. Choose an owned Priority remedy before optional studies or construction.",
-      "intents": ["TRADE_BUY", "TRADE_SELL", "BUILD_FACTORY", "OPEN_SHOP", "BUILD_OFFICE", "BOND_ISSUE", "SET_ASIDE_RESERVE", "SLASH_SPENDING", "RAISE_TAX", "CUT_TAX", "HIRE_WORKERS", "SUBSIDY", "FUND_INNOVATION", "STUDY_ECONOMY"]
+      "intents": ["TRADE_BUY", "TRADE_SELL", "BUILD_FACTORY", "OPEN_SHOP", "BUILD_OFFICE", "SOLICIT_FDI", "APPROVE_CONCESSION", "BOND_ISSUE", "SET_ASIDE_RESERVE", "SLASH_SPENDING", "RAISE_TAX", "CUT_TAX", "HIRE_WORKERS", "SUBSIDY", "FUND_INNOVATION", "STUDY_ECONOMY"]
     },
     {
       "id": "land",

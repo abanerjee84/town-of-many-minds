@@ -261,6 +261,8 @@ const PHRASES = [
   ['BOND_ISSUE', ['ISSUE A BOND', 'ISSUE BONDS', 'BOND ISSUE', 'RAISE A BOND', 'TAKE OUT A LOAN', 'BORROW MONEY', 'BORROW']],
   ['SUBSIDY', ['PAY A SUBSIDY', 'GIVE A SUBSIDY', 'SUBSIDY', 'SUBSIDISE', 'SUBSIDIZE', 'GRANT TO THE SHOPS', 'BAILOUT', 'HELP THE STRUGGLING SHOPS']],
   ['SLASH_SPENDING', ['SLASH SPENDING', 'CUT SPENDING', 'TRIM SPENDING', 'CUT COSTS', 'SPEND LESS', 'AUSTERITY']],
+  ['SOLICIT_FDI', ['SOLICIT FDI', 'ATTRACT FOREIGN INVESTMENT', 'SEEK FOREIGN INVESTMENT', 'INVITE FOREIGN INVESTORS', 'COURT INDUSTRIAL INVESTORS', 'SEEK OUT INVESTORS']],
+  ['APPROVE_CONCESSION', ['APPROVE CONCESSION', 'APPROVE FDI', 'APPROVE FOREIGN PROJECT', 'AUTHORISE FOREIGN PROJECT', 'AUTHORIZE FOREIGN PROJECT', 'APPROVE INVESTOR PROJECT']],
   // Civic life: a festival, a declaration, a dispatch.
   ['HOST_EVENT', ['HOST AN EVENT', 'HOST A FESTIVAL', 'PUT ON A FESTIVAL', 'ORGANISE A FESTIVAL', 'ORGANIZE A FESTIVAL', 'FESTIVAL', 'CARNIVAL', 'HOST A MARKET DAY']],
   ['DECLARE_EMERGENCY', ['DECLARE AN EMERGENCY', 'DECLARE EMERGENCY', 'EMERGENCY DECLARATION', 'CALL AN EMERGENCY', 'DECLARE A STATE OF EMERGENCY']],
@@ -558,9 +560,10 @@ const PROMPT_BODY = [
   'each bucket is limited by its own basis — ' + BUCKET_IDS.map((id) => `${BUCKETS[id].label} needs ${BUCKETS[id].hint}`).join(' · ') + ',',
   'and a finished programme applies one of these gains: ' + LEVER_IDS.map((k) => `${k} (${LEVERS[k].hint})`).join(' · ') +
     '. The next programme is always the town\u2019s own weakest number, printed on the Research line,',
-  'EXTEND_STREET (also EXPAND_STREET) chooses a legal run only when the congestion average since the previous sitting is above the road gate and observed trips or a disconnected component justify it; the report also shows the instantaneous value, range, duration, and sample count for context; graph planning uses connected components, weighted shortest paths, measured OD relief, and a deterministic frontage/continuation foresight tie-break; the council chooses whether to order it, not its coordinates,',
+  'EXTEND_STREET (also EXPAND_STREET) uses the closed congestion average, observed trips, connected components, weighted paths, OD relief, and frontage foresight; the council chooses whether to order it, never its coordinates,',
   'ACQUIRE_LAND buys surveyed frontier tiles only after the current acquired land has no usable serviced plot left; it is priced per fresh tile and must leave the public reserve intact,',
   'BUILD_TRANSIT (optional spec: facility=busdepot|transit) commissions a bus depot or transit hub; the network then selects separated road stops, registers buses in proportion to population, and reports coverage and ridership,',
+  'SOLICIT_FDI exposes a measured external offer; APPROVE_CONCESSION accepts offerId= only when its legal site, reserve-safe finance, jobs, tax, and infrastructure case is feasible. Private operation remains independent after approval,',
   'BUILD_CIVIC facility=police|fire|clinic|hospital adds response stations as population grows; state vehicles require a real station and are procured only when coverage or open calls justify them,',
   'RESTRUCTURE_BUILDING clears and rebuilds one eligible occupied lot with a safe additional floor; it preserves the footprint and facility and records the demolition,',
   'UPGRADE_ROAD widens the longest eligible straight corridor one rung up the ladder ' +
@@ -609,7 +612,7 @@ const PROMPT_BODY = [
   'BUILD_DISTRICT commissions a whole district as one order — the crews then work through a queue of roads, homes, shops, civic buildings and works, sized from the town\u2019s own housing pressure, strained resources and worst-loaded facility,',
   'and every build that lands off the network lays its own access road and pays for it, so nothing is ever stranded — read the Connectivity line for how many components the town has,',
   '"Feasible now (builds)", "Blocked" and "Priority" are ground truth: build only from Feasible now —',
-  'a Blocked public pick cannot start; the Council must choose a later remedy from the next report. Private developers remain independent and may commission private commerce from their own accounts, but they do not substitute the Council\'s blocked public motion. Non-build actions (tax, trade, hire, finance, festival, emergency, study, ATTRACT_SETTLERS, FUND_INNOVATION, ENACT_SCHEME, END_SCHEME, PASS_LAW, REPEAL_LAW, EXTEND_FOOTWAY, NO_ACTION) are always available,',
+  'a Blocked public pick cannot start; choose its later remedy. Private developers remain independent and cannot substitute a blocked public motion. Non-build actions (tax, trade, hire, finance, festival, emergency, study, ATTRACT_SETTLERS, FUND_INNOVATION, policies, EXTEND_FOOTWAY, NO_ACTION) are always available,',
   // The land-use family is never ranked (see ranked()), so — like EXTEND_
   // FOOTWAY — it must be declared always available or the "build only from
   // Feasible now" rule would make it unorderable. plaza/parking are ranked
@@ -690,7 +693,7 @@ const CABINET_REPORT_PREFIXES = Object.freeze({
     'Treasury ', 'Budget:', 'Employment:', 'Feasible now', 'Blocked:', 'Priority:',
     'Intent map:', 'Construction:', 'Warnings:', 'Last decision:'
   ],
-  treasury: ['Economy:', 'Employment:', 'Industry:', 'Staff:', 'Primary resources:', 'Stocks:', 'Trade:', 'HIRE_WORKERS', 'TRADE_BUY', 'TRADE_SELL', 'BOND_ISSUE', 'FUND_INNOVATION'],
+  treasury: ['Economy:', 'Employment:', 'Industry:', 'Staff:', 'Primary resources:', 'Stocks:', 'Trade:', 'Foreign investment:', 'SOLICIT_FDI', 'APPROVE_CONCESSION', 'HIRE_WORKERS', 'TRADE_BUY', 'TRADE_SELL', 'BOND_ISSUE', 'FUND_INNOVATION'],
   land: ['Society:', 'Settlers:', 'Civic load:', 'Design opportunity:', 'Connectivity:'],
   infrastructure: ['Congestion average', 'Road planning:', 'Services:', 'Connectivity:'],
   services: ['Society:', 'Weather:', 'Emergency:', 'Services:', 'Industry:', 'Staff:', 'Utilities:', 'Electricity:', 'Primary resources:', 'Waste flow:'],
@@ -1031,6 +1034,19 @@ function parseTradeSpec(raw) {
   return spec;
 }
 
+/** Optional offer/investor/project pin for the external-capital intents. */
+function parseFDISpec(raw) {
+  const s = String(raw || '');
+  const spec = {};
+  const offer = s.match(/\b(?:offer|offerId|concession)\s*[=:]\s*([a-z0-9_-]+)/i);
+  const investor = s.match(/\b(?:investor|investorId)\s*[=:]\s*([a-z0-9_-]+)/i);
+  const project = s.match(/\b(?:project|projectId)\s*[=:]\s*([a-z0-9_-]+)/i);
+  if (offer) spec.offerId = offer[1];
+  if (investor) spec.investorId = investor[1];
+  if (project) spec.projectId = project[1];
+  return spec;
+}
+
 /** Pull an OPEN_SHOP spec from raw text. tier is optional — a bare OPEN_SHOP
  *  stays valid and lets the chooser pick the rung; when PRESENT it must name
  *  a SHOP_TIERS rung (bad value → issues, rejects the whole decision), the
@@ -1099,6 +1115,7 @@ export function parseIntent(text) {
   // the bucket with the most headroom), so only a PRESENT-but-unknown bucket
   // is a refusal.
   else if (r.intent === 'FUND_INNOVATION') r.params = parseBucketSpec(text);
+  else if (r.intent === 'SOLICIT_FDI' || r.intent === 'APPROVE_CONCESSION') r.params = parseFDISpec(text);
   return r;
 }
 
@@ -1540,6 +1557,7 @@ export class GovernanceSystem {
     const gr = t.growth ? t.growth.stats() : null;
     const ut = t.utilities ? t.utilities.stats() : null;
     const ind = t.industry ? t.industry.stats() : null;
+    const fdi = t.foreignInvestment?.stats?.() || null;
     const inc = t.incidents && t.incidents.stats ? t.incidents.stats() : null;
     const fleet = t.traffic && t.traffic.fleetStats ? t.traffic.fleetStats() : null;
     const prices = priceIndex(t);
@@ -1664,6 +1682,9 @@ export class GovernanceSystem {
         ` · demand ${Math.round(tourism.demand * 100)}% · appeal ${Math.round(tourism.appeal * 100)}%` +
         ` · nightly revenue $${Math.round(tourism.revenueToday || 0)}`
       : '';
+    const fdiLine = fdi
+      ? `Foreign investment: offers ${fdi.offers.length} · active ${fdi.activeProjects}/${fdi.maxActive} · committed $${Math.round(fdi.capitalCommitted).toLocaleString('en-US')} · jobs ${fdi.jobsCreated} · tax $${Math.round(fdi.taxRevenue).toLocaleString('en-US')} · infrastructure ${fdi.infrastructure}`
+      : '';
     const stockLine = ind
       ? (() => {
           const rows = Object.entries(ind.commodities);
@@ -1728,6 +1749,8 @@ export class GovernanceSystem {
       `ATTRACT_SETTLERS ${st?.spareBeds > 0 && st?.openings > 0 ? 'available' : 'wait for beds/posts'}`,
       `TRADE_BUY ${rs?.strained?.length ? `consider ${rs.strained.join('/')}` : 'no primary deficit'}`,
       `TRADE_SELL ${ind?.commodities ? 'surplus shown in Stocks' : 'unavailable'}`,
+      `SOLICIT_FDI ${fdi?.offers?.length ? `${fdi.offers.length} offer${fdi.offers.length === 1 ? '' : 's'} available` : 'no current offer'}`,
+      `APPROVE_CONCESSION ${fdi?.offers?.some((offer) => offer.feasible) ? 'feasible offer available' : 'wait for a feasible offer'}`,
       `BOND_ISSUE ${t.growth?.loanNeed?.() ? 'runway short' : 'runway/debt gate not met'}`,
       `DISPATCH_UNITS ${inc?.open ? `${inc.open} open calls` : 'no open calls'}`,
       `DECLARE_EMERGENCY ${inc?.open ? 'available for open calls' : 'no open calls'}`,
@@ -1758,6 +1781,7 @@ export class GovernanceSystem {
         : 'Treasury unknown',
       economyLine,
       employmentLine,
+      fdiLine,
       tourismLine,
       t.economy?.treasuryFlow ? (() => { const f = t.economy.treasuryFlow();
         return `Treasury ${eco?.fiscalBand || 'healthy'}: opening $${Math.round(f.opening)}, inflows $${Math.round(f.inflows)}, outflows $${Math.round(f.outflows)}, closing $${Math.round(f.closing)}`; })() : '',
@@ -1918,6 +1942,33 @@ export class GovernanceSystem {
     if (parsed.intent === 'HIRE_WORKERS') return this.hire(decision);
 
     if (parsed.intent === 'ATTRACT_SETTLERS') return this.attractSettlers(decision);
+
+    // External capital is a Council-controlled public concession, while the
+    // resulting private project is financed and operated through the existing
+    // developer/economy path. Solicitation only exposes a measured offer;
+    // approval is the explicit public gate that starts construction.
+    if (parsed.intent === 'SOLICIT_FDI') {
+      const result = t.foreignInvestment?.solicit(parsed.params || {}) || { ok: false, reason: 'foreign investment system unavailable' };
+      decision.status = result.ok ? 'done' : 'rejected';
+      decision.detail = result.ok ? result.detail : `FDI solicitation refused — ${result.reason}`;
+      if (result.offer) decision.offerId = result.offer.id;
+      this.record(decision);
+      return decision;
+    }
+    if (parsed.intent === 'APPROVE_CONCESSION') {
+      const result = t.foreignInvestment?.approve(parsed.params?.offerId || null) || { ok: false, reason: 'foreign investment system unavailable' };
+      decision.status = result.ok ? (result.applied?.status === 'started' ? 'started' : 'done') : 'rejected';
+      decision.detail = result.ok
+        ? `${result.project.project} approved for ${result.project.investor} — $${Math.round(result.project.capital).toLocaleString('en-US')} committed`
+        : `concession refused — ${result.reason}`;
+      decision.cost = result.ok ? 0 : 0;
+      if (result.project) {
+        decision.projectId = result.project.id;
+        decision.offerId = result.project.offerId;
+      }
+      this.record(decision);
+      return decision;
+    }
 
     // A bad trade spec is refused outright — same rule as the factory spec.
     if (

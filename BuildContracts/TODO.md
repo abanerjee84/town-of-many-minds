@@ -321,6 +321,15 @@ Updated 2026-10-04 after the catalogue-wide industrial-planning audit.
 - [ ] Split large static foliage batches into spatial chunks if close-view GPU profiling shows coarse frustum culling.
 - [ ] Add dynamic shadow-map quality and distant-prop shadow LOD if renderer telemetry shows shadows dominating frame time.
 
+## Current sprint (2026-10-04, foreign investment and industrialist projects)
+
+- [x] Added `src/data/foreignInvestment.json` with two investor profiles, industrial/logistics/transit/utility templates, capital, risk, tax, jobs, infrastructure, repatriation, cadence, expiry, and active-project limits.
+- [x] Added `ForeignInvestmentSystem` with measured offer eligibility, deterministic feasible-template selection, explicit solicitation/approval, bounded active projects, operating tax, bounded repatriation, telemetry, and integrity serialization.
+- [x] Added Council intents `SOLICIT_FDI` and `APPROVE_CONCESSION offer=<id>` to the registry, parser, Treasury remit, prompt, report, and enact boundary. The Mayor/Cabinet remains the public approval gate while private operation uses the existing developer lane.
+- [x] Routed approved FDI projects through the existing GrowthSystem quote/apply pipeline and EconomySystem ledger. Factory, road, transit, and utility proposals therefore retain normal site, land, material, construction, staffing, and production safeguards.
+- [x] Added `foreign_investment` and `foreign_tax` ledger categories, treasury-flow attribution, FDI report/stat telemetry, and save/restore support without adding a second money system.
+- [x] Added `npm run test:fdi`; it verifies a feasible offer, parser/registry visibility, solicitation, concession approval, real construction start/completion, jobs/capital/tax effects, and a clean economy audit.
+
 ## Current sprint (2026-10-04, MapNow inspection export)
 
 - [x] Added `src/simulation/mapNow.js` with the `TOMM-MAP/1` layered ASCII format: coarse acquired-town matrix, stable legend, resource pressure, road graph, pressure cells, frontier candidates, and exact hotspot/frontier windows.

@@ -59,6 +59,7 @@
     ,"test:kpi": "node scripts/_kpi_check.mjs"
     ,"test:citizen-render": "node scripts/_citizen_render_check.mjs"
     ,"test:vehicle-render": "node scripts/_vehicle_render_check.mjs"
+    ,"test:fdi": "node scripts/_fdi_check.mjs"
     ,"mapnow:capture": "node scripts/_mapnow_capture.mjs"
   },
   "dependencies": {

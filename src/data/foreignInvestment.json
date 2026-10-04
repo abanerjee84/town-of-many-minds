@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "triggers": {
+    "minPopulation": 90,
+    "minTreasury": 150000,
+    "minApproval": 0.45,
+    "minIndustryPressure": 0.25,
+    "maxActive": 2,
+    "offerCadenceDays": 14,
+    "offerExpiryDays": 30
+  },
+  "investors": [
+    {
+      "id": "atlas-industrial",
+      "label": "Atlas Industrial Partners",
+      "capital": 6000000,
+      "risk": 0.35,
+      "sectors": ["industry", "logistics", "infrastructure"],
+      "taxRate": 0.16,
+      "repatriationRate": 0.25
+    },
+    {
+      "id": "harbor-infrastructure",
+      "label": "Harbor Infrastructure Fund",
+      "capital": 4500000,
+      "risk": 0.25,
+      "sectors": ["infrastructure", "transit", "utility"],
+      "taxRate": 0.14,
+      "repatriationRate": 0.2
+    }
+  ],
+  "projects": [
+    {
+      "id": "industrial-park",
+      "label": "Industrial park",
+      "kind": "industry",
+      "planType": "factory",
+      "investment": 900000,
+      "jobs": 24,
+      "taxPerDay": 1100,
+      "infrastructure": 0
+    },
+    {
+      "id": "logistics-hub",
+      "label": "Logistics hub",
+      "kind": "infrastructure",
+      "planType": "road",
+      "investment": 650000,
+      "jobs": 12,
+      "taxPerDay": 650,
+      "infrastructure": 1
+    },
+    {
+      "id": "transit-concession",
+      "label": "Transit concession",
+      "kind": "transit",
+      "planType": "transit",
+      "investment": 800000,
+      "jobs": 14,
+      "taxPerDay": 500,
+      "infrastructure": 2
+    },
+    {
+      "id": "utility-expansion",
+      "label": "Utility expansion",
+      "kind": "utility",
+      "planType": "power",
+      "investment": 750000,
+      "jobs": 10,
+      "taxPerDay": 400,
+      "infrastructure": 2
+    }
+  ]
+}

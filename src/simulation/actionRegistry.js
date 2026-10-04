@@ -65,6 +65,7 @@ function familyOf(intent) {
     || intent.startsWith('ANNEX_') || intent === 'PARK_LAND' || intent === 'PAVE_PLAZA'
     || intent === 'PLANT_TREES' || intent === 'INSTALL_LAMP') return 'place';
   if (intent === 'ACQUIRE_LAND') return 'infrastructure';
+  if (intent === 'SOLICIT_FDI' || intent === 'APPROVE_CONCESSION') return 'money';
   if (intent.startsWith('RAISE_') || intent.startsWith('CUT_') || intent === 'KEEP_TAX'
     || intent === 'SET_ASIDE_RESERVE' || intent === 'BOND_ISSUE' || intent === 'SUBSIDY'
     || intent === 'SLASH_SPENDING' || intent.startsWith('TRADE_') || intent === 'FUND_INNOVATION') return 'money';

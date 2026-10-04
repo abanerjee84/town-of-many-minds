@@ -390,3 +390,17 @@ This section defines the target architecture for turning the current specialist 
 
 83. Vehicle render simplification shall not change collision, parking, routing, fuel, or public-fleet behavior. `npm run test:vehicle-render` shall verify four rotating wheel pivots, the low-poly wheel budget, inspection metadata, shadow settings, and absence of page errors.
 
+## Foreign investment and industrialist projects
+
+84. Foreign capital shall be a versioned data contract in `src/data/foreignInvestment.json`, with named investors, sector/risk profiles, project templates, investment size, expected jobs, daily tax, infrastructure benefit, tax rate, repatriation rate, offer cadence, expiry, and active-project limits. Adding an investor or project template shall not require a new hardcoded economy branch.
+
+85. `ForeignInvestmentSystem` shall expose deterministic `availableOffers()`, `solicit()`, `approve()`, `stats()`, `serialize()`, and `restore()` boundaries. Offers shall be generated from measured population, treasury, approval, industry pressure, congestion, frontier, and site feasibility. An infeasible template shall not occupy the only offer slot when another configured project can legally proceed.
+
+86. `SOLICIT_FDI` shall expose an offer and `APPROVE_CONCESSION offer=<id>` shall be the public Council gate. The Mayor and Cabinet remit validation remain in force. Foreign investors may finance an approved project through the existing developer/private financing leg, but private operation shall remain independent of Council day-to-day decisions; Council retains approval, concession, land-use, safety, and public-service authority.
+
+87. An approved offer shall build through the existing `GrowthSystem` quote/apply/project lifecycle and the existing `EconomySystem` ledger. It shall never paint arbitrary roads, bypass acquired-land/site rules, mint treasury cash directly, or create a shadow factory. Factory, road, transit, and utility templates shall use the normal catalogue, materials, labour, staffing, production, and construction completion paths.
+
+88. Foreign funding shall be observable as external-to-developer `foreign_investment`, concession receipts as `permit_fee`, and operating taxes as `foreign_tax`. Operating projects may repatriate a bounded return only from actual developer cash above the operating floor. All external flows shall preserve the economy conservation audit and shall appear in FDI telemetry and the Council report.
+
+89. `Town.stats().foreignInvestment` and the Council report shall expose offers, active/completed projects, investor/project identity, committed and incoming capital, jobs, infrastructure points, tax revenue, repatriation, cap, and blocked reasons. Integrity save/restore shall retain this bounded state. `npm run test:fdi` shall verify offer selection, parser/registry visibility, solicitation, approval, real project start/completion, external tax, and a clean economy audit.
+

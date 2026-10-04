@@ -194,7 +194,8 @@ export function registerBuiltinKits(registry) {
         'RAISE_TAX', 'CUT_TAX', 'KEEP_TAX', 'HIRE_WORKERS', 'ATTRACT_SETTLERS', 'FUND_INNOVATION',
         'TRADE_BUY', 'TRADE_SELL', 'SET_ASIDE_RESERVE', 'BOND_ISSUE', 'SUBSIDY', 'SLASH_SPENDING',
         'HOST_EVENT', 'DECLARE_EMERGENCY', 'STUDY_ROAD', 'STUDY_ECONOMY', 'STUDY_DEMOGRAPHICS',
-        'STUDY_TRAFFIC', 'STUDY_INCIDENTS', 'ENACT_SCHEME', 'END_SCHEME', 'PASS_LAW', 'REPEAL_LAW', 'NO_ACTION'
+        'STUDY_TRAFFIC', 'STUDY_INCIDENTS', 'SOLICIT_FDI', 'APPROVE_CONCESSION',
+        'ENACT_SCHEME', 'END_SCHEME', 'PASS_LAW', 'REPEAL_LAW', 'NO_ACTION'
       ].map((intent) => [intent, null])),
       planTypes: [],
       capabilities: { council: true, policy: true, finance: true },
