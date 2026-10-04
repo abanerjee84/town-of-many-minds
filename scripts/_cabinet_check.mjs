@@ -94,6 +94,7 @@ try {
       departmentPrompts: [...new Set(messageMeta.filter((row) => row.department !== 'council').map((row) => row.department))],
       ownSystemPrompt: messageMeta.every((row) => row.messages.filter((message) => message.role === 'system').length === 1),
       distinctSystemPrompts: new Set(messageMeta.filter((row) => row.sittingId === 'cabinet-1' && row.department !== 'council').map((row) => row.messages[0]?.content)).size,
+      treasuryPrimeDirective: messageMeta.some((row) => row.department === 'treasury' && /Prime directive: stabilise the treasury first and increase it sustainably/i.test(row.messages.find((message) => message.role === 'system')?.content || '')),
       wrongDepartment: { valid: wrongDepartment.ownershipValid, reason: wrongDepartment.ownershipReason },
       malformedArchetype: { valid: malformedArchetype.specValid, reason: malformedArchetype.specReason },
       priorityMix: cabinet.priorityMix,
@@ -119,6 +120,7 @@ try {
   assert.deepEqual(result.departmentPrompts, ['treasury', 'land', 'infrastructure', 'services', 'society'], JSON.stringify(result));
   assert.equal(result.ownSystemPrompt, true, JSON.stringify(result));
   assert.equal(result.distinctSystemPrompts, 5, JSON.stringify(result));
+  assert.equal(result.treasuryPrimeDirective, true, JSON.stringify(result));
   assert.equal(result.firstMotions, 5, JSON.stringify(result));
   assert.equal(result.firstApproved, 1, JSON.stringify(result));
   assert.equal(result.firstExecuted, 1, JSON.stringify(result));
