@@ -423,3 +423,5 @@ This section defines the target architecture for turning the current specialist 
 
 96. `npm run test:municipal-revenue` shall verify transit, business licence, land lease, and utility collection, stats/treasury-flow attribution, payer ledger use, and a clean economy audit. Tourism regression shall continue to verify visitor export settlement and lodging telemetry.
 
+97. Decision cards shall distinguish total project cost from the amount paid by the public treasury. Every recorded motion shall expose public and private ledger spend, and the UI shall label the funding source (`public treasury`, `private capital`, or a mixed split). A developer-financed public outcome such as `UPGRADE_RESOURCE` must not be presented as state expenditure. `npm run test:fiscal-funding` shall verify the resource-upgrade funding leg, treasury delta, funding label, and audit.
+

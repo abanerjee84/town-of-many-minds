@@ -308,6 +308,7 @@ export class Hud {
       departmentLabel: decision.departmentLabel || null,
       mayor: decision.mayor || null,
       cost: Number(decision.cost) || 0,
+      funding: decision.funding || null,
       why: decision.why ?? decision.detail ?? '',
       // Phase 30 (S19b) — when the planner answered in place of the model, say
       // so on the card rather than showing only the substitute.
@@ -434,7 +435,7 @@ export class Hud {
               `<span class="c-intent${r.source === 'rules' ? ' muted' : ''}" title="Intent: ${esc(r.action)}">${esc(r.action)}</span>` +
               `<span class="c-status ${esc(r.status)}">${esc(r.status)}</span>` +
               (r.sub ? `<span class="c-sub" title="the council asked for this; the planner answered instead">↩ ${esc(r.sub)}</span>` : '') +
-              (r.cost ? `<span class="c-cost">$${Math.round(r.cost).toLocaleString('en-US')}</span>` : '') +
+              (r.cost ? `<span class="c-cost">$${Math.round(r.cost).toLocaleString('en-US')}${r.funding?.label ? ` · ${esc(r.funding.label)}` : ''}</span>` : '') +
               `</div>` +
               (why ? `<div class="c-why">${esc(why.length > 160 ? why.slice(0, 160) + '…' : why)}</div>` : '') +
               (r.departmentLabel ? `<div class="c-department">${esc(r.departmentLabel)}</div>` : '') +

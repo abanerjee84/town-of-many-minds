@@ -2880,6 +2880,15 @@ export class GovernanceSystem {
     decision.actualPublicSpend = expense('government');
     decision.actualPrivateSpend = expense('developer') + expense('business') + expense('household');
     decision.actualSpend = decision.actualPublicSpend + decision.actualPrivateSpend;
+    const publicLabel = `$${Math.round(decision.actualPublicSpend).toLocaleString('en-US')} public treasury`;
+    const privateLabel = `$${Math.round(decision.actualPrivateSpend).toLocaleString('en-US')} private capital`;
+    decision.funding = decision.actualPublicSpend > 0 && decision.actualPrivateSpend > 0
+      ? { public: decision.actualPublicSpend, private: decision.actualPrivateSpend, label: `${publicLabel} + ${privateLabel}` }
+      : decision.actualPublicSpend > 0
+        ? { public: decision.actualPublicSpend, private: 0, label: 'public treasury' }
+        : decision.actualPrivateSpend > 0
+          ? { public: 0, private: decision.actualPrivateSpend, label: 'private capital' }
+          : { public: 0, private: 0, label: 'no ledger payment' };
     decision.committedCost ??= decision.actualSpend;
     decision.cost = decision.actualSpend;
     decision.transactions = rows.map((tx) => tx.id);
@@ -2929,6 +2938,7 @@ export class GovernanceSystem {
     decision.actualPublicSpend = 0;
     decision.actualPrivateSpend = 0;
     decision.cost = 0;
+    decision.funding = { public: 0, private: 0, label: 'refunded' };
     decision.status = 'failed_rolled_back';
     decision.reason = reason;
     decision.reversals = this.town.economy?.projectTransactions(projectId).filter((tx) => tx.category === 'project_reversal').map((tx) => tx.id) || [];
