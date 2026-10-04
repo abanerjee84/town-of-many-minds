@@ -22,6 +22,12 @@ try {
     const dayStep = 1296;
     let maxTransitHold = 0;
     let worst = null;
+    let forcedRefuel = false;
+    let refuelEntered = false;
+    let refueled = false;
+    let stationHoldDays = 0;
+    let maxStationHoldDays = 0;
+    let refuelProbe = null;
 
     for (let day = 0; day < days; day++) {
       clock.update(rawDay);
@@ -38,6 +44,22 @@ try {
         if (code) town.governance.forceRequest(`INTENT: ${code}`);
       }
       for (const vehicle of town.traffic.vehicles.filter((item) => item.role === 'transit')) {
+        // Force one realistic low-tank diversion so the regression covers the
+        // pump approach and docking path, not only the ordinary bus loop.
+        if (!forcedRefuel) {
+          vehicle.fuel = 5;
+          forcedRefuel = true;
+          refuelProbe = { day: day + 1, uid: vehicle.uid };
+        }
+        const atFuelStation = !!vehicle.fuelStop || !!vehicle.docking && vehicle.docking.kind === 'pump';
+        if (atFuelStation) {
+          refuelEntered = true;
+          stationHoldDays++;
+          maxStationHoldDays = Math.max(maxStationHoldDays, stationHoldDays);
+        } else {
+          stationHoldDays = 0;
+        }
+        if (forcedRefuel && vehicle.fuel > 5 && !vehicle.fuelStop && !vehicle.docking) refueled = true;
         if (vehicle.holdT <= maxTransitHold) continue;
         maxTransitHold = vehicle.holdT;
         const cell = town.grid.worldToCell(vehicle.group.position.x, vehicle.group.position.z);
@@ -69,7 +91,23 @@ try {
     if (!transport.ready) failures.push('seeded horizon never commissioned a ready bus route');
     if (!transport.fleet || !transport.operationalFleet) failures.push('ready bus route has no operational fleet');
     if (maxTransitHold > 8) failures.push(`transit hold reached ${Math.round(maxTransitHold * 100) / 100}s`);
-    return { days, transport, maxTransitHold: Math.round(maxTransitHold * 100) / 100, worst, buses, failures };
+    if (!forcedRefuel) failures.push('seeded horizon never commissioned a bus for the refuel probe');
+    if (!refuelEntered) failures.push('forced low-fuel bus never reached a legal pump leg');
+    if (!refueled) failures.push('forced low-fuel bus did not leave the pump with more fuel');
+    if (maxStationHoldDays > 24) failures.push(`bus held at fuel station for ${maxStationHoldDays} sampled days`);
+    return {
+      days,
+      transport,
+      maxTransitHold: Math.round(maxTransitHold * 100) / 100,
+      maxStationHoldDays,
+      refuelProbe,
+      forcedRefuel,
+      refuelEntered,
+      refueled,
+      worst,
+      buses,
+      failures
+    };
   }, { days: DAYS });
 
   const failures = [...result.failures, ...errors.map((message) => `page error: ${message}`)];

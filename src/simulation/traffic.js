@@ -1052,14 +1052,11 @@ export class VehicleAgent {
   }
 
   onArrive(rng) {
-    if (this.role === 'transit') {
-      this.points = [];
-      this.idx = 0;
-      this.speed = 0;
-      this.parkTimer = 2.5;
-      this.nextLeg(rng);
-      return;
-    }
+    // A transit bus can be diverted to a fuel pump just like any other road
+    // vehicle.  Fuel docking must win over the normal stop-to-stop turn: the
+    // old transit-first branch reset the route as soon as the bus reached the
+    // pump approach (and again when it reached the claimed bay), leaving the
+    // pump claim/docking leg stranded at the station forever.
     if (this.docking) {
       // A recovery leg names its own dwell (home and station bays hold); a
       // normal arrival rolls one.
@@ -1094,6 +1091,17 @@ export class VehicleAgent {
       this.bayWaitT = 0;
       this.bayHopeful = undefined;
       this.speed = 0;
+      return;
+    }
+    if (this.role === 'transit') {
+      // Normal bus-stop arrivals do not claim a parking bay. Fuel arrivals
+      // have already been handled above, so a bus can only reach this branch
+      // after it has completed its pump leg or when it is serving its route.
+      this.points = [];
+      this.idx = 0;
+      this.speed = 0;
+      this.parkTimer = 2.5;
+      this.nextLeg(rng);
       return;
     }
     if (this.role !== 'emergency') {
@@ -1819,6 +1827,20 @@ export class VehicleAgent {
     if (this.docking || this.parkSpace) {
       this.backing = null;
       this.abortDock(8);
+      return;
+    }
+    if (this.role === 'transit') {
+      const rng = this.town.traffic?.rng || this.town.rng;
+      this.backing = null;
+      this.points = [];
+      this.idx = 0;
+      this.speed = 0;
+      if (this.fuelStop) {
+        this.onArrive(rng);
+        return;
+      }
+      this.parkTimer = 2.5;
+      this.nextLeg(rng);
       return;
     }
     const pos = this.group.position;
