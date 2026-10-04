@@ -60,6 +60,7 @@ export class CabinetSystem {
     this.lastSittingId = null;
     this.lastMotions = [];
     this.lastBoundaryViolations = [];
+    this.lastSpecViolations = [];
     this.lastCouncil = null;
     this.lastReview = null;
     this.lastExecution = [];
@@ -75,6 +76,7 @@ export class CabinetSystem {
     return [
       'CABINET MODE: return one JSON object {"motions":[]}; do not use the legacy one-line format unless the provider cannot emit JSON.',
       `Submit at most ${this.motionsPerSitting} motions, normally one per department. Each motion has department, canonical intent, reason, priority 0..1, emergency when measured, and optional parser params.`,
+      'Typed build intents must carry their catalogue parameter: BUILD_LANDMARK requires params.type=<landmark id>, BUILD_FACTORY requires params.type=<factory id>, BUILD_CIVIC/BUILD_TRANSIT require their facility when the report names one, and IMAGINE_ARCHETYPE requires params.block=<catalogue id>. Never submit a bare typed-build intent; choose NO_ACTION when the report does not identify a legal catalogue row.',
       `Use a ${Math.round(this.priorityMix.immediateShare * 100)}/${Math.round(this.priorityMix.longTermShare * 100)} split: address listed Priority/mandatory evidence first, and use the remaining share for defensible long-term capacity or vision.`,
       'Use only the report evidence and the named department remit. The Mayor approves or rejects; do not claim execution or invent coordinates, budgets, IDs, or actions.'
     ].join('\n');
@@ -92,7 +94,7 @@ export class CabinetSystem {
       return [
         `CABINET MINISTER ${department.id} — ${department.label}.`,
         focus,
-        `Own intents: ${intents}. Submit at most one motion for this department; use another department for another remit. When this department owns a listed Priority or mandatory remedy, choose it before a study, scheme, design, or other long-term option. The sitting target is ${Math.round(this.priorityMix.immediateShare * 100)}% immediate evidence and ${Math.round(this.priorityMix.longTermShare * 100)}% long-term vision across the Cabinet.`
+        `Own intents: ${intents}. Submit at most one motion for this department; use another department for another remit. Typed builds must include the exact catalogue parameter from Feasible now: BUILD_LANDMARK needs params.type=<id>, BUILD_FACTORY needs params.type=<id>, BUILD_CIVIC/BUILD_TRANSIT need params.facility when applicable, and IMAGINE_ARCHETYPE needs params.block=<id>. A bare typed-build intent is invalid; return NO_ACTION when no legal row is named. When this department owns a listed Priority or mandatory remedy, choose it before a study, scheme, design, or other long-term option. The sitting target is ${Math.round(this.priorityMix.immediateShare * 100)}% immediate evidence and ${Math.round(this.priorityMix.longTermShare * 100)}% long-term vision across the Cabinet.`
       ].join(' ');
     });
   }
@@ -129,6 +131,7 @@ export class CabinetSystem {
       const ownershipValid = defaultDepartment
         ? declaredDepartmentMatches && (finalResult.intent === 'NO_ACTION' || defaultDepartment.intents.includes(finalResult.intent))
         : (!declaredDepartment || finalResult.intent === 'NO_ACTION' || declaredDepartment.intents.includes(finalResult.intent));
+      const specIssues = Array.isArray(finalResult.params?.issues) ? finalResult.params.issues : [];
       return {
         id: `motion-${index + 1}`,
         index,
@@ -142,6 +145,8 @@ export class CabinetSystem {
         emergency: Boolean(object.emergency),
         ownershipValid,
         ownershipReason: ownershipValid ? '' : `${finalResult.intent || 'motion'} is outside ${department.label}`,
+        specValid: specIssues.length === 0,
+        specReason: specIssues.join('; '),
         key: `${finalResult.intent || 'UNPARSED'}|${fullRaw.replace(/^INTENT:\s*/i, '').trim().toUpperCase()}`
       };
     });
@@ -204,6 +209,13 @@ export class CabinetSystem {
         departmentLabel: motion.departmentLabel,
         intent: motion.intent,
         reason: motion.ownershipReason
+      })),
+      lastSpecViolations: this.lastSpecViolations.map((motion) => ({
+        id: motion.id,
+        department: motion.department,
+        departmentLabel: motion.departmentLabel,
+        intent: motion.intent,
+        reason: motion.specReason || 'invalid typed-build parameters'
       })),
       lastCouncil: this.lastCouncil ? {
         status: this.lastCouncil.status,

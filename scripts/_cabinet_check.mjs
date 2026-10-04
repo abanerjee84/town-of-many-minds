@@ -20,7 +20,9 @@ try {
       land: { department: 'land', intent: 'STUDY_DEMOGRAPHICS', reason: 'measure population', priority: 0.3 },
       infrastructure: { department: 'infrastructure', intent: 'STUDY_TRAFFIC', reason: 'measure movement', priority: 0.5 },
       services: { department: 'services', intent: 'STUDY_INCIDENTS', reason: 'measure calls', priority: 0.6 },
-      society: { department: 'society', intent: 'NO_ACTION', reason: 'hold', priority: 0.1 }
+      // Deliberately malformed: a bare typed build must be quarantined before
+      // Council synthesis rather than becoming a late enact() rejection.
+      society: { department: 'society', intent: 'BUILD_LANDMARK', reason: 'try a landmark without a catalogue type', priority: 0.1 }
     };
     const secondRound = {
       treasury: { department: 'treasury', intent: 'EXTEND_STREET', reason: 'wrong remit', priority: 0.9 },
@@ -72,6 +74,7 @@ try {
       firstMotions: firstCabinet.lastMotions.length,
       firstApproved: firstCabinet.lastReview.approved.length,
       firstExecuted: firstCabinet.lastExecution.length,
+      firstSpecViolations: firstCabinet.lastSpecViolations.length,
       secondReturned: { intent: secondReturned.intent, status: secondReturned.status },
       motions: cabinet.lastMotions.length,
       approved: cabinet.lastReview.approved.length,
@@ -115,6 +118,7 @@ try {
   assert.equal(result.firstMotions, 5, JSON.stringify(result));
   assert.equal(result.firstApproved, 1, JSON.stringify(result));
   assert.equal(result.firstExecuted, 1, JSON.stringify(result));
+  assert.equal(result.firstSpecViolations, 1, JSON.stringify(result));
   assert.equal(result.motions, 5, JSON.stringify(result));
   assert.equal(result.approved, 1, JSON.stringify(result));
   assert.equal(result.rejected, 0, JSON.stringify(result));

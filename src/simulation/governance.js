@@ -669,7 +669,7 @@ export function systemPrompt(town, options = {}) {
       `You are the ${department.label} Cabinet minister. ${focus}`,
       `Your owned canonical intents are: ${department.intents.join(', ')}.`,
       'Read the town report as evidence. Resolve a mandatory remedy first; choose only a legal action supported by Feasible now, Priority, or an explicit always-available rule. If this department owns a Priority remedy, submit it before a long-term study, scheme, design, or vision action. If Priority contains a build or service remedy outside this department, return NO_ACTION. Do not use ENACT_SCHEME, PASS_LAW, or HOST_EVENT while any measured Priority remains. Do not invent coordinates, budgets, IDs, or actions.',
-      'Return exactly one JSON object: {"motions":[{"department":"' + department.id + '","intent":"CANONICAL_INTENT","reason":"short measured reason","priority":0.0,"params":{}}]}. Use priority 0..1; set params only when the report supports them.',
+      'Return exactly one JSON object: {"motions":[{"department":"' + department.id + '","intent":"CANONICAL_INTENT","reason":"short measured reason","priority":0.0,"params":{}}]}. Use priority 0..1. Typed builds require their exact Feasible-now parameter: BUILD_LANDMARK params.type=<landmark id>, BUILD_FACTORY params.type=<factory id>, BUILD_CIVIC/BUILD_TRANSIT params.facility when applicable, and IMAGINE_ARCHETYPE params.block=<catalogue id>. Never emit a bare typed-build intent; use NO_ACTION if no legal catalogue row is named.',
       voice,
       learning
     ].filter(Boolean).join(' ');
@@ -3070,6 +3070,8 @@ export class GovernanceSystem {
       this.cabinet.lastMotions = motions;
       const boundaryViolations = motions.filter((motion) => motion.ownershipValid === false);
       this.cabinet.lastBoundaryViolations = boundaryViolations;
+      const specViolations = motions.filter((motion) => motion.specValid === false);
+      this.cabinet.lastSpecViolations = specViolations;
       if (boundaryViolations.length) {
         const labels = [...new Set(boundaryViolations.map((motion) => motion.departmentLabel))].join(', ');
         events.emit('log', {
@@ -3077,10 +3079,17 @@ export class GovernanceSystem {
           text: `Cabinet remit guard quarantined ${boundaryViolations.length} out-of-remit motion${boundaryViolations.length === 1 ? '' : 's'} from ${labels}.`
         });
       }
+      if (specViolations.length) {
+        const labels = [...new Set(specViolations.map((motion) => motion.departmentLabel))].join(', ');
+        events.emit('log', {
+          kind: 'event',
+          text: `Cabinet spec guard quarantined ${specViolations.length} malformed typed-build motion${specViolations.length === 1 ? '' : 's'} from ${labels}; the motion did not reach Council synthesis.`
+        });
+      }
       // An individual minister cannot put another department's intent before
       // the final Council chamber. Keep the invalid reply in the Cabinet audit
       // stats, but only admit motions owned by the calling department.
-      const admittedMotions = motions.filter((motion) => motion.ownershipValid !== false);
+      const admittedMotions = motions.filter((motion) => motion.ownershipValid !== false && motion.specValid !== false);
       const priorityIntents = this.planBoard()?.priority || [];
       const candidateDigest = admittedMotions.map((motion) => ({
         id: motion.id,
@@ -3211,8 +3220,15 @@ export class GovernanceSystem {
                 text: `Cabinet remit guard quarantined the correction from ${corrected[0].departmentLabel}.`
               });
             }
+            if (corrected[0].specValid === false) {
+              this.cabinet.lastSpecViolations.push(corrected[0]);
+              events.emit('log', {
+                kind: 'event',
+                text: `Cabinet spec guard quarantined the malformed correction from ${corrected[0].departmentLabel}.`
+              });
+            }
             const correctionReview = this.cabinet.mayor.review(
-              corrected.filter((motion) => motion.ownershipValid !== false),
+              corrected.filter((motion) => motion.ownershipValid !== false && motion.specValid !== false),
               { requiredAction: this.requiredAction, priorityIntents }
             );
             review = {
