@@ -2200,6 +2200,11 @@ export class GrowthSystem {
         reason: `surplus capacity supports one experimental ${zone} design`,
         opts: {
           zone,
+          // Keep the generated Feasible-now code executable under the
+          // catalogue-spec contract. The Council remains free to choose a
+          // different compatible block; this is only the planner's starting
+          // suggestion for a comfort design.
+          blockId: zone === 'house' ? 'house.townhouse' : 'mixed.use',
           need: Math.max(0.2, need),
           designGap: 'comfort',
           designReason: `surplus capacity supports one experimental ${zone} design`

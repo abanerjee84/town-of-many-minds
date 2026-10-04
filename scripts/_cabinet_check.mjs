@@ -61,6 +61,9 @@ try {
     const wrongDepartment = t.governance.cabinet.parse(JSON.stringify({ motions: [
       { department: 'treasury', intent: 'EXTEND_STREET', reason: 'wrong remit' }
     ] }))[0];
+    const malformedArchetype = t.governance.cabinet.parse(JSON.stringify({ motions: [
+      { department: 'society', intent: 'IMAGINE_ARCHETYPE', reason: 'missing catalogue block' }
+    ] }), { departmentId: 'society', maxMotions: 1 })[0];
     const mixProbe = t.governance.cabinet.enforcePriorityMix(
       [{ id: 'vision', intent: 'ENACT_SCHEME', priority: 1, index: 0 }],
       [
@@ -92,6 +95,7 @@ try {
       ownSystemPrompt: messageMeta.every((row) => row.messages.filter((message) => message.role === 'system').length === 1),
       distinctSystemPrompts: new Set(messageMeta.filter((row) => row.sittingId === 'cabinet-1' && row.department !== 'council').map((row) => row.messages[0]?.content)).size,
       wrongDepartment: { valid: wrongDepartment.ownershipValid, reason: wrongDepartment.ownershipReason },
+      malformedArchetype: { valid: malformedArchetype.specValid, reason: malformedArchetype.specReason },
       priorityMix: cabinet.priorityMix,
       mixProbe,
       reportHasEmployment: /Employment:/.test(t.governance.report()),
@@ -126,6 +130,7 @@ try {
   assert.equal(result.executed, 1, JSON.stringify(result));
   assert.equal(result.boundaryViolations, 3, JSON.stringify(result));
   assert.equal(result.wrongDepartment.valid, false, JSON.stringify(result));
+  assert.equal(result.malformedArchetype.valid, false, JSON.stringify(result));
   assert.equal(result.sittingIds.length, 2, JSON.stringify(result));
   console.log(JSON.stringify({ ok: true, ...result, pageErrors: errors }));
 } finally {

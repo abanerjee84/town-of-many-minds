@@ -786,8 +786,9 @@ function nameFrom(s, re) {
  *
  *  Strict by design: every value that is PRESENT is validated. An invalid
  *  zone/style/floors lands in `spec.issues`, and `enact` rejects the whole
- *  decision with that detail instead of silently randomising. Only values
- *  that were never mentioned fall back to planFor's bespoke defaults. */
+ *  decision with that detail instead of silently randomising. A creative
+ *  request must name a catalogue block or a facility (which infers its civic
+ *  block); a completely bare IMAGINE_ARCHETYPE is not an executable design. */
 function parseArchetypeSpec(raw) {
   const s = String(raw || '');
   const spec = {};
@@ -901,6 +902,14 @@ function parseArchetypeSpec(raw) {
   }
   if (spec.blockId && !spec.blockId.startsWith('house.') && !spec.blockId.startsWith('civic.') && !['mixed.use', 'office.lobby'].includes(spec.blockId)) {
     issues.push(`construction block ${spec.blockId} belongs to another build intent`);
+  }
+
+  // A bare creative intent used to fall through to a generic one-storey
+  // house, so a Cabinet minister could submit a design without naming the
+  // kit being commissioned. Facility-only requests remain valid because the
+  // parser has already inferred civic.<facility> above.
+  if (!blockM && !facM) {
+    issues.push('spec needs block=<catalogue id> or facility=<civic id>');
   }
 
   const name = nameFrom(s, NAME_RE);

@@ -11,6 +11,7 @@ const cases = [
   ['REZONE zone=industrial', 'REZONE', 'industrial'],
   ['REZONE zone=banana', 'REZONE', 'issue'],
   ['INTENT: BUILD_FACTORY type=bogus', 'BUILD_FACTORY', 'issue'],
+  ['INTENT: IMAGINE_ARCHETYPE', 'IMAGINE_ARCHETYPE', 'issue'],
   ['INTENT: NO_ACTION', 'NO_ACTION']
 ];
 
