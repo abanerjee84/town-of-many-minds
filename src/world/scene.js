@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import performanceRules from '../data/performance.json' with { type: 'json' };
 import { CELL, PALETTE } from '../core/config.js';
 
 // Reused by updateLighting. Constructing a dozen Color objects per frame was
@@ -191,10 +192,18 @@ export class SceneManager {
     this.container = container;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.defaultPixelRatio = Math.min(window.devicePixelRatio, 2);
+    this.renderer.setPixelRatio(this.defaultPixelRatio);
     this.renderer.setSize(container.clientWidth, container.clientHeight);
-    this.renderer.shadowMap.enabled = true;
+    // Shadows are an explicit user preference. Start disabled so a new run
+    // does not spend a large shadow-map pass before the player opts in.
+    this.shadowsEnabled = false;
+    this.renderer.shadowMap.enabled = false;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.autoUpdate = false;
+    this.renderer.shadowMap.needsUpdate = false;
+    this.performanceMode = 'normal';
+    this.performanceStaticVersion = null;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
@@ -608,6 +617,46 @@ export class SceneManager {
     // full plate; only its direction should change with the camera.
     this.skybox.position.copy(this.camera.position);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /**
+   * Keep the visual workload bounded while a large town is fast-forwarding.
+   * Shadow direction is static in TOMM, so a fast run can reuse the existing
+   * shadow map and refresh it only when the rendered town structure changes.
+   * Returning to normal speed restores the full pixel ratio and live shadows.
+   */
+  setPerformanceMode({ speed = 0, population = 0, staticVersion = null } = {}) {
+    const rules = performanceRules.render?.highSpeed || {};
+    const fast = Number(speed) >= (Number(rules.speedThreshold) || 50) &&
+      Number(population) >= (Number(rules.populationThreshold) || 240);
+    const next = fast ? 'high-speed' : 'normal';
+    if (next !== this.performanceMode) {
+      this.performanceMode = next;
+      if (fast) {
+        this.renderer.setPixelRatio(Math.min(this.defaultPixelRatio, Number(rules.pixelRatio) || this.defaultPixelRatio));
+        this.renderer.shadowMap.autoUpdate = this.shadowsEnabled && rules.shadowAutoUpdate !== false;
+      } else {
+        this.renderer.setPixelRatio(this.defaultPixelRatio);
+        this.renderer.shadowMap.autoUpdate = this.shadowsEnabled;
+      }
+      this.renderer.shadowMap.needsUpdate = this.shadowsEnabled;
+      this.performanceStaticVersion = staticVersion;
+    } else if (fast && staticVersion !== this.performanceStaticVersion) {
+      this.renderer.shadowMap.needsUpdate = this.shadowsEnabled;
+      this.performanceStaticVersion = staticVersion;
+    }
+    return this.performanceMode;
+  }
+
+  /** Apply the user's shadow preference without rebuilding the scene. */
+  setShadowsEnabled(enabled = false) {
+    const next = enabled === true;
+    if (next === this.shadowsEnabled && this.renderer.shadowMap.enabled === next) return next;
+    this.shadowsEnabled = next;
+    this.renderer.shadowMap.enabled = next;
+    this.renderer.shadowMap.autoUpdate = next && (this.performanceMode !== 'high-speed' || performanceRules.render?.highSpeed?.shadowAutoUpdate !== false);
+    this.renderer.shadowMap.needsUpdate = next;
+    return next;
   }
 
   worldSize(grid) {

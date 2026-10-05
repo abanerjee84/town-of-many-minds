@@ -112,6 +112,7 @@ export class Town {
     // do not each repeat the same industry/research/growth work.
     this._statsVersion = 0;
     this._statsCache = null;
+    this._staticVersion = 0;
 
     this.traffic = new TrafficSystem(this);
     // The vehicle register. TrafficSystem owns the BEHAVIOUR of whatever is
@@ -158,6 +159,8 @@ export class Town {
     this._statsVersion++;
     this._statsCache = null;
   }
+
+  staticVersion() { return this._staticVersion; }
 
   generate(seed) {
     this.clearTown();
@@ -403,6 +406,7 @@ export class Town {
    * asking for it.
    */
   rebuildStatic({ roads = true, lots = true, validate = true } = {}) {
+    this._staticVersion++;
     // A few specialist planners (notably resource-site access) write road
     // cells directly instead of going through paintRoad. Remove any stale
     // foliage before layoutLots can turn custom props into meshes. This is a
@@ -437,6 +441,7 @@ export class Town {
   }
 
   rebuildBuildings() {
+    this._staticVersion++;
     this.clearGroup(this.buildingsGroup);
     const bodyGeos = [];
     const glowGeos = [];

@@ -16,6 +16,7 @@ export const SETTINGS_DEFAULTS = Object.freeze({
   residentsPerTilePerFloor: 3,
   maxPopulation: 1000,
   glowIntensity: 1,
+  shadows: false,
   councilTemperature: 0.15,
   councilSittingsPerDay: 2,
   cabinetMotionsPerSitting: 5,
@@ -36,6 +37,7 @@ function normalise(patch = {}) {
   const residents = Number(patch.residentsPerTilePerFloor);
   const maxPopulation = Number(patch.maxPopulation);
   const glow = Number(patch.glowIntensity);
+  const shadows = patch.shadows;
   const temperature = Number(patch.councilTemperature);
   const sittingsPerDay = Number(patch.councilSittingsPerDay);
   const cabinetMotionsPerSitting = Number(patch.cabinetMotionsPerSitting);
@@ -56,6 +58,7 @@ function normalise(patch = {}) {
     glowIntensity: Number.isFinite(glow)
       ? Math.round(clamp(glow, 0.2, 2) * 10) / 10
       : SETTINGS_DEFAULTS.glowIntensity,
+    shadows: shadows === true || shadows === 'true',
     councilTemperature: Number.isFinite(temperature)
       ? Math.round(clamp(temperature, 0, 1) * 100) / 100
       : SETTINGS_DEFAULTS.councilTemperature,

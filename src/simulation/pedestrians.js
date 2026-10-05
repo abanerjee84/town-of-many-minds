@@ -1434,7 +1434,7 @@ export class CitizenSystem {
   }
 
   /** One fixed micro-step, interleaved with the vehicle micro-steps. */
-  step(stepDt, clock) {
+  step(stepDt, clock, agentMode = null) {
     const clk = clock || this.clock;
     this.time += stepDt;
     this.stressAcc += stepDt;
@@ -1469,11 +1469,15 @@ export class CitizenSystem {
       else this.neighborBuckets.set(key, [c]);
     }
     const population = this.citizens.length;
-    const lodStart = performanceRules.agents.lodStartPopulation;
-    const maxStride = performanceRules.agents.lodMaxStride;
+    const lodStart = Math.max(1, Number(agentMode?.lodStartPopulation) || performanceRules.agents.lodStartPopulation);
+    const maxStride = Math.max(
+      performanceRules.agents.lodMaxStride,
+      Number(agentMode?.lodMaxStride) || performanceRules.agents.lodMaxStride
+    );
     const stride = population <= lodStart
       ? 1
       : Math.min(maxStride, Math.max(1, Math.ceil(population / lodStart)));
+    this.lastStepStride = stride;
     const phase = this.agentStepIndex++ % stride;
     for (let i = 0; i < this.citizens.length; i++) {
       const c = this.citizens[i];

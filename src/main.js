@@ -110,6 +110,7 @@ function applySettingsToRuntime({ speed = false, camera = false, population = fa
   if (population || SIM.maxCitizens !== settings.maxPopulation) SIM.maxCitizens = settings.maxPopulation;
   if (speed) clock.speed = settings.defaultSpeed;
   if (camera) sceneMgr.applyCameraDefaults(settings);
+  sceneMgr.setShadowsEnabled(settings.shadows === true);
   fitTownEnabled = settings.fitTown !== false;
   updateFitTownControl();
   if (fit && fitTownEnabled) fitTownToView();
@@ -186,6 +187,9 @@ function renderSettings() {
           <span><b>Night glow</b><small>Window, lamp and emissive light strength</small></span>
           <span class="settings-inline"><input id="setting-glow" type="range" min="0.2" max="2" step="0.1" value="${settings.glowIntensity}" /><output id="setting-glow-value">${settings.glowIntensity.toFixed(1)}×</output></span>
         </label>
+        <label class="settings-check settings-item" data-setting-search="shadows shadow map lighting performance graphics">
+          <input id="setting-shadows" type="checkbox"${settings.shadows ? ' checked' : ''} /> <span><b>Shadows</b><small>Real-time object shadows; off keeps large towns faster</small></span>
+        </label>
       </section>
       <section class="settings-section" data-settings-section="camera">
         <div class="settings-section-head"><h3>Camera</h3><span>Defaults used on load and Reset</span></div>
@@ -258,6 +262,10 @@ function renderSettings() {
   glow.addEventListener('input', () => {
     const next = updateSettings({ glowIntensity: glow.value });
     glowValue.textContent = `${next.glowIntensity.toFixed(1)}×`;
+  });
+  document.getElementById('setting-shadows').addEventListener('change', (event) => {
+    const next = updateSettings({ shadows: event.target.checked });
+    sceneMgr.setShadowsEnabled(next.shadows);
   });
 
   const temperature = document.getElementById('setting-temperature');
@@ -515,6 +523,11 @@ function frame(now) {
 
     step('lighting', () => sceneMgr.updateLighting(clock, town.weather?.stats?.()));
     step('glow', () => setGlowLevel(sceneMgr.nightFactor * getSettings().glowIntensity));
+    step('render-quality', () => sceneMgr.setPerformanceMode({
+      speed: clock.speed,
+      population: town.pedestrians?.citizens?.length || 0,
+      staticVersion: town.staticVersion?.() ?? null
+    }));
 
     // Deep town diagnostics are expensive. Advance the two UI schedulers
     // first, then build one shared snapshot only when at least one surface is

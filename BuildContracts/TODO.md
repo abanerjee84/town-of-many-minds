@@ -323,7 +323,10 @@ Updated 2026-10-04 after the catalogue-wide industrial-planning audit.
 
 - [ ] Add a bounded route-job queue/cache after profiling route churn at the 1,000-resident cap.
 - [ ] Split large static foliage batches into spatial chunks if close-view GPU profiling shows coarse frustum culling.
-- [ ] Add dynamic shadow-map quality and distant-prop shadow LOD if renderer telemetry shows shadows dominating frame time.
+- [x] Added a persisted Visuals → Shadows toggle, default off, with runtime enable/disable and fast-mode shadow refresh rules. The default avoids shadow-map work on large towns until a player opts in.
+- [x] Moved the shared tree, pine, bush, and simple vehicle-wheel segment counts into `performance.json`; the default foliage and wheel meshes now use smaller low-poly budgets without changing simulation footprints or picking.
+- [x] Added a data-driven high-speed agent mode for large towns: 50×+ with 240+ residents uses a 0.1-second agent step, a bounded 0.65 population budget share, and an idle-agent LOD stride up to 12 while critical agents remain fully updated. Added `npm run test:performance-stress`, which fills the real citizen kit to 1,000 residents, runs the full simulation/render path at 50×, and records frame timing and renderer telemetry without network/provider work.
+- [x] Added fast visual quality management at the same threshold: pixel ratio is bounded and the fixed-direction shadow map stops re-rendering every frame, refreshing when the town's static-version changes and restoring live shadows at normal speed.
 
 ## Current sprint (2026-10-04, foreign investment and industrialist projects)
 

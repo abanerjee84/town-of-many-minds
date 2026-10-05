@@ -2,6 +2,12 @@ import * as THREE from 'three';
 import { PALETTE } from '../../core/config.js';
 import { box, cyl, sphere, cone, merge, jitterColor } from '../geometry.js';
 import { sharedLampGlow } from '../glow.js';
+import performanceRules from '../../data/performance.json' with { type: 'json' };
+
+const geometryRules = performanceRules.render?.geometry || {};
+const treeGeometry = geometryRules.tree || {};
+const pineGeometry = geometryRules.pine || {};
+const bushGeometry = geometryRules.bush || {};
 
 function single(geos, opts = {}) {
   const geo = merge(geos);
@@ -20,7 +26,7 @@ export function buildTree(rng, scale = 1) {
   const geos = [];
   const h = rng.float(1.6, 2.6) * scale;
   const trunkR = 0.14 * scale;
-  geos.push(cyl(trunkR * 0.8, trunkR * 1.2, h, PALETTE.trunk, 0, h / 2, 0, 7));
+  geos.push(cyl(trunkR * 0.8, trunkR * 1.2, h, PALETTE.trunk, 0, h / 2, 0, treeGeometry.trunkSegments || 6));
   const leaf = jitterColor(rng.pick(PALETTE.foliage), rng, 0.06);
   const blobs = rng.int(2, 3);
   for (let i = 0; i < blobs; i++) {
@@ -32,13 +38,13 @@ export function buildTree(rng, scale = 1) {
         rng.float(-0.4, 0.4) * scale,
         h + rng.float(-0.1, 0.55) * scale,
         rng.float(-0.4, 0.4) * scale,
-        6,
-        4
+        treeGeometry.leafWidthSegments || 5,
+        treeGeometry.leafHeightSegments || 3
       )
     );
   }
   if (rng.chance(0.22)) {
-    geos.push(cone(0.85 * scale, 1.3 * scale, jitterColor(leaf, rng, 0.08), 0, h + 0.5 * scale, 0, 7));
+    geos.push(cone(0.85 * scale, 1.3 * scale, jitterColor(leaf, rng, 0.08), 0, h + 0.5 * scale, 0, treeGeometry.crownSegments || 6));
   }
   return single(geos);
 }
@@ -46,14 +52,14 @@ export function buildTree(rng, scale = 1) {
 export function buildPine(rng, scale = 1) {
   const geos = [];
   const h = rng.float(2.6, 4.2) * scale;
-  geos.push(cyl(0.1 * scale, 0.16 * scale, h * 0.45, PALETTE.trunk, 0, h * 0.22, 0, 7));
+  geos.push(cyl(0.1 * scale, 0.16 * scale, h * 0.45, PALETTE.trunk, 0, h * 0.22, 0, pineGeometry.trunkSegments || 6));
   const leaf = jitterColor(rng.pick(PALETTE.foliage), rng, 0.05);
   const layers = 3;
   for (let i = 0; i < layers; i++) {
     const t = i / layers;
     const r = (1.05 - t * 0.62) * scale;
     const y = h * 0.32 + t * h * 0.6;
-    geos.push(cone(r, h * 0.4, jitterColor(leaf, rng, 0.05), 0, y, 0, 6));
+    geos.push(cone(r, h * 0.4, jitterColor(leaf, rng, 0.05), 0, y, 0, pineGeometry.coneSegments || 5));
   }
   return single(geos);
 }
@@ -69,8 +75,8 @@ export function buildBush(rng, scale = 1) {
         rng.float(-0.3, 0.3) * scale,
         rng.float(0.2, 0.35) * scale,
         rng.float(-0.3, 0.3) * scale,
-        7,
-        5
+        bushGeometry.widthSegments || 6,
+        bushGeometry.heightSegments || 4
       )
     );
   }

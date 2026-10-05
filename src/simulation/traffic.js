@@ -1926,6 +1926,9 @@ export class TrafficSystem {
     this.lastAgentWanted = 0;
     this.lastAgentUsable = 0;
     this.lastAgentSteps = 0;
+    this.lastAgentFixedStep = performanceRules.agents.fixedStepSeconds;
+    this.lastAgentMode = 'normal';
+    this.lastAgentStride = 1;
   }
 
   /** Completed private trips, kept as a plain field for existing readers. */
@@ -3134,7 +3137,14 @@ export class TrafficSystem {
     peds?.beginFrame?.(dt, clock);
 
     const agentRules = performanceRules.agents;
-    const FIXED = agentRules.fixedStepSeconds;
+    const population = peds?.citizens?.length || 0;
+    const speed = Number(clock?.speed) || 0;
+    const highSpeedRules = agentRules.highSpeed;
+    const highSpeed = !!highSpeedRules &&
+      speed >= (Number(highSpeedRules.speedThreshold) || 50) &&
+      population >= (Number(highSpeedRules.populationThreshold) || 240);
+    const mode = highSpeed ? highSpeedRules : null;
+    const FIXED = Math.max(0.01, Number(mode?.fixedStepSeconds || agentRules.fixedStepSeconds) || 0.05);
     // A catch-up BUDGET in agent-time, not a step count. The old `MAX_STEPS = 64`
     // was 3.2 s of simulation per frame, which sounds generous until you notice
     // what `dt` is: `main.js` passes `simDt = dt * speed`, so at the default 100×
@@ -3148,11 +3158,10 @@ export class TrafficSystem {
     // The budget is now explicit, the overflow is reported rather than
     // discarded, and the step count is derived from it — so the loss is a
     // visible number instead of a silent divergence.
-    const population = peds?.citizens?.length || 0;
     const populationShare = population <= agentRules.populationReference
       ? 1
       : Math.max(
-          agentRules.minimumPopulationBudgetShare,
+          Number(mode?.populationBudgetShare) || agentRules.minimumPopulationBudgetShare,
           agentRules.populationReference / population
         );
     // At high clock speeds, spend more of the available render frame on
@@ -3164,7 +3173,7 @@ export class TrafficSystem {
       Math.max(0, dt) * agentRules.targetBudgetFrameFraction
     );
     const STEP_BUDGET = Math.min(
-      agentRules.maxBudgetSeconds,
+      Number(mode?.maxBudgetSeconds) || agentRules.maxBudgetSeconds,
       requestedBudget * populationShare
     );
     const wanted = Math.max(0, this.acc + dt);
@@ -3177,15 +3186,18 @@ export class TrafficSystem {
     if (this.droppedSeconds > 0.01) this.timeDroppedTotal = (this.timeDroppedTotal || 0) + this.droppedSeconds;
     const steps = Math.floor(usable / FIXED);
     this.lastAgentSteps = steps;
+    this.lastAgentFixedStep = FIXED;
+    this.lastAgentMode = highSpeed ? 'high-speed' : 'normal';
     if (steps > 0) {
       const stepDt = FIXED;
       const list = this.vehicles;
       for (let i = 0; i < steps; i++) {
         this.releaseJunctions();
         for (const v of list) v.update(stepDt, list, this.rng);
-        peds?.step?.(stepDt, clock);
+        peds?.step?.(stepDt, clock, mode);
       }
     }
+    this.lastAgentStride = peds?.lastStepStride || 1;
 
     this.releaseJunctions();
     this.resolveJams(dt);
@@ -3199,7 +3211,9 @@ export class TrafficSystem {
   /** Compact telemetry for the performance panel and long-horizon probes. */
   performanceStats() {
     return {
-      fixedStepSeconds: performanceRules.agents.fixedStepSeconds,
+      fixedStepSeconds: this.lastAgentFixedStep,
+      mode: this.lastAgentMode,
+      lodStride: this.lastAgentStride,
       budgetSeconds: this.lastAgentBudget,
       wantedSeconds: this.lastAgentWanted,
       simulatedSeconds: this.lastAgentUsable,
@@ -3264,6 +3278,9 @@ export class TrafficSystem {
     this.lastAgentWanted = 0;
     this.lastAgentUsable = 0;
     this.lastAgentSteps = 0;
+    this.lastAgentFixedStep = performanceRules.agents.fixedStepSeconds;
+    this.lastAgentMode = 'normal';
+    this.lastAgentStride = 1;
   }
 }
 

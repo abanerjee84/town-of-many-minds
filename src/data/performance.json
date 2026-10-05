@@ -4,15 +4,49 @@
     "statsIntervalSeconds": 0.25,
     "inspectorIntervalSeconds": 0.5
   },
+  "render": {
+    "highSpeed": {
+      "speedThreshold": 50,
+      "populationThreshold": 240,
+      "pixelRatio": 1.25,
+      "shadowAutoUpdate": false
+    },
+    "geometry": {
+      "tree": {
+        "trunkSegments": 6,
+        "leafWidthSegments": 5,
+        "leafHeightSegments": 3,
+        "crownSegments": 6
+      },
+      "pine": {
+        "trunkSegments": 6,
+        "coneSegments": 5
+      },
+      "bush": {
+        "widthSegments": 6,
+        "heightSegments": 4
+      },
+      "vehicleWheelSegments": 6
+    }
+  },
   "agents": {
     "fixedStepSeconds": 0.05,
+    "highSpeed": {
+      "speedThreshold": 50,
+      "populationThreshold": 240,
+      "fixedStepSeconds": 0.1,
+      "populationBudgetShare": 0.65,
+      "lodStartPopulation": 80,
+      "lodMaxStride": 12,
+      "maxBudgetSeconds": 1.25
+    },
     "baseBudgetSeconds": 0.8,
     "maxBudgetSeconds": 1.8,
     "targetBudgetFrameFraction": 1.15,
     "populationReference": 180,
     "minimumPopulationBudgetShare": 0.5,
     "lodStartPopulation": 120,
-    "lodMaxStride": 4,
+    "lodMaxStride": 8,
     "chatBucketSize": 2.6,
     "citizenRenderMode": "simple",
     "citizenCastShadows": false,

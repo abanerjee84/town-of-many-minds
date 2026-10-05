@@ -6,7 +6,8 @@ import vehicleCatalog from '../../data/vehicleCatalog.json' with { type: 'json' 
 import performanceRules from '../../data/performance.json' with { type: 'json' };
 
 const detailedWheels = performanceRules.agents.vehicleWheelRenderMode === 'detailed';
-const wheelGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.24, detailedWheels ? 12 : 8);
+const wheelSegments = detailedWheels ? 12 : (performanceRules.render?.geometry?.vehicleWheelSegments || 6);
+const wheelGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.24, wheelSegments);
 wheelGeo.rotateZ(Math.PI / 2);
 const hubGeo = new THREE.CylinderGeometry(0.14, 0.14, 0.26, 8);
 hubGeo.rotateZ(Math.PI / 2);

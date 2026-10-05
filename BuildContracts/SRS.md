@@ -359,6 +359,16 @@ This section defines the target architecture for turning the current specialist 
 
 69. Future performance work may add route-job queues/cache, spatially chunked static foliage batches, dynamic shadow resolution, and distant-prop shadow LOD. These are measured follow-ups; they shall not be enabled by guesswork if the current draw-call, triangle, or frame-time telemetry does not show a regression.
 
+69a. At a configured high-speed threshold, large populations shall use a separate bounded agent scheduler loaded from `performance.json`. The scheduler may use a coarser fixed agent step and a larger idle-agent LOD stride while keeping walking, crossing, chatting, driving, emergency, and transit agents on the critical update path. It shall expose the selected mode, actual fixed step, LOD stride, requested agent seconds, simulated agent seconds, dropped seconds, and lag ratio through performance telemetry; it shall never claim dropped time was simulated.
+
+69b. `npm run test:performance-stress` shall fill the real citizen kit to the configured 1,000-resident ceiling, run the full simulation and render path at 50×, and report frame timing, renderer calls/triangles, page errors, and scheduler telemetry. The regression shall verify high-speed mode selection, bounded lag, high-speed LOD activation, and absence of page errors without making an economy audit claim about synthetic stress residents.
+
+69c. At the same high-speed population threshold, the renderer shall use a versioned fast visual mode: a bounded pixel ratio and, when shadows are enabled, a reusable directional shadow map whose refresh is requested only when static town geometry changes. Returning below the threshold shall restore the normal pixel ratio and live shadow updates. This mode shall not alter simulation state, lighting values, or construction geometry.
+
+69d. The Visuals settings shall expose a persisted `shadows` boolean with a default of `false`. The renderer shall begin with shadow-map rendering disabled, shall enable or disable it immediately when the setting changes, and shall keep fast-mode auto-update rules subordinate to the user's preference. Resetting settings shall restore shadows to off.
+
+69e. High-count shared decorative geometry shall use versioned segment budgets in `src/data/performance.json`. The default low-poly profile shall cover tree trunks/crowns, pines, bushes, and simple vehicle wheels; it shall reduce vertex work while preserving object dimensions, collision/parking footprints, materials, pick metadata, animation, and simulation behaviour. A detailed profile may raise the budgets for close-up experiments.
+
 ## MapNow diagnostic export
 
 70. Immediately before every Council or Cabinet sitting, the runtime shall emit a `TOMM-MAP/1` diagnostic snapshot to the local MapNow writer. The snapshot shall contain a compact acquired-town matrix, legend, resource pressure, road-graph summary, measured pressure cells, frontier candidates, and focused windows around hotspots/frontier sites.
@@ -389,7 +399,7 @@ This section defines the target architecture for turning the current specialist 
 
 81. Citizen simulation behavior, employment, mood, routing, collision avoidance, and lifecycle shall remain independent of render detail. `npm run test:citizen-render` shall verify the simple mesh budget, inspection contract, animation contract, and absence of page errors.
 
-82. The default vehicle renderer shall use eight-segment wheel cylinders without hub meshes and disable per-vehicle shadow casting. Four wheel pivots, wheel rotation, lane-sized physical footprints, lights, beacons, vehicle picking, and type-specific bodies shall remain unchanged. A detailed wheel mode may be enabled through the performance JSON for close-up experiments.
+82. The default vehicle renderer shall use the versioned low-poly wheel segment budget (six segments, without hub meshes) and disable per-vehicle shadow casting. Four wheel pivots, wheel rotation, lane-sized physical footprints, lights, beacons, vehicle picking, and type-specific bodies shall remain unchanged. A detailed wheel mode may be enabled through the performance JSON for close-up experiments.
 
 83. Vehicle render simplification shall not change collision, parking, routing, fuel, or public-fleet behavior. `npm run test:vehicle-render` shall verify four rotating wheel pivots, the low-poly wheel budget, inspection metadata, shadow settings, and absence of page errors.
 

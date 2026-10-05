@@ -125,6 +125,8 @@ result.stats.settings = await page.evaluate(() => ({
   residents: document.getElementById('setting-residents')?.value,
   maxPopulation: document.getElementById('setting-max-population')?.value,
   glow: document.getElementById('setting-glow')?.value,
+  shadows: document.getElementById('setting-shadows')?.checked,
+  rendererShadows: window.sceneMgr?.renderer?.shadowMap?.enabled,
   temperature: document.getElementById('setting-temperature')?.value,
   temperatureMax: document.getElementById('setting-temperature')?.max,
   speed: document.getElementById('setting-speed')?.value,
@@ -142,6 +144,12 @@ result.stats.settings = await page.evaluate(() => ({
   cameraTargetZ: document.getElementById('setting-camera-target-z')?.value,
   sectionCount: document.querySelectorAll('.settings-section').length,
   searchable: !!document.getElementById('settings-search')
+}));
+await page.check('#setting-shadows');
+result.stats.shadowMutation = await page.evaluate(() => ({
+  checked: document.getElementById('setting-shadows')?.checked,
+  stored: JSON.parse(localStorage.getItem('tomm.settings') || '{}').shadows,
+  renderer: window.sceneMgr?.renderer?.shadowMap?.enabled
 }));
 await page.fill('#settings-search', 'camera');
 result.stats.settingsSearch = await page.evaluate(() => ({
@@ -208,6 +216,7 @@ result.stats.settingsReset = await page.evaluate(() => ({
   councilSittings: document.getElementById('setting-council-sittings')?.value,
   cabinetMotions: document.getElementById('setting-cabinet-motions')?.value,
   congestionThreshold: document.getElementById('setting-congestion-threshold')?.value,
+  shadows: document.getElementById('setting-shadows')?.checked,
   stored: JSON.parse(localStorage.getItem('tomm.settings') || '{}').residentsPerTilePerFloor,
   targetX: window.sceneMgr.controls.target.x,
   targetZ: window.sceneMgr.controls.target.z,
@@ -246,6 +255,8 @@ const failures = [
   ...(result.stats.settings?.residents !== '3' ? ['settings modal has the wrong residential density default'] : []),
   ...(result.stats.settings?.maxPopulation !== '1000' ? ['settings modal has the wrong maximum population default'] : []),
   ...(result.stats.settings?.glow !== '1' ? ['settings modal has the wrong glow default'] : []),
+  ...(result.stats.settings?.shadows !== false || result.stats.settings?.rendererShadows !== false ? ['shadows are not disabled by default'] : []),
+  ...(result.stats.shadowMutation?.checked !== true || result.stats.shadowMutation?.stored !== true || result.stats.shadowMutation?.renderer !== true ? ['shadow setting did not enable the renderer'] : []),
   ...(result.stats.settings?.temperatureMax !== '1' ? ['settings modal temperature does not allow 1.0'] : []),
   ...(result.stats.settings?.speed !== '100' ? ['settings modal has the wrong speed default'] : []),
   ...(result.stats.settings?.councilSittings !== '2' ? ['settings modal has the wrong Council cadence default'] : []),
@@ -265,6 +276,7 @@ const failures = [
   ...(result.stats.councilCadenceMutation?.stored !== 4 || result.stats.councilCadenceMutation?.runtime !== 4 || result.stats.councilCadenceMutation?.cadenceHours !== 6 ? ['Council cadence setting did not reach the live Council'] : []),
   ...(result.stats.cabinetMotionsMutation?.stored !== 3 || result.stats.cabinetMotionsMutation?.runtime !== 3 ? ['Cabinet motion setting did not reach the live Council'] : []),
   ...(result.stats.settingsReset?.residents !== '3' || result.stats.settingsReset?.maxPopulation !== '1000' || result.stats.settingsReset?.councilSittings !== '2' || result.stats.settingsReset?.cabinetMotions !== '5' || result.stats.settingsReset?.congestionThreshold !== '0.5' || result.stats.settingsReset?.stored !== 3 ? ['settings restore defaults did not persist'] : []),
+  ...(result.stats.settingsReset?.shadows !== false ? ['settings restore defaults did not disable shadows'] : []),
   ...(result.stats.settingsReset?.fitTown !== true || Math.abs((result.stats.settingsReset?.targetX ?? 0) - (((result.stats.resetFitTown?.acquiredBounds?.minX + result.stats.resetFitTown?.acquiredBounds?.maxX) / 2 - 49.5) * 4)) > 8 || Math.abs((result.stats.settingsReset?.targetZ ?? 0) - (((result.stats.resetFitTown?.acquiredBounds?.minY + result.stats.resetFitTown?.acquiredBounds?.maxY) / 2 - 49.5) * 4)) > 8 ? ['settings restore defaults did not restore acquired-land framing'] : []),
   ...(result.stats.ribbon1024?.overflow ? ['bottom ribbon controls overflow at 1024px'] : []),
   ...pageErrors.map((message) => `page error: ${message}`)
