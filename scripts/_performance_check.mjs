@@ -28,10 +28,23 @@ try {
     town.traffic.runShared(1.6, clock);
     const perf = town.traffic.performanceStats();
     const updated = town.stats({ force: true });
+    const pricing = town.economy.pricingSignals();
+    const pricingMatches = ['treasury', 'operatingReserve', 'projectedDailyBurn']
+      .every(key => pricing[key] === updated.economy[key]);
+    const liveRows = town.governance.staffNeed().civic.rows;
+    const reportRows = updated.governance.staff.civic.rows;
+    const staffingBoundary = liveRows.length > 0 &&
+      liveRows.every(row => town.buildings.includes(row.building)) &&
+      reportRows.every((row, index) => !('building' in row) &&
+        row.buildingId === liveRows[index].building.id && row.have === liveRows[index].have && row.need === liveRows[index].need);
+    const grownRenderMode = window.sceneMgr.setPerformanceMode({ speed: 50, population: 170, staticVersion: town.staticVersion() });
 
     return {
       cacheHit,
       invalidated,
+      pricingMatches,
+      staffingBoundary,
+      grownRenderMode,
       perf,
       snapshotPerformance: updated.performance,
       trees: town.forest?.stats?.().trees || 0,
@@ -41,6 +54,9 @@ try {
   const failures = [];
   if (!result.cacheHit) failures.push('Town.stats() did not reuse the same-version snapshot');
   if (!result.invalidated) failures.push('Town.stats() cache was not invalidated after a rebuild');
+  if (!result.pricingMatches) failures.push('lean pricing signals differ from the full fiscal report');
+  if (!result.staffingBoundary) failures.push('staffing report must retain counts and IDs while operations retain live buildings');
+  if (result.grownRenderMode !== 'high-speed') failures.push('grown-town rendering optimization did not activate below 240 residents');
   if (!(result.perf.budgetSeconds > 0.8)) failures.push('adaptive agent budget did not increase at 100x');
   if (result.perf.lagRatio > 0.05) failures.push(`unexpected founding agent lag ratio ${result.perf.lagRatio}`);
   failures.push(...pageErrors.map((message) => `page error: ${message}`));

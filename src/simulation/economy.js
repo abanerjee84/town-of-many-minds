@@ -2711,6 +2711,16 @@ export class EconomySystem {
     };
   }
 
+  /** Live quote inputs without scanning the accounting ledger or service census. */
+  pricingSignals() {
+    const burn = this.projectedGovernmentDailyBurn();
+    return {
+      treasury: Math.round(this.treasury),
+      operatingReserve: Math.max(ECON.government.reserveOperatingFloor, Math.ceil(burn * ECON.government.operatingRunwayDays)),
+      projectedDailyBurn: Math.round(burn)
+    };
+  }
+
   stats() {
     const p = this.period || blankPeriod(this.lastDay);
     const citizens = this.town.pedestrians?.citizens || [];

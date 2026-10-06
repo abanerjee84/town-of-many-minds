@@ -7,7 +7,7 @@
   "render": {
     "highSpeed": {
       "speedThreshold": 50,
-      "populationThreshold": 240,
+      "populationThreshold": 80,
       "pixelRatio": 1.25,
       "shadowAutoUpdate": false
     },

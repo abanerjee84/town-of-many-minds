@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 
 const URL = process.env.APP_URL || 'http://127.0.0.1:5179';
 const DAYS = Number(process.env.BUS_STUCK_DAYS || 180);
+const FAST_POPULATION = process.env.BUS_FAST_POPULATION ? Number(process.env.BUS_FAST_POPULATION) : null;
 
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage();
@@ -11,10 +12,15 @@ page.on('pageerror', (error) => errors.push(error.message));
 try {
   await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await page.waitForFunction(() => !!window.town?.growth, null, { timeout: 60000 });
-  const result = await page.evaluate(({ days }) => {
+  const result = await page.evaluate(async ({ days, fastPopulation }) => {
+    if (fastPopulation != null) {
+      const { default: rules } = await import('/src/data/performance.json?import');
+      rules.agents.highSpeed.populationThreshold = fastPopulation;
+    }
     const town = window.town;
     town.generate(1337);
     const clock = window.clock;
+    clock.reset();
     clock.speed = 50;
     town.governance.auto = false;
     town.growth.auto = false;
@@ -108,7 +114,7 @@ try {
       buses,
       failures
     };
-  }, { days: DAYS });
+  }, { days: DAYS, fastPopulation: FAST_POPULATION });
 
   const failures = [...result.failures, ...errors.map((message) => `page error: ${message}`)];
   console.log(JSON.stringify({ ok: failures.length === 0, ...result, errors, failures }, null, 2));

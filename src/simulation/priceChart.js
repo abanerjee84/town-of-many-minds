@@ -11,8 +11,13 @@ function rowFor(path) {
 function townSignals(town) {
   const economy = town?.economy;
   const industry = town?.industry;
-  const stats = economy?.stats?.() || {};
-  const pressure = num(town?.growth?.inputs?.()?.pressure, 0);
+  // Quotes need three fiscal values, not the transaction-history report.
+  const stats = economy?.pricingSignals?.() || economy?.stats?.() || {};
+  const homes = Array.isArray(town?.buildings) ? town.buildings.filter(b => b.kind === 'house') : null;
+  const beds = homes?.reduce((sum, b) => sum + (b.capacity || 2), 0) || 0;
+  const pressure = homes
+    ? (beds ? (town.pedestrians?.citizens?.length || 0) / beds : 0)
+    : num(town?.growth?.inputs?.()?.pressure, 0);
   const evidence = town?.governance?.congestionEvidence?.();
   const congestion = num(evidence?.average, num(town?.traffic?.mobilityStats?.()?.congestion, 0));
   const treasury = num(stats.treasury, num(economy?.treasury, 0));
@@ -52,12 +57,12 @@ export function quotePrice(path, town, options = {}) {
   const base = Math.max(0, num(row.base, fallback));
   if (!base) return 0;
   if (options.dynamic === false || !town) return Math.round(base * Math.max(1, num(options.quantity, 1)));
-  const signals = townSignals(town);
   let adjustment = 0;
   const group = String(path).split('.')[0];
   if (group === 'commodity') {
     adjustment += (commodityScarcity(town, String(path).split('.')[1]) - 0.5) * num(row.elasticity, 0.35);
   } else {
+    const signals = townSignals(town);
     adjustment += (signals.pressure - 0.35) * num(row.pressure, row.elasticity || chart.defaults.elasticity);
     adjustment += (signals.congestion - 0.35) * num(row.congestion, 0);
     adjustment += signals.fiscalPressure * num(row.fiscal, 0.10);

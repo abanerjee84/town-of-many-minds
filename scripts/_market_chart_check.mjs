@@ -23,6 +23,19 @@ const steelStress = commodityPrice(stressed, 'steel');
 assert.equal(basePrice('construction.house'), 9000);
 assert(houseStress > houseCalm, 'construction prices should respond to live pressure');
 assert(steelStress > steelCalm, 'commodity prices should respond to scarcity');
+const leanTown = {
+  ...stressed,
+  buildings: [{ kind: 'house', capacity: 100 }],
+  pedestrians: { citizens: Array(95) },
+  economy: {
+    pricingSignals: stressed.economy.stats,
+    stats: () => { throw new Error('price quote built a full economy report'); }
+  },
+  growth: { inputs: () => { throw new Error('price quote built a growth report'); } }
+};
+assert.equal(commodityPrice(leanTown, 'steel'), steelStress);
+assert.equal(quotePrice('construction.house', leanTown), houseStress);
+assert.equal(commodityPrice({ ...leanTown, economy: { pricingSignals: () => { throw new Error('commodity quote read unrelated fiscal signals'); } } }, 'steel'), steelStress);
 assert(priceIndex(stressed).version === 1);
 assert(BASE_BUILD_HOURS.house === 16 && BUILD_TIME_CHART.version === 1);
 const hoursCalm = buildHoursFor('factory', calm, { area: 9, floors: 2 });

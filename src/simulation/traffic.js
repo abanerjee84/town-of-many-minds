@@ -1296,15 +1296,15 @@ export class VehicleAgent {
     const grid = this.town.grid;
     for (const c of peds) {
       if (!c.rig?.group?.visible) continue;
+      const dx = c.group.position.x - px;
+      const dz = c.group.position.z - pz;
+      if (Math.abs(dx) > 8 || Math.abs(dz) > 8) continue;
       // Pavement users - including people waiting at the kerb - are not
       // hazards; only someone on the asphalt or stepping onto a crossing is.
       // A docking vehicle crosses the pavement, so it respects everyone.
       if (!this.docking && !pedInRoad(c, grid)) continue;
       // Someone standing at the kerb waiting for us is not a reason to wait for them.
       if (c.state === 'waiting-crossing' && c.speed < 0.1) continue;
-      const dx = c.group.position.x - px;
-      const dz = c.group.position.z - pz;
-      if (Math.abs(dx) > 8 || Math.abs(dz) > 8) continue;
       const ahead = dx * fx + dz * fz;
       if (ahead < -nose * 0.5 || ahead > reach) continue;
       const lateral = Math.abs(dx * -fz + dz * fx);
@@ -1991,10 +1991,10 @@ export class TrafficSystem {
       // Hard stop only for people clearly on the asphalt; kerb-edge walkers
       // step around vehicle bodies themselves and would otherwise starve a
       // vehicle.
-      if (!agent.docking && !pedInRoad(p, this.town.grid, 1.4)) continue;
       const dx = p.group.position.x - x;
       const dz = p.group.position.z - z;
       if (Math.abs(dx) > 5 || Math.abs(dz) > 5) continue;
+      if (!agent.docking && !pedInRoad(p, this.town.grid, 1.4)) continue;
       if (Math.abs(dx * fx + dz * fz) >= halfL || Math.abs(dx * rx + dz * rz) >= halfW) continue;
       const oldDx = p.group.position.x - agent.group.position.x;
       const oldDz = p.group.position.z - agent.group.position.z;
@@ -2404,9 +2404,9 @@ export class TrafficSystem {
     if (!inside && clearance > 2.5) return null;
     if (!inside) {
       const pedestrianInCrossing = (this.town.pedestrians?.citizens || []).some((p) => {
-        if (!pedInRoad(p, grid)) return false;
+        if (!p.rig?.group?.visible) return false;
         const c = grid.worldToCell(p.group.position.x, p.group.position.z);
-        return c.x === next.x && c.y === next.y;
+        return c.x === next.x && c.y === next.y && pedInRoad(p, grid);
       });
       if (pedestrianInCrossing) return { stop: true, key, pedestrian: true, clearance };
     }

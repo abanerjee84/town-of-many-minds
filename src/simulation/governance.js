@@ -3628,6 +3628,17 @@ export class GovernanceSystem {
   }
 
   stats() {
+    const staff = this.staffNeed();
+    // Staffing operations need live buildings; reporting must carry identifiers.
+    // Copying a civic row's Three.js rig through kitStats serialized megabytes
+    // of geometry on every HUD refresh as the town grew.
+    const staffSnapshot = staff ? {
+      ...staff,
+      civic: staff.civic ? {
+        ...staff.civic,
+        rows: (staff.civic.rows || []).map(({ building, ...row }) => ({ ...row, buildingId: building?.id ?? null }))
+      } : null
+    } : null;
     return {
       enabled: this.enabled,
       auto: this.auto,
@@ -3654,7 +3665,7 @@ export class GovernanceSystem {
       modelUsed: this.modelUsed,
       spent: Math.round(this.spent),
       lastReply: this.lastReply.slice(0, 160),
-      staff: this.staffNeed(),
+      staff: staffSnapshot,
       // Phase 30 (S19b) — the call boundary, made visible. `rulesOnly` is the
       // one the town operator needs: it says the model is not being asked any
       // more, and why, rather than leaving the HUD to imply it is thinking.
