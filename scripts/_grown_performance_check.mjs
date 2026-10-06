@@ -8,7 +8,7 @@ page.on('pageerror', e => errors.push(e.message));
 try {
   await page.goto(process.env.APP_URL || 'http://127.0.0.1:5173', { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => !!window.town?.economy);
-  const fixture = await page.evaluate(() => {
+  const fixture = await page.evaluate(({ profileAgents }) => {
     const t = window.town, c = window.clock;
     t.generate(1337); c.reset(); c.speed = 50;
     t.governance.auto = false; t.growth.auto = false;
@@ -81,6 +81,35 @@ try {
       wrap(t[key], 'stats', `${key}.stats`);
     }
     wrap(t.kits, 'kitStats', 'kitStats');
+    const routeReasons = {};
+    // Leaf timing touches millions of calls and perturbs FPS. Enable it only
+    // for diagnosis; default throughput measurements retain coarse timings.
+    if (profileAgents) {
+      for (const method of ['wouldCollide', 'wouldHitPed', 'junctionGate', 'occupancyMap'])
+        wrap(t.traffic, method, `traffic.${method}`);
+      wrap(t.pedestrians, 'step', 'pedestrians.step');
+      const vehiclePrototype = Object.getPrototypeOf(t.traffic.vehicles[0]);
+      const citizenPrototype = Object.getPrototypeOf(t.pedestrians.citizens[0]);
+      for (const method of ['beginPrivateTrip','beginFuelStop','nextLeg','rerouteAround','routeToBay','tryDock']) {
+        const fn=vehiclePrototype[method];
+        vehiclePrototype[method]=function(...args) {
+          const previous=this._profileRouteReason;
+          this._profileRouteReason=method;
+          try { return fn.apply(this,args); } finally { this._profileRouteReason=previous; }
+        };
+      }
+      const planRoute=vehiclePrototype.planRoute;
+      vehiclePrototype.planRoute=function(...args) {
+        const key=`${this._profileRouteReason || 'other'}:${this.type}`;
+        routeReasons[key]=(routeReasons[key]||0)+1;
+        return planRoute.apply(this,args);
+      };
+      for (const method of ['planRoute', 'blockedBy', 'yieldToPeds'])
+        wrap(vehiclePrototype, method, `vehicle.${method}`);
+      for (const method of ['planRoute', 'vehicleBlocked', 'pavementDetour'])
+        wrap(citizenPrototype, method, `citizen.${method}`);
+    }
+    window.__grownRouteReasons = routeReasons;
     window.__grownProfile = profile;
     window.__grownFrames = [];
     let last = performance.now();
@@ -95,8 +124,8 @@ try {
     };
     requestAnimationFrame(sample);
     return { population: t.pedestrians.citizens.length, buildings: t.buildings.length,
-      vehicles: t.traffic.vehicles.length, day: c.day, kitBytes, leanStaff };
-  });
+      vehicles: t.traffic.vehicles.length, day: c.day, kitBytes, leanStaff, profileAgents };
+  }, { profileAgents: process.env.AGENT_PROFILE === '1' });
   console.log(JSON.stringify({ fixture }));
   await page.waitForFunction(() => window.__grownFrames?.length >= 120, null, { timeout: 120000 });
   const result = await page.evaluate(() => {
@@ -106,8 +135,11 @@ try {
       clockRate: (window.__grownEnd.elapsed-window.__grownStart.elapsed) /
         ((window.__grownEnd.wall-window.__grownStart.wall)/1000),
       profile: window.__grownProfile, performance: window.town.traffic.performanceStats(),
+      routeReasons: window.__grownRouteReasons,
       renderer: { calls: window.sceneMgr.renderer.info.render.calls,
         triangles: window.sceneMgr.renderer.info.render.triangles },
+      liveReadout: document.getElementById('performance-values')?.textContent,
+      framePerformance: window.framePerformance,
       activeVehicles: window.town.traffic.vehicles.filter(v => v.parkTimer <= 0 && v.points?.length).length,
       gpu: (()=>{const gl=window.sceneMgr.renderer.getContext();const info=gl.getExtension('WEBGL_debug_renderer_info');return info?gl.getParameter(info.UNMASKED_RENDERER_WEBGL):'unavailable';})() };
   });
@@ -120,9 +152,12 @@ try {
   assert(fixture.kitBytes<100000,'kit diagnostics unexpectedly contain heavy state');
   assert.equal(result.performance.mode,'normal');
   assert.equal(result.performance.fixedStepSeconds,0.05);
+  assert(result.liveReadout?.includes('FPS') && result.liveReadout?.includes('traffic lag'), 'performance readout is missing');
+  assert(result.performance.spatialQueries>0 && result.performance.spatialCandidates<result.performance.spatialFullCandidates, 'spatial broad phase did not reduce candidate scans');
   assert(result.clockRate>0,'foreground simulation clock did not advance');
   assert(result.activeVehicles>0,'traffic fixture must not be idle');
   const averageStats=result.profile.stats.ms/result.profile.stats.calls;
   assert(averageStats<40,`grown-town stats cost ${averageStats.toFixed(1)}ms`);
   assert(result.profile['economy.stats'].calls/result.profile.stats.calls<10,'price quotes rebuilt the economy report');
+  if (process.env.PERFORMANCE_SCREENSHOT) await page.screenshot({path:process.env.PERFORMANCE_SCREENSHOT});
 } finally { await browser.close(); }

@@ -75,6 +75,10 @@
     ,"test:private-queue": "node scripts/_private_queue_check.mjs"
     ,"test:housing-street-expansion": "node scripts/_housing_street_expansion_check.mjs"
     ,"mapnow:capture": "node scripts/_mapnow_capture.mjs"
+    ,"test:spatial-index": "node scripts/_spatial_index_check.mjs"
+    ,"test:spatial-traffic": "node scripts/_spatial_traffic_check.mjs"
+    ,"test:performance-meter": "node scripts/_performance_meter_check.mjs"
+    ,"test:private-route-retry": "node scripts/_private_route_retry_check.mjs"
   },
   "dependencies": {
     "three": "^0.169.0"

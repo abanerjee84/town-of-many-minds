@@ -9,6 +9,7 @@ import { roadRoute, sampleAt, curvatureAt } from './routes.js';
 import { events } from '../core/events.js';
 import { disposeObject } from '../world/scene.js';
 import performanceRules from '../data/performance.json' with { type: 'json' };
+import { SpatialIndex } from '../core/spatialIndex.js';
 
 const forwardVec = new THREE.Vector3();
 const tmpVec = new THREE.Vector3();
@@ -193,6 +194,11 @@ export class VehicleAgent {
     this.parkSpace = null;
     this.parkGen = 0;
     this.docking = null;
+    this.privateTripRetryT = 0;
+    this.privateTripRetryToken = null;
+    this.privateTripRetryVersion = -1;
+    this.routeRetryT = 0;
+    this.routeRetryVersion = -1;
     this.dockRetryT = 0;
     this.dockSearchT = 0;
     this.postSearches = 0;
@@ -695,16 +701,26 @@ export class VehicleAgent {
   beginPrivateTrip(clock, rng) {
     const citizen = this.driverCitizen;
     if (!citizen || citizen.driving || !citizen.indoors || !citizen.insideBuilding) return false;
+    const tripToken = `${clock.day}:${citizen.desiredKey(clock).kind}`;
+    if (this.lastPrivateTripToken === tripToken) return false;
+    if (this.privateTripRetryT > 0 && this.privateTripRetryToken === tripToken
+      && this.privateTripRetryVersion === this.town.roadGraphVersion) return false;
     const destination = this.privateDestination(clock, rng);
     if (!destination) return false;
-    const tripToken = `${clock.day}:${destination.purpose}`;
-    if (this.lastPrivateTripToken === tripToken) return false;
     // P-F03: after dark only the run home goes out — night trips belong to the
     // units built for them (taxi, bus) and to emergency and service roles.
     if (!this.nightEligible && (clock.hour >= 22 || clock.hour < 6.5) && destination.purpose !== 'home') {
       return false;
     }
-    if (!this.planRoute(rng, destination.building.cell)) return false;
+    if (!this.planRoute(rng, destination.building.cell)) {
+      // An unreachable private destination must not run A* every physics step.
+      // Keep the bay reserved; retry promptly on a new purpose or road layout.
+      this.privateTripRetryT = performanceRules.agents.failedRouteRetrySeconds || 1;
+      this.privateTripRetryToken = tripToken;
+      this.privateTripRetryVersion = this.town.roadGraphVersion;
+      return false;
+    }
+    this.privateTripRetryT = 0;
 
     this.town.parking?.release(this);
     this.parkTimer = 0;
@@ -1232,7 +1248,7 @@ export class VehicleAgent {
     let best = null;
     let bestAhead = Infinity;
     let bestGap = 0;
-    for (const o of others) {
+    for (const o of this.town.traffic.nearVehicles(px, pz, look + 3, others)) {
       if (o === this) continue;
       if (this.passT > 0 && o === this.passVehicle) continue;
       const ox = o.group.position.x;
@@ -1294,23 +1310,23 @@ export class VehicleAgent {
     const wide = this.spec.width * 0.5 + 0.18;
     let hit = null;
     const grid = this.town.grid;
-    for (const c of peds) {
+    for (const c of this.town.traffic.nearPedestrians(px, pz, 8)) {
       if (!c.rig?.group?.visible) continue;
       const dx = c.group.position.x - px;
       const dz = c.group.position.z - pz;
       if (Math.abs(dx) > 8 || Math.abs(dz) > 8) continue;
-      // Pavement users - including people waiting at the kerb - are not
-      // hazards; only someone on the asphalt or stepping onto a crossing is.
-      // A docking vehicle crosses the pavement, so it respects everyone.
-      if (!this.docking && !pedInRoad(c, grid)) continue;
+      // Reject people outside the body cone before querying road geometry.
       // Someone standing at the kerb waiting for us is not a reason to wait for them.
       if (c.state === 'waiting-crossing' && c.speed < 0.1) continue;
       const ahead = dx * fx + dz * fz;
       if (ahead < -nose * 0.5 || ahead > reach) continue;
       const lateral = Math.abs(dx * -fz + dz * fx);
       if (lateral > wide) continue;
+      // A docking vehicle crosses the pavement; other traffic respects only
+      // people on the asphalt/crossing. These predicates are unchanged.
+      if (!this.docking && !pedInRoad(c, grid)) continue;
       const gap = nose + 0.7;
-      if (hit === null || ahead < hit.distance) hit = { distance: ahead, gap };
+      if (hit === null || ahead < hit.distance) hit = { distance: ahead, gap, agent: c };
     }
     return hit;
   }
@@ -1358,6 +1374,8 @@ export class VehicleAgent {
     this.stuckTime = Math.max(0, this.stuckTime);
     if (this.cooldown > 0) this.cooldown -= dt;
     if (this.rerouteT > 0) this.rerouteT -= dt;
+    if (this.routeRetryT > 0) this.routeRetryT -= dt;
+    if (this.privateTripRetryT > 0) this.privateTripRetryT -= dt;
     if (this.dockRetryT > 0) this.dockRetryT -= dt;
     if (this.dockSearchT > 0) this.dockSearchT -= dt;
     if (this.stationWakeT > 0) this.stationWakeT -= dt;
@@ -1575,7 +1593,18 @@ export class VehicleAgent {
 
 
     if (this.points.length === 0 || this.idx >= this.points.length) {
+      if (this.routeRetryT > 0 && this.routeRetryVersion === this.town.roadGraphVersion) {
+        this.speed = 0;
+        this.waitKind = 'route';
+        return;
+      }
       if (!this.nextLeg(rng)) {
+        // A failed route is not new information at every 50ms step. Retry
+        // promptly on a road change, otherwise retain a bounded cadence.
+        this.routeRetryT = performanceRules.agents.failedRouteRetrySeconds || 1;
+        this.routeRetryVersion = this.town.roadGraphVersion;
+        this.speed = 0;
+        this.waitKind = 'route';
         // P-D01: a stop has to name itself. A civilian that ran out of road
         // has not stalled - it is either between trips or still hunting a bay,
         // and both must be said out loud and kept retrying rather than left
@@ -1656,10 +1685,15 @@ export class VehicleAgent {
       const slow = Math.max(0, (ped.distance - ped.gap) * 2.6);
       desired = Math.min(desired, slow);
       if (desired < 0.35) desired = 0;
-      this.yielding = ped.distance < 3;
+      // Courtesy is measured from the bumper, not a fixed centre distance:
+      // a long bus otherwise stops before the old 3m threshold and never
+      // accumulates pedestrian waiting time or asks walkers to make room.
+      this.yielding = ped.distance < ped.gap + 0.5;
+      this.pedYieldTo = ped.agent;
       if (desired === 0 && !this.waitKind) this.waitKind = 'ped';
     } else {
       this.yielding = false;
+      this.pedYieldTo = null;
     }
 
     const gate = this.signalGate(target, dist);
@@ -1929,6 +1963,11 @@ export class TrafficSystem {
     this.lastAgentFixedStep = performanceRules.agents.fixedStepSeconds;
     this.lastAgentMode = 'normal';
     this.lastAgentStride = 1;
+    this.vehicleIndex = new SpatialIndex(performanceRules.agents.spatialCellSize, performanceRules.agents.spatialQueryCacheEntries);
+    this.pedestrianIndex = new SpatialIndex(performanceRules.agents.spatialCellSize, performanceRules.agents.spatialQueryCacheEntries);
+    this.spatialActive = false;
+    this.courtesyVehicles = [];
+    this.spatialQueries = this.spatialCandidates = this.spatialFullCandidates = 0;
   }
 
   /** Completed private trips, kept as a plain field for existing readers. */
@@ -1936,6 +1975,25 @@ export class TrafficSystem {
     return this.tripCompletions;
   }
 
+
+  nearVehicles(x, z, radius, list = this.vehicles) {
+    if (!this.spatialActive || list !== this.vehicles || list.length < performanceRules.agents.spatialVehicleThreshold) return list;
+    const candidates = this.vehicleIndex.near(x, z, radius);
+    this.spatialQueries++;
+    this.spatialCandidates += candidates.length;
+    this.spatialFullCandidates += list.length;
+    return candidates;
+  }
+
+  nearPedestrians(x, z, radius) {
+    const list = this.town.pedestrians?.citizens || [];
+    if (!this.spatialActive) return list;
+    const candidates = this.pedestrianIndex.near(x, z, radius);
+    this.spatialQueries++;
+    this.spatialCandidates += candidates.length;
+    this.spatialFullCandidates += list.length;
+    return candidates;
+  }
 
   cellOccupancy(x, y, except = null) {
     let count = 0;
@@ -1948,7 +2006,7 @@ export class TrafficSystem {
   }
 
   wouldCollide(agent, x, z, yaw, list = this.vehicles) {
-    for (const other of list) {
+    for (const other of this.nearVehicles(x, z, 7, list)) {
       if (other === agent) continue;
       if (Math.abs(other.group.position.x - x) > 7 || Math.abs(other.group.position.z - z) > 7) continue;
       if (!vehicleBoxesOverlap(agent, x, z, yaw, other)) continue;
@@ -1982,7 +2040,7 @@ export class TrafficSystem {
     const rz = fx;
     const halfL = agent.spec.length * 0.5 + 0.28;
     const halfW = agent.spec.width * 0.5 + 0.28;
-    for (const p of this.town.pedestrians?.citizens || []) {
+    for (const p of this.nearPedestrians(x, z, 5)) {
       if (!p.rig?.group?.visible) continue;
       // The stylised vehicle box slightly overhangs the narrow rendered
       // kerb. A citizen waiting on that pavement must not be treated as if
@@ -1994,8 +2052,8 @@ export class TrafficSystem {
       const dx = p.group.position.x - x;
       const dz = p.group.position.z - z;
       if (Math.abs(dx) > 5 || Math.abs(dz) > 5) continue;
-      if (!agent.docking && !pedInRoad(p, this.town.grid, 1.4)) continue;
       if (Math.abs(dx * fx + dz * fz) >= halfL || Math.abs(dx * rx + dz * rz) >= halfW) continue;
+      if (!agent.docking && !pedInRoad(p, this.town.grid, 1.4)) continue;
       const oldDx = p.group.position.x - agent.group.position.x;
       const oldDz = p.group.position.z - agent.group.position.z;
       const oldFx = Math.sin(agent.group.rotation.y);
@@ -2033,7 +2091,7 @@ export class TrafficSystem {
 
   /** No other vehicle near a pose (bay / bay entry), with a generous margin. */
   spotFree(agent, x, z, yaw) {
-    for (const o of this.vehicles) {
+    for (const o of this.nearVehicles(x, z, 7)) {
       if (o === agent) continue;
       if (Math.abs(o.group.position.x - x) > 7 || Math.abs(o.group.position.z - z) > 7) continue;
       if (vehicleBoxesOverlap(agent, x, z, yaw, o, 0.3, 0.3)) return false;
@@ -2209,12 +2267,13 @@ export class TrafficSystem {
   prioritizeTransit() {
     for (const bus of this.vehicles) {
       if (bus.role !== 'transit' || bus.speed > 0.3 || bus.holdT < 4) continue;
-      const blocker = bus.waitingOn;
+      const blocker = this.chainOf(bus).at(-1);
       if (!blocker || !blocker.group?.parent || blocker === bus) continue;
       // Emergency response keeps priority over scheduled transit. Station
       // approaches are filtered out of the stop catalogue, so an ambulance
       // should never be forced to back away from a call or its post for a bus.
-      if (blocker.role === 'emergency') continue;
+      if (blocker.role === 'emergency' && (blocker.status === 'enroute' || blocker.incident || blocker.sirens)) continue;
+      if (blocker.waitKind === 'signal' || blocker.waitSignal) continue;
       if (blocker.parkTimer > 0 || blocker.sceneT > 0 || blocker.backing || blocker.giveWay || blocker.resolveT > 0) continue;
       if (blocker.speed > 0.3 || blocker.holdT < 2) continue;
 
@@ -2397,19 +2456,21 @@ export class TrafficSystem {
     const current = grid.worldToCell(agent.group.position.x, agent.group.position.z);
     const inside = current.x === next.x && current.y === next.y;
     const junctionCenter = grid.cellToWorld(next.x, next.y);
+    let entryIndex = -1, exitIndex = -1;
+    for (let i = agent.idx; i < agent.points.length; i++) {
+      const p = agent.points[i], c = grid.worldToCell(p.x,p.z);
+      if (c.x === next.x && c.y === next.y) {
+        if (entryIndex < 0) entryIndex = i;
+      } else if (entryIndex >= 0) { exitIndex = i; break; }
+    }
     const clearance = Math.hypot(
       agent.group.position.x - junctionCenter.x,
       agent.group.position.z - junctionCenter.z
     ) - (CELL * 0.5 + agent.spec.length * 0.5 + 0.3);
     if (!inside && clearance > 2.5) return null;
-    if (!inside) {
-      const pedestrianInCrossing = (this.town.pedestrians?.citizens || []).some((p) => {
-        if (!p.rig?.group?.visible) return false;
-        const c = grid.worldToCell(p.group.position.x, p.group.position.z);
-        return c.x === next.x && c.y === next.y && pedInRoad(p, grid);
-      });
-      if (pedestrianInCrossing) return { stop: true, key, pedestrian: true, clearance };
-    }
+    // Pedestrians are governed by the route yield cone and the per-step
+    // oriented pose guard. Reserving the entire junction for every walker
+    // (including a parallel crossing in another arm) starved busy approaches.
     const pass = agent.passT > 0 ? agent.passVehicle : null;
     let claim = this.junctionClaims.get(key);
     if (claim && claim.vehicle !== agent && claim.vehicle === pass && !claim.entered) {
@@ -2425,18 +2486,12 @@ export class TrafficSystem {
       // first pose beyond it is physically available. A reservation alone
       // prevents crossing conflicts, but without this exit check a stopped
       // queue could still strand its owner across every approach.
-      let exitPoint = null;
-      for (let i = agent.idx + 1; i < agent.points.length; i++) {
-        const p = agent.points[i];
-        const c = grid.worldToCell(p.x, p.z);
-        if (c.x !== next.x || c.y !== next.y) {
-          exitPoint = p;
-          break;
-        }
-      }
+      // Search past the actual junction entry. The first non-junction point
+      // from idx+1 can still be on the approach, creating a false exit jam.
+      const exitPoint = exitIndex >= 0 ? agent.points[exitIndex] : null;
       if (exitPoint) {
-        const center = grid.cellToWorld(next.x, next.y);
-        const exitYaw = Math.atan2(exitPoint.x - center.x, exitPoint.z - center.z);
+        const previous = agent.points[exitIndex-1];
+        const exitYaw = Math.atan2(exitPoint.x - previous.x, exitPoint.z - previous.z);
         const exitBlocker = this.vehicles.find((other) =>
           other !== agent &&
           other !== pass &&
@@ -3130,7 +3185,7 @@ export class TrafficSystem {
    */
   runShared(dt, clock = null) {
     if (clock) this.clock = clock;
-    this.town.roadKit?.signals?.update(dt);
+    const signals = this.town.roadKit?.signals;
     this.town.incidents?.update(dt);
 
     const peds = this.town.pedestrians;
@@ -3188,15 +3243,45 @@ export class TrafficSystem {
     this.lastAgentSteps = steps;
     this.lastAgentFixedStep = FIXED;
     this.lastAgentMode = highSpeed ? 'high-speed' : 'normal';
+    this.spatialQueries = this.spatialCandidates = this.spatialFullCandidates = 0;
     if (steps > 0) {
       const stepDt = FIXED;
       const list = this.vehicles;
+      // Rebuild once per frame for external spawns, teleports and removals.
+      // Positions are then maintained incrementally throughout all micro-steps.
+      if (list.length >= performanceRules.agents.spatialVehicleThreshold) this.vehicleIndex.rebuild(list);
+      this.pedestrianIndex.rebuild(peds?.citizens || []);
       for (let i = 0; i < steps; i++) {
-        this.releaseJunctions();
-        for (const v of list) v.update(stepDt, list, this.rng);
-        peds?.step?.(stepDt, clock, mode);
+        this.spatialActive = performanceRules.agents.spatialQueries !== false;
+        try {
+          signals?.advance(stepDt);
+          this.releaseJunctions();
+          for (const v of list) {
+            const driver = v.driverCitizen;
+            v.update(stepDt, list, this.rng);
+            if (list.length >= performanceRules.agents.spatialVehicleThreshold) this.vehicleIndex.update(v);
+            if (driver) this.pedestrianIndex.update(driver);
+            if (v.driverCitizen) this.pedestrianIndex.update(v.driverCitizen);
+          }
+          // All vehicle poses are stable during the pedestrian batch. Reuse
+          // their oriented bounds across the many local avoidance probes.
+          for (const v of list) {
+            const b = v.pedestrianObstacle ||= {};
+            b.x = v.group.position.x; b.z = v.group.position.z;
+            b.c = Math.cos(v.group.rotation.y); b.s = Math.sin(v.group.rotation.y);
+            b.halfW = v.spec.width * 0.5 + 0.28;
+            b.halfL = v.spec.length * 0.5 + 0.28;
+            b.front = v.pedWaitT > 2 ? 1.6 : 0;
+            b.side = v.pedWaitT > 2 ? 0.9 : 0;
+          }
+          this.courtesyVehicles = list.filter(v => v.pedWaitT > 1.5 && v.speed <= 0.3);
+          peds?.step?.(stepDt, clock, mode);
+        } finally {
+          this.spatialActive = false;
+        }
       }
     }
+    signals?.sync();
     this.lastAgentStride = peds?.lastStepStride || 1;
 
     this.releaseJunctions();
@@ -3222,7 +3307,10 @@ export class TrafficSystem {
       timeDroppedTotal: this.timeDroppedTotal || 0,
       lagRatio: this.lastAgentWanted > 0
         ? Math.max(0, Math.min(1, this.droppedSeconds / this.lastAgentWanted))
-        : 0
+        : 0,
+      spatialQueries: this.spatialQueries,
+      spatialCandidates: this.spatialCandidates,
+      spatialFullCandidates: this.spatialFullCandidates
     };
   }
 
@@ -3241,6 +3329,7 @@ export class TrafficSystem {
    * distinction matters: the car was never really here, but it still exists.
    */
   remove(agent) {
+    this.vehicleIndex.remove(agent);
     const i = this.vehicles.indexOf(agent);
     if (i >= 0) this.vehicles.splice(i, 1);
     // Hand the asset back before the driver link is cut, so the register still
@@ -3267,6 +3356,11 @@ export class TrafficSystem {
   clear() {
     for (const v of this.vehicles.slice()) this.remove(v);
     this.vehicles.length = 0;
+    this.vehicleIndex.clear();
+    this.pedestrianIndex.clear();
+    this.courtesyVehicles = [];
+    this.spatialActive = false;
+    this.spatialQueries = this.spatialCandidates = this.spatialFullCandidates = 0;
     this.junctionClaims.clear();
     this.demandTime = 0;
     this.demandBuckets = [];
@@ -3283,6 +3377,3 @@ export class TrafficSystem {
     this.lastAgentStride = 1;
   }
 }
-
-
-

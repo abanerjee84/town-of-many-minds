@@ -75,7 +75,20 @@ try {
           cell: [cell.x, cell.y],
           hold: Math.round(vehicle.holdT * 100) / 100,
           wait: vehicle.waitKind,
-          jam: vehicle.jamState
+          jam: vehicle.jamState,
+          position: [vehicle.group.position.x, vehicle.group.position.z],
+          yaw: vehicle.group.rotation.y,
+          target: vehicle.points[vehicle.idx] ? [vehicle.points[vehicle.idx].x, vehicle.points[vehicle.idx].z] : null,
+          docking: vehicle.docking?.id || null,
+          blocker: vehicle.collisionBlocker?.agent?.p?.name || null,
+          waitingOn: vehicle.waitingOn ? { uid: vehicle.waitingOn.uid, type: vehicle.waitingOn.type,
+            hold: vehicle.waitingOn.holdT, wait: vehicle.waitingOn.waitKind, parked: vehicle.waitingOn.parkTimer>0,
+            position: [vehicle.waitingOn.group.position.x,vehicle.waitingOn.group.position.z] } : null,
+          nearby: town.pedestrians.citizens.filter(p => p.group.visible &&
+            Math.hypot(p.group.position.x - vehicle.group.position.x, p.group.position.z - vehicle.group.position.z) < 8)
+            .map(p => ({ name: p.p.name, position: [p.group.position.x, p.group.position.z],
+              state: p.state, speed: p.speed, crossing: p.inCrossing, blockT: p.blockT,
+              target: p.points[p.idx] ? [p.points[p.idx].x, p.points[p.idx].z] : null }))
         };
       }
     }

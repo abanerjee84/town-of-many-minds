@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { PerformanceMeter } from './core/performanceMeter.js';
 import { SceneManager } from './world/scene.js';
 import { Town, GRID_W, GRID_H } from './simulation/town.js';
 import { Clock } from './core/clock.js';
@@ -479,10 +480,14 @@ function step(name, fn) {
 }
 
 let last = performance.now();
+const performanceMeter = new PerformanceMeter();
+const performanceReadout = document.getElementById('performance-values');
 function frame(now) {
   const rawDt = (now - last) / 1000;
   const dt = Math.min(0.1, rawDt);
   last = now;
+  const calendarBefore = clock.elapsed;
+  const agentBefore = town.pedestrians.time;
 
   // Pause while the council's LLM is thinking. Two reasons, both load-bearing:
   // the town report the model reads is snapshotted at ask() time, so a world
@@ -546,6 +551,17 @@ function frame(now) {
       if (interactionDue) interaction.update(0, uiStats);
     });
     step('camera-readout', updateCameraReadout);
+    const measured = performanceMeter.sample({
+      wallSeconds: rawDt,
+      calendarSeconds: clock.elapsed - calendarBefore,
+      agentSeconds: town.pedestrians.time - agentBefore,
+      requestedSeconds: thinking ? 0 : dt * clock.speed,
+      visible: document.visibilityState === 'visible'
+    });
+    if (measured) {
+      window.framePerformance = measured;
+      performanceReadout.textContent = `${Math.round(measured.fps)} FPS · actual ${measured.calendarRate.toFixed(1)}× · traffic lag ${Math.round(measured.agentLag * 100)}%`;
+    }
     step('render', () => sceneMgr.render());
   } finally {
     // The one guarantee the loop makes: it always reschedules. Everything above

@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { CELL, CELL_KIND, SIM, FOUNDING_POPULATION } from '../core/config.js';
-import { findPath, randomWalkableCell } from '../core/pathfinding.js';
+import { randomWalkableCell } from '../core/pathfinding.js';
+import { cachedRoadPath, roadJunctions } from './roadPathCache.js';
+import { obstacleDetour } from './pedestrianAvoidance.js';
 import { buildCitizen, animateWalk } from '../kits/citizens/citizenKit.js';
 import {
   moodFrom,
@@ -17,10 +19,6 @@ import { disposeObject } from '../world/scene.js';
 import performanceRules from '../data/performance.json' with { type: 'json' };
 
 const tmp = new THREE.Vector3();
-
-function walkableRoad(x, y, grid) {
-  return grid.kindAt(x, y) === CELL_KIND.ROAD;
-}
 
 /**
  * Travel axis of a one-cell route. Must match what pedestrianRoute feeds
@@ -96,21 +94,20 @@ function pushDistinct(out, point, crossingCell = null) {
  * The result is identical — same path, same `crossIdx` — because both are
  * exact computations; only the wasted work is gone.
  */
-function nearestCrossingPath(grid, from, to) {
+function nearestCrossingPath(town, from, to) {
+  const grid = town.grid;
   let best = null;
   const legFrom = (j) => Math.abs(j[0] - from[0]) + Math.abs(j[1] - from[1]);
   const legTo = (j) => Math.abs(j[0] - to[0]) + Math.abs(j[1] - to[1]);
-  grid.forEach((x, y, g) => {
-    if (!g.isRoad(x, y) || g.roadDegree(x, y) < 3) return;
-    const junction = [x, y];
+  roadJunctions(town).forEach((junction) => {
     // Both legs cost at least their Manhattan distance, so this cannot beat what
     // we already have and the junction is never searched.
     if (best && legFrom(junction) + legTo(junction) >= best.score) return;
-    const a = findPath(g, from, junction, { walkable: walkableRoad, maxNodes: 9000 });
+    const a = cachedRoadPath(town, from, junction);
     if (!a) return;
     // The inward leg is now known exactly; only the outward one is open.
     if (best && a.length + legTo(junction) >= best.score) return;
-    const b = findPath(g, junction, to, { walkable: walkableRoad, maxNodes: 9000 });
+    const b = cachedRoadPath(town, junction, to);
     if (!b) return;
     const score = a.length + b.length;
     if (!best || score < best.score) best = { path: a.concat(b.slice(1)), crossIdx: a.length - 1, score };
@@ -147,7 +144,8 @@ function pavementAccessPoint(grid, path, target) {
  * Build a pavement route. Side changes happen only across a marked junction;
  * when both buildings face the same pavement there is no road crossing at all.
  */
-function pedestrianRoute(grid, directPath, start, end) {
+function pedestrianRoute(town, directPath, start, end) {
+  const grid = town.grid;
   let path = directPath;
   let startSide = endpointSide(grid, path, start, true);
   let endSide = endpointSide(grid, path, end, false);
@@ -156,7 +154,7 @@ function pedestrianRoute(grid, directPath, start, end) {
   if (startSide !== endSide) {
     crossIdx = path.findIndex((c, i) => i > 0 && i < path.length - 1 && grid.roadDegree(c[0], c[1]) >= 3);
     if (crossIdx < 0) {
-      const detour = nearestCrossingPath(grid, path[0], path[path.length - 1]);
+      const detour = nearestCrossingPath(town, path[0], path[path.length - 1]);
       if (!detour) return null;
       path = detour.path;
       crossIdx = detour.crossIdx;
@@ -496,7 +494,7 @@ export class CitizenAgent {
         ? [tc.x, tc.y]
         : this.town.nearestRoadCell(tc.x, tc.y);
     if (!from || !to) return false;
-    const path = findPath(grid, from, to, { walkable: walkableRoad, maxNodes: 9000 });
+    const path = cachedRoadPath(this.town, from, to);
     if (!path || path.length === 0) return false;
     const start = this.group.position.clone();
     let end = new THREE.Vector3(target.x, target.y ?? 0, target.z);
@@ -505,7 +503,7 @@ export class CitizenAgent {
     // building occupants are then placed inside, never walked through a lane.
     const endCell = grid.worldToCell(end.x, end.z);
     if (grid.isRoad(endCell.x, endCell.y)) end = pavementAccessPoint(grid, path, end);
-    const pts = pedestrianRoute(grid, path, start, end);
+    const pts = pedestrianRoute(this.town, path, start, end);
     if (!pts || pts.length < 2) return false;
     this.points = pts;
     this.routeCells = path;
@@ -621,7 +619,7 @@ export class CitizenAgent {
     };
   }
 
-  update(dt, clock, system) {
+  update(dt, clock, system, logicalDt = dt) {
     this.syncProfile(clock);
     if (this.vehicle) {
       if (this.driving) {
@@ -647,7 +645,7 @@ export class CitizenAgent {
     const baseMood = moodFrom(this.p, this.state, system && system.stress ? system.stress.overall : 0) + (system?.moodTarget || 0);
     const civicMood = this.p.mood?.overall;
     this.mood = Math.max(0, Math.min(1, Number.isFinite(civicMood) ? baseMood * 0.45 + civicMood * 0.55 : baseMood));
-    this.strollTimer -= dt * (1 + this.p.traits.openness);
+    this.strollTimer -= logicalDt * (1 + this.p.traits.openness);
     // Occupancy is the only thing that decides visibility: an indoor citizen
     // is hidden no matter what they want or how their trip is going.
     this.group.visible = !this.indoors;
@@ -673,7 +671,7 @@ export class CitizenAgent {
       return;
     }
 
-    if (this.replanT > 0) this.replanT -= dt;
+    if (this.replanT > 0) this.replanT -= logicalDt;
 
     const desire = this.desiredKey(clock);
     let moving = this.points.length > 0 && this.idx < this.points.length;
@@ -743,10 +741,19 @@ export class CitizenAgent {
       if (this.state === 'walking') this.state = 'idle';
       animateWalk(this.rig, this.phase, 0, false, this.groundY);
       if (this.indoors) return;
-      this.tryChat(system, dt);
+      this.tryChat(system, logicalDt);
       return;
     }
 
+    // A stopped vehicle asks all walkers in its nose corridor to clear to
+    // the kerb. Do this even if a tiny angular dodge is available; those
+    // dodges could otherwise oscillate forever around the same waypoint.
+    if (this.makeWay(dt)) {
+      this.speed = 0;
+      if (!this.town.grid.isCarriageway(this.group.position.x, this.group.position.z, 1.4)) this.inCrossing = false;
+      animateWalk(this.rig, this.phase, 0, false, this.groundY);
+      return;
+    }
     const target = this.points[this.idx];
     tmp.set(target.x - this.group.position.x, 0, target.z - this.group.position.z);
     const dist = tmp.length();
@@ -754,6 +761,7 @@ export class CitizenAgent {
     // The door step is generous on purpose: a parked car on the threshold
     // must not keep a citizen from ever finishing the trip.
     if (dist < (last ? 1.1 : 0.4)) {
+      this.avoidanceWait = 0;
       this.idx++;
       if (this.idx >= this.points.length) {
         this.arrive(system);
@@ -791,6 +799,16 @@ export class CitizenAgent {
     let mz = tmp.z;
     let detoured = false;
     if (this.vehicleBlocked(this.group.position.x + mx * step, this.group.position.z + mz * step)) {
+      this.avoidanceWait = (this.avoidanceWait || 0) + dt;
+      if (this.avoidanceWait >= (performanceRules.agents.pedestrianAvoidance?.retrySeconds || 1)) {
+        this.avoidanceWait = 0;
+        const detour = obstacleDetour(this);
+        if (detour) {
+          this.points.splice(this.idx, detour.resumeIndex-this.idx, ...detour.points);
+          this.speed = 0;
+          return;
+        }
+      }
       const around = this.pavementDetour(mx, mz, step, this.inCrossing ? target.crossingCell : null);
       if (around) {
         mx = around[0];
@@ -856,37 +874,34 @@ export class CitizenAgent {
 
   /** Would this footprint land inside a vehicle? Bumper box, yaw and all. */
   vehicleBlocked(x, z) {
-    const list = this.town.traffic?.vehicles;
+    // Vehicles cannot move during this citizen's update. Reuse a conservative
+    // local roster for the many tiny detour probes; longer search nodes use
+    // the ordinary live broad phase. Exact body/courtesy checks remain below.
+    const local = this.collisionCandidates && Math.abs(x-this.collisionOriginX)<=1 && Math.abs(z-this.collisionOriginZ)<=1;
+    const list = local ? this.collisionCandidates : this.town.traffic?.nearVehicles(x, z, 5);
     if (!list || !list.length) return false;
     for (const v of list) {
-      const dx = x - v.group.position.x;
-      const dz = z - v.group.position.z;
+      const b = this.town.traffic.spatialActive ? v.pedestrianObstacle : null;
+      const vx = b ? b.x : v.group.position.x, vz = b ? b.z : v.group.position.z;
+      const dx = x - vx, dz = z - vz;
       if (Math.abs(dx) > 5 || Math.abs(dz) > 5) continue;
-      const yaw = v.group.rotation.y;
-      const c = Math.cos(yaw);
-      const s = Math.sin(yaw);
-      const lx = dx * c - dz * s;
-      const lz = dx * s + dz * c;
-      const margin = 0.28;
-      const halfW = v.spec.width * 0.5 + margin;
-      const halfL = v.spec.length * 0.5 + margin;
-      // Courtesy: a vehicle that has already waited for people gets a clear
-      // zone in front of its nose that walkers may not ENTER, so a stream of
-      // them cannot starve it. Anyone already inside may carry on.
-      const courtesy = (v.pedWaitT || 0) > 2;
-      const front = courtesy ? 1.6 : 0;
-      const side = courtesy ? 0.9 : 0;
-      const inBody = (ax, az) => Math.abs(ax) < halfW && Math.abs(az) < halfL;
-      const inZone = (ax, az) => Math.abs(ax) < halfW + side && az > -halfL - side && az < halfL + front;
-      if (inZone(lx, lz)) {
-        const oldDx = this.group.position.x - v.group.position.x;
-        const oldDz = this.group.position.z - v.group.position.z;
-        const oldLx = oldDx * c - oldDz * s;
-        const oldLz = oldDx * s + oldDz * c;
-        // Inside the courtesy zone: only moves that back away from the vehicle.
-        if (!inBody(lx, lz) && inZone(oldLx, oldLz) && Math.hypot(dx, dz) > Math.hypot(oldDx, oldDz) + 0.0001) continue;
-        // Already touching the body: only steps that increase separation.
-        if (inBody(oldLx, oldLz) && Math.hypot(dx, dz) > Math.hypot(oldDx, oldDz) + 0.0001) continue;
+      const c = b ? b.c : Math.cos(v.group.rotation.y);
+      const s = b ? b.s : Math.sin(v.group.rotation.y);
+      const lx = dx * c - dz * s, lz = dx * s + dz * c;
+      const halfW = b ? b.halfW : v.spec.width * 0.5 + 0.28;
+      const halfL = b ? b.halfL : v.spec.length * 0.5 + 0.28;
+      const front = b ? b.front : v.pedWaitT > 2 ? 1.6 : 0;
+      const side = b ? b.side : v.pedWaitT > 2 ? 0.9 : 0;
+      if (Math.abs(lx) < halfW + side && lz > -halfL - side && lz < halfL + front) {
+        const oldDx = this.group.position.x - vx, oldDz = this.group.position.z - vz;
+        const oldLx = oldDx * c - oldDz * s, oldLz = oldDx * s + oldDz * c;
+        const inBody = Math.abs(lx) < halfW && Math.abs(lz) < halfL;
+        const oldInZone = Math.abs(oldLx) < halfW + side && oldLz > -halfL - side && oldLz < halfL + front;
+        const oldInBody = Math.abs(oldLx) < halfW && Math.abs(oldLz) < halfL;
+        // Preserve the body and courtesy predicates: only increasing separation
+        // may escape an existing overlap; no new penetration is permitted.
+        if ((!inBody && oldInZone || oldInBody)
+          && Math.hypot(dx, dz) > Math.hypot(oldDx, oldDz) + 0.0001) continue;
         return true;
       }
     }
@@ -932,26 +947,30 @@ export class CitizenAgent {
   makeWay(dt) {
     const pos = this.group.position;
     let v = null;
-    for (const o of this.town.traffic?.vehicles || []) {
-      if (o.collisionBlocker?.agent === this && (o.pedWaitT || 0) > 1.5) {
-        v = o;
-        break;
-      }
+    const traffic = this.town.traffic;
+    for (const o of (traffic?.spatialActive ? traffic.courtesyVehicles : traffic?.vehicles) || []) {
+      if ((o.pedWaitT || 0) <= 1.5 || o.speed > 0.3) continue;
+      const dx=pos.x-o.group.position.x, dz=pos.z-o.group.position.z;
+      const along=dx*Math.sin(o.group.rotation.y)+dz*Math.cos(o.group.rotation.y);
+      const lateral=dx*Math.cos(o.group.rotation.y)-dz*Math.sin(o.group.rotation.y);
+      if (along < -o.spec.length*0.5 || along > o.spec.length*0.5+2 || Math.abs(lateral)>o.spec.width*0.5+0.9) continue;
+      v=o; break;
     }
     if (!v) return false;
     const grid = this.town.grid;
     const step = 1.3 * dt;
-    const d0 = Math.hypot(pos.x - v.group.position.x, pos.z - v.group.position.z);
+    const rightX=Math.cos(v.group.rotation.y), rightZ=-Math.sin(v.group.rotation.y);
+    const lateral0=Math.abs((pos.x-v.group.position.x)*rightX+(pos.z-v.group.position.z)*rightZ);
     let best = null;
     let gain = 0.0005;
-    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    for (const [dx, dz] of [[rightX,rightZ],[-rightX,-rightZ]]) {
       const x = pos.x + dx * step;
       const z = pos.z + dz * step;
       if (grid.isCarriageway(x, z, 1.4) && !grid.isCarriageway(pos.x, pos.z, 1.4)) continue;
       const c = grid.worldToCell(x, z);
       if (!grid.isRoad(c.x, c.y)) continue;
       if (this.vehicleBlocked(x, z)) continue;
-      const g = Math.hypot(x - v.group.position.x, z - v.group.position.z) - d0;
+      const g = Math.abs((x-v.group.position.x)*rightX+(z-v.group.position.z)*rightZ)-lateral0;
       if (g > gain) {
         gain = g;
         best = [x, z];
@@ -981,7 +1000,7 @@ export class CitizenAgent {
     // for us must not hold the crossing, or walker and driver wait on each
     // other for ever.
     const reach = signal ? 3.6 : 7;
-    for (const v of this.town.traffic?.vehicles || []) {
+    for (const v of this.town.traffic?.nearVehicles(center.x, center.z, reach) || []) {
       if (v.parkTimer > 0 || v.docking || v.speed <= 0.35) continue;
       const dx = center.x - v.group.position.x;
       const dz = center.z - v.group.position.z;
@@ -1431,6 +1450,7 @@ export class CitizenSystem {
   beginFrame(dt, clock) {
     void dt;
     if (clock) this.clock = clock;
+    this.frameStress = null;
   }
 
   /** One fixed micro-step, interleaved with the vehicle micro-steps. */
@@ -1440,9 +1460,13 @@ export class CitizenSystem {
     this.stressAcc += stepDt;
     if (this.stressAcc >= 0.5) {
       this.stressAcc = 0;
-      this.stress = this.town.resources && this.town.resources.stats
-        ? resourceStress(this.town.resources.stats())
-        : null;
+      const levels = this.town.resources?.levels;
+      const levelKey = levels ? [levels.water, levels.energy, levels.food, levels.fuel].join(',') : '';
+      if (!this.town.traffic?.spatialActive || !this.frameStress || this.frameStress.key !== levelKey) {
+        this.frameStress = { key: levelKey, value: this.town.resources?.stats
+          ? resourceStress(this.town.resources.stats()) : null };
+      }
+      this.stress = this.frameStress.value;
       // Empty shelves worry citizens too — goods shortages join the mix
       // (harmless no-op while the storehouse is stocked: gs === 0).
       const gs = this.town.industry ? this.town.industry.goodsStress() : 0;
@@ -1483,8 +1507,20 @@ export class CitizenSystem {
       const c = this.citizens[i];
       const critical = c.state === 'walking' || c.state === 'waiting-crossing' ||
         c.state === 'chatting' || c.state === 'driving' || c.inCrossing;
+      c.idleElapsed = (c.idleElapsed || 0) + stepDt;
       if (stride > 1 && !critical && i % stride !== phase) continue;
-      c.update(stepDt, clk, this);
+      const logicalDt = c.idleElapsed;
+      c.idleElapsed = 0;
+      const traffic = this.town.traffic;
+      if (traffic?.spatialActive && critical && !c.vehicle) {
+        const p = c.group.position;
+        c.collisionOriginX = p.x; c.collisionOriginZ = p.z;
+        c.collisionCandidates = traffic.nearVehicles(p.x,p.z,6).filter(v=>
+          Math.abs(v.group.position.x-p.x)<=6 && Math.abs(v.group.position.z-p.z)<=6);
+      }
+      try { c.update(stepDt, clk, this, logicalDt); }
+      finally { c.collisionCandidates = null; }
+      if (this.town.traffic?.spatialActive) this.town.traffic.pedestrianIndex.update(c);
     }
     if (clk && clk.day !== this.policyDay) {
       this.policyDay = clk.day;
@@ -1549,6 +1585,7 @@ export class CitizenSystem {
   }
 
   remove(agent) {
+    this.town.traffic?.pedestrianIndex?.remove(agent);
     // A citizen can be removed while behind the wheel. Break both halves of
     // that link before the object goes, or the vehicle keeps driving a ghost
     // and the inspector reports an occupant who no longer exists.

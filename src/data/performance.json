@@ -30,6 +30,13 @@
     }
   },
   "agents": {
+    "spatialQueries": true,
+    "roadPathCacheEntries": 512,
+    "failedRouteRetrySeconds": 1,
+    "pedestrianAvoidance": { "spacing": 0.4, "radius": 7, "maxNodes": 900, "retrySeconds": 1 },
+    "spatialCellSize": 8,
+    "spatialVehicleThreshold": 64,
+    "spatialQueryCacheEntries": 256,
     "fixedStepSeconds": 0.05,
     "highSpeed": {
       "speedThreshold": 50,

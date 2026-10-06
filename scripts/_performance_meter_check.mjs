@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import { PerformanceMeter } from '../src/core/performanceMeter.js';
+const meter = new PerformanceMeter();
+let value;
+for (let i=0;i<11;i++) value = meter.sample({wallSeconds:0.05,calendarSeconds:2.5,agentSeconds:1.8,requestedSeconds:2.5}) || value;
+assert(Math.abs(value.fps-20)<1e-9);
+assert(Math.abs(value.calendarRate-50)<1e-9);
+assert(Math.abs(value.agentRate-36)<1e-9);
+assert(Math.abs(value.agentLag-0.28)<1e-9);
+assert.equal(meter.sample({wallSeconds:30,visible:false}),null);
+for (let i=0;i<11;i++) value = meter.sample({wallSeconds:0.05,calendarSeconds:0,agentSeconds:0,requestedSeconds:0}) || value;
+assert.equal(value.calendarRate,0);
+assert.equal(value.agentLag,0);
+console.log('Foreground rates, bounded agent lag, pause and hidden-tab exclusion passed.');

@@ -391,5 +391,19 @@ Updated 2026-10-04 after the catalogue-wide industrial-planning audit.
 - [x] Completed the representative 170-person, 51-building, 38-vehicle regression: RTX 5060 Ti/D3D11, 48.5 ms average frame, 66.7 ms p95, 50x calendar-clock rate, 7.5 ms average town-statistics refresh, 19,280-byte kit report, and no browser errors. Agent overflow remains visible (28% on the last sampled frame); this is not a 60 FPS or full traffic-speed claim.
 - [x] Passed build, dynamic price/formula equivalence, kit registry, statistics cache/fiscal/staffing boundary, 1,000-person indoor scheduling stress, speed controls, public staffing, parking, and UI regressions.
 - [ ] Resolve the existing bus/refuelling horizon failure. The older scheduler also failed the hold check; with a reset seed-1337 clock the 180-day probe reports a 54.6-second pedestrian hold and 103 sampled days in a fuel diversion without completing refuelling. Added a test-only scheduler-threshold override and clock reset for reproducible comparisons. Keep this failure visible rather than relaxing the assertions.
-- [ ] Profile active-agent route churn and spatial queries next; after removing the report bottlenecks, agents account for roughly 40 ms per frame in this fixture.
+- [x] Profiled active-agent route churn and spatial queries in the 2026-10-07 sprint, including repeated failed private trips and pedestrian detour probes.
 - [x] Prepare the verified performance changes and updated BuildContracts for local commit and GitHub push.
+
+## Current sprint (2026-10-07, active-agent performance and bus recovery)
+
+- [x] Added per-method profiling to the grown-town benchmark; the initial instrumented baseline is 53.5 ms/frame with 170 residents, 51 buildings and 38 vehicles.
+- [x] Validated spatial candidate coverage against brute-force lists, including negative coordinates, sequential moves, removals, additions and first-blocker order. Added standalone and live traffic regressions.
+- [x] Diagnosed bumper courtesy, blocked pedestrian waypoints, approach poses mistaken for junction exits, and signals advancing beyond the actual agent budget. A diagnostic bus completed refuelling; later commissioning still makes the horizon unreliable.
+- [ ] Finish the bus queue fix and commission a deterministic early refuel fixture: one 180-day diagnostic reported a 20.8-second hold/39-day diversion; the final probe commissioned the bus on day 173, reported a 9.2-second hold and did not complete refuelling in its remaining seven sampled days. Preserve the existing 8-second/24-day assertions and completion requirement.
+- [x] Added bounded graph-version pedestrian path/crossing caches, per-frame resource stress reuse with storage invalidation, preserved idle timer time, and bounded retries for failed vehicle routes. Live vehicle congestion costs remain uncached.
+- [x] Added foreground FPS, achieved clock speed and traffic-lag readout with pause/hidden-tab measurement tests.
+- [x] Added one-second failed private-trip retries with immediate road/purpose/day invalidation, atomic parking/driver transitions, reusable oriented pedestrian obstacle bounds, and reset/removal cleanup.
+- [x] Repeated build, spatial coverage/order and collision equivalence, private-route retry, foreground meter, report-boundary, speed, 1,000-resident indoor stress, parking, transit-stop, kit registry and UI checks. UI screenshot checked on seed 1337; readout is centered above camera values.
+- [x] Measured the 170-resident/51-building/38-vehicle foreground workload on RTX 5060 Ti: 43.7 ms average, 66.6 ms p95, 50x calendar rate, 19,190-byte kit report. Detailed leaf instrumentation is now opt-in to avoid presenting its overhead as normal FPS. Traffic lag remains visible; no 60 FPS claim.
+- [ ] Move agent simulation into a Web Worker after defining the state/event boundary; further render batching remains subsequent profiling work.
+- [x] Prepared the verified changes and updated BuildContracts for local commit and GitHub push.

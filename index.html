@@ -365,6 +365,16 @@
         pointer-events: none;
         user-select: none;
       }
+      #performance-readout {
+        position: fixed;
+        left: 50%;
+        bottom: calc(var(--panel-bottom) + 45px);
+        transform: translateX(-50%);
+        max-width: calc(100vw - 24px);
+        z-index: 7;
+        pointer-events: none;
+        font-variant-numeric: tabular-nums;
+      }
       .camera-chip {
         display: inline-flex;
         align-items: baseline;
@@ -1311,6 +1321,9 @@
       </div>
     </div>
 
+    <div id="performance-readout" class="camera-chip" title="Actual foreground calendar speed and traffic time skipped by the bounded physics budget. Traffic lag is separate from congestion.">
+      <b id="performance-values">Measuring performance…</b>
+    </div>
     <div id="camera-readout" aria-label="Camera orbit, zoom, and pan values">
       <span class="camera-chip"><span class="cam-label">Orbit</span><b id="camera-orbit">34.5° yaw · 64.0° tilt</b></span>
       <span class="camera-chip"><span class="cam-label">Zoom</span><b id="camera-zoom">228 m</b></span>

@@ -61,8 +61,13 @@ export class SignalController {
   }
 
   update(dt) {
-    if (dt > 0) this.t += dt;
+    this.advance(dt);
     this.sync();
+  }
+
+  /** Physics advances phases per micro-step; lamp meshes refresh once per frame. */
+  advance(dt) {
+    if (dt > 0) this.t += dt;
   }
 
   /** Only touch the meshes when a phase actually changed. */
