@@ -653,7 +653,7 @@ export function systemPrompt(town, options = {}) {
       'You are the final Town Council synthesis chamber. Five independent ministers have reported; your job is to compare their evidence-backed candidate motions and set the town\'s priorities for this sitting.',
       st.opening,
       st.focus,
-      'Use the town report as ground truth. Resolve any mandatory remedy first. Prefer a measured Priority build, utility, housing, supply, staffing, employment, or mobility action over optional policy when the report shows one. Select only candidate motion IDs supplied in the user message; never invent an intent, department, coordinate, budget, catalogue id, or action.',
+      'Use the town report as ground truth. Include the matching mandatory-remedy candidate first when feasible; selecting only unrelated motions would leave the entire slate deferred. Prefer a measured Priority build, utility, housing, supply, staffing, employment, or mobility action over optional policy when the report shows one. Select only candidate motion IDs supplied in the user message; never invent an intent, department, coordinate, budget, catalogue id, or action.',
       'Return exactly one JSON object: {"selected":[{"id":"motion-1","priority":0.0,"reason":"short evidence-backed reason"}]}. Select at most five unique candidates, normally one per department. Aim for roughly 70% immediate Priority/mandatory candidates and 30% longer-term candidates when both exist. Select at least one candidate when any admitted candidate is feasible; return {"selected":[]} only when every candidate is infeasible or the report gives no defensible action.',
       'The selected candidates are recommendations for the existing Mayor/planner validation boundary. Do not claim execution. Traits are emergent from evidence and outcomes; do not optimize for a prescribed personality.',
       voice,
@@ -673,7 +673,7 @@ export function systemPrompt(town, options = {}) {
       st.focus,
       `You are the ${department.label} Cabinet minister. ${focus}`,
       `Your owned canonical intents are: ${department.intents.join(', ')}.`,
-      'Read the town report as evidence. Resolve a mandatory remedy first; choose only a legal action supported by Feasible now, Priority, or an explicit always-available rule. If this department owns a Priority remedy, submit it before a long-term study, scheme, design, or vision action. If Priority contains a build or service remedy outside this department, return NO_ACTION. Do not use ENACT_SCHEME, PASS_LAW, or HOST_EVENT while any measured Priority remains. Do not invent coordinates, budgets, IDs, or actions.',
+      'Read the town report as evidence. If you own the mandatory remedy, submit it first with its exact resource and legal parameters; if infeasible, explain the concrete prerequisite. Otherwise choose your own immediate priority, supported by Feasible now, Priority, or an explicit always-available rule. Another department\'s priority does not erase your own needs; the Mayor validates sequencing. Submit owned remedies before studies, schemes, designs, or vision work. Do not use ENACT_SCHEME, PASS_LAW, or HOST_EVENT while measured Priority remains. Do not invent coordinates, budgets, IDs, or actions.',
       'Return exactly one JSON object: {"motions":[{"department":"' + department.id + '","intent":"CANONICAL_INTENT","reason":"short measured reason","priority":0.0,"params":{}}]}. Use priority 0..1. Typed builds require their exact Feasible-now parameter: BUILD_LANDMARK params.type=<landmark id>, BUILD_FACTORY params.type=<factory id>, BUILD_CIVIC/BUILD_TRANSIT params.facility when applicable, and IMAGINE_ARCHETYPE params.block=<catalogue id>. Never emit a bare typed-build intent; use NO_ACTION if no legal catalogue row is named.',
       voice,
       learning
@@ -690,7 +690,7 @@ const CABINET_REPORT_PREFIXES = Object.freeze({
   common: [
     'TOWN REPORT', 'Construction kits:', 'Population ', 'Buildings:', 'Land:',
     'Treasury ', 'Budget:', 'Employment:', 'Feasible now', 'Blocked:', 'Priority:',
-    'Intent map:', 'Construction:', 'Warnings:', 'Last decision:'
+    'Intent map:', 'Construction:', 'Warnings:', 'Last decision:', 'MANDATORY COUNCIL REMEDY:'
   ],
   treasury: ['Economy:', 'Employment:', 'Industry:', 'Staff:', 'Primary resources:', 'Stocks:', 'Trade:', 'Foreign investment:', 'SOLICIT_FDI', 'APPROVE_CONCESSION', 'HIRE_WORKERS', 'TRADE_BUY', 'TRADE_SELL', 'BOND_ISSUE', 'FUND_INNOVATION'],
   land: ['Society:', 'Settlers:', 'Civic load:', 'Design opportunity:', 'Connectivity:'],
@@ -714,9 +714,21 @@ function cabinetReportFor(report, departmentId = 'council') {
   ]);
   const selected = rows.filter((row) => [...prefixes].some((prefix) => row.startsWith(prefix)));
   const limit = departmentId === 'council' ? 4000 : 3600;
-  const compact = selected.join('\n');
-  if (compact.length <= limit) return compact;
-  return `${compact.slice(0, limit)}\n[report truncated to fit this provider context]`;
+  // Sequencing evidence must survive compacting. A missing directive left
+  // ministers proposing normal work while the Mayor silently vetoed it all.
+  const essential = ['MANDATORY COUNCIL REMEDY:', 'Feasible now', 'Blocked:',
+    'Priority:', 'Construction:', 'Treasury ', 'Budget:', 'Primary resources:'];
+  const important = row => essential.some(prefix => row.startsWith(prefix));
+  const ordered = [...essential.flatMap(prefix => selected.filter(row => row.startsWith(prefix))),
+    ...selected.filter(row => !important(row))];
+  const kept = [];
+  let length = 0;
+  for (const row of ordered) {
+    if (length + row.length + 1 > limit) continue;
+    kept.push(row);
+    length += row.length + 1;
+  }
+  return kept.join('\n');
 }
 
 function normalize(text) {
@@ -1547,6 +1559,41 @@ export class GovernanceSystem {
     };
   }
 
+  /** A directive is current evidence, not a permanent veto from an old turn. */
+  refreshRequiredAction(emergency = this.town.growth?.resourceEmergency?.()) {
+    if (!emergency) {
+      this.requiredAction = null;
+      this.blockedRemedyAttempts = 0;
+      return null;
+    }
+    const previous = this.requiredAction;
+    const sameResource = Boolean(previous && previous.resource === emergency.resource);
+    // Preserve an explicit funding bridge only while its physical prerequisite
+    // is still the live emergency. Do not turn it into a recurring bond order.
+    if (sameResource && previous.kind === 'finance' && previous.blockedIntent === emergency.intent) {
+      const growth = this.town.growth;
+      const rngState = growth.rng?.getState?.();
+      try {
+        const plan = planFor(this.town, actionFor(previous.blockedIntent)?.planType, { resource: emergency.resource });
+        const quotation = plan ? growth.quote(plan) : null;
+        if (quotation && !quotation.ok && /over budget|needs .* on hand|insufficient_financing|operating reserve/i.test(quotation.reason || '')) {
+          return previous;
+        }
+      } finally {
+        if (rngState !== undefined) growth.rng.setState(rngState);
+      }
+    }
+    const same = sameResource && previous.intent === emergency.intent && previous.kind === emergency.kind;
+    this.requiredAction = {
+      ...(same ? previous : {}),
+      ...emergency,
+      day: same ? previous.day : this.town.clockDay || 0,
+      attempts: same ? previous.attempts || 0 : 0
+    };
+    this.blockedRemedyAttempts = this.requiredAction.attempts;
+    return this.requiredAction;
+  }
+
   report() {
     const t = this.town;
     const eco = t.economy ? t.economy.stats() : null;
@@ -1583,10 +1630,7 @@ export class GovernanceSystem {
     // water store sitting at 0% and answered NO_ACTION.
     const rs = t.resources && t.resources.stats ? t.resources.stats() : null;
     const emergency = t.growth?.resourceEmergency?.() || null;
-    const required = this.requiredAction && emergency &&
-      this.requiredAction.resource === emergency.resource
-      ? this.requiredAction
-      : emergency;
+    const required = this.refreshRequiredAction(emergency);
     // Phase 15 — the policy read-out. `stats()` is cheap (the jurisdiction
     // figure is cached against a signature), so the report and the council see
     // the same object.
@@ -3229,9 +3273,9 @@ export class GovernanceSystem {
       // services minister from reporting a water or emergency shortfall.
       const departments = this.cabinet.departments;
       const report = this.report();
-      const callMinister = async (department, correction = '') => {
+      const callMinister = async (department, correction = '', currentReport = report) => {
         try {
-          const ministerReport = cabinetReportFor(report, department.id);
+          const ministerReport = cabinetReportFor(currentReport, department.id);
           const reply = await this.provider.complete({
             endpoint: this.endpoint,
             model: this.model,
@@ -3384,9 +3428,10 @@ export class GovernanceSystem {
       const fallbackBatch = this.cabinet.enforcePriorityMix(admittedMotions, admittedMotions, priorityIntents).selected;
       const selectedMotions = councilResult.valid ? councilResult.selected : fallbackBatch;
       let review = this.cabinet.mayor.review(selectedMotions, {
-        requiredAction: this.requiredAction,
+        requiredAction: this.refreshRequiredAction(),
         priorityIntents,
-        councilSelected: councilResult.valid
+        councilSelected: councilResult.valid,
+        maxApprovals: this.cabinet.motionsPerSitting
       });
       this.cabinet.lastReview = review;
       for (const motion of [...review.rejected, ...review.deferred]) {
@@ -3415,13 +3460,22 @@ export class GovernanceSystem {
         if (blocked) break;
       }
 
-      if (blocked) {
-        const requiredIntent = String(blocked.requiredAction || '').match(/INTENT:\s*([A-Z0-9_]+)/)?.[1] || '';
+      const currentRequired = this.refreshRequiredAction();
+      // A Mayor-only veto never enters enact(), so the previous correction
+      // branch was unreachable for an entire slate of deferred motions.
+      if (blocked || (!execution.length && currentRequired)) {
+        const requiredLine = blocked?.requiredAction ||
+          `INTENT: ${currentRequired.intent}${currentRequired.resource ? ` resource=${currentRequired.resource}` : ''}`;
+        const requiredIntent = requiredLine.match(/INTENT:\s*([A-Z0-9_]+)/)?.[1] || '';
         const correctionDepartment = this.cabinet.departmentForIntent(requiredIntent)
-          || departments.find((department) => department.id === blocked.department)
+          || departments.find((department) => department.id === blocked?.department)
           || departments[0];
-        const correction = `CORRECTION: this sitting's approved ${blocked.intent} was blocked by a hard sequencing constraint. Choose exactly ${blocked.requiredAction} now; return one JSON motion for your department and do not repeat ${blocked.intent}.`;
-        const correctedReply = await callMinister(correctionDepartment, correction);
+        const correction = `CORRECTION: ${blocked ? `this sitting's approved ${blocked.intent} was blocked` : 'the Mayor could approve no selected motion'} because the mandatory remedy was not satisfied. Choose exactly ${requiredLine} with the current report's legal parameters; return one JSON motion for your department. If it is infeasible, explain its concrete prerequisite instead of proposing unrelated work.`;
+        const correctedReply = await callMinister(correctionDepartment, correction, this.report());
+        if (!isCurrent()) {
+          this.staleReplies = (this.staleReplies || 0) + 1;
+          return { status: 'stale', intent: null, detail: 'the town was regenerated before the Cabinet correction arrived' };
+        }
         if (correctedReply.reply && isCurrent()) {
           this.llmCalls++;
           this.cabinetCalls++;
@@ -3449,7 +3503,7 @@ export class GovernanceSystem {
             }
             const correctionReview = this.cabinet.mayor.review(
               corrected.filter((motion) => motion.ownershipValid !== false && motion.specValid !== false),
-              { requiredAction: this.requiredAction, priorityIntents }
+              { requiredAction: this.refreshRequiredAction(), priorityIntents }
             );
             review = {
               approved: [...review.approved, ...correctionReview.approved],
@@ -3462,6 +3516,41 @@ export class GovernanceSystem {
               this.recordMayorMotion(motion, motion.status, motion.mayorReason);
             }
             for (const motion of correctionReview.approved) execute(motion);
+          }
+        }
+      }
+
+      // A started remedy releases the sequencing constraint immediately.
+      // Reconsider only the Council's original slate, keeping its approval
+      // cap and one executed motion per department. Never invent public work.
+      const approvalLimit = Math.min(this.cabinet.motionsPerSitting, this.cabinet.mayor.maxApprovals);
+      if (!this.refreshRequiredAction() && execution.length < approvalLimit) {
+        blocked = null;
+        const attempted = new Set(execution.map(decision => decision.motionId));
+        const handledDepartments = new Set(execution.map(decision => decision.department));
+        const remaining = selectedMotions.filter(motion =>
+          !attempted.has(motion.id) && !handledDepartments.has(motion.department));
+        if (remaining.length) {
+          const resumed = this.cabinet.mayor.review(remaining, {
+            requiredAction: null,
+            priorityIntents: this.planBoard()?.priority || [],
+            councilSelected: councilResult.valid,
+            maxApprovals: approvalLimit - execution.length
+          });
+          const reconsidered = new Set(remaining.map(motion => motion.id));
+          review = {
+            approved: [...review.approved.filter(motion => !reconsidered.has(motion.id)), ...resumed.approved],
+            rejected: [...review.rejected.filter(motion => !reconsidered.has(motion.id)), ...resumed.rejected],
+            deferred: [...review.deferred.filter(motion => !reconsidered.has(motion.id)), ...resumed.deferred],
+            label: resumed.label
+          };
+          this.cabinet.lastReview = review;
+          for (const motion of [...resumed.rejected, ...resumed.deferred]) {
+            this.recordMayorMotion(motion, motion.status, motion.mayorReason);
+          }
+          for (const motion of resumed.approved) {
+            execute(motion);
+            if (blocked) break;
           }
         }
       }

@@ -407,3 +407,15 @@ Updated 2026-10-04 after the catalogue-wide industrial-planning audit.
 - [x] Measured the 170-resident/51-building/38-vehicle foreground workload on RTX 5060 Ti: 43.7 ms average, 66.6 ms p95, 50x calendar rate, 19,190-byte kit report. Detailed leaf instrumentation is now opt-in to avoid presenting its overhead as normal FPS. Traffic lag remains visible; no 60 FPS claim.
 - [ ] Move agent simulation into a Web Worker after defining the state/event boundary; further render batching remains subsequent profiling work.
 - [x] Prepared the verified changes and updated BuildContracts for local commit and GitHub push.
+
+
+## Current sprint (2026-10-07, Cabinet mandatory-remedy stall)
+
+- [x] Found the compact report omitted MANDATORY COUNCIL REMEDY while the Mayor still enforced it; all-deferred slates never entered the existing enactment-only correction path.
+- [x] Protected complete remedy/feasibility/construction/fiscal rows within compact context limits and revised the minister/Council instructions to submit owned immediate priorities and the exact resource remedy.
+- [x] Revalidated directives against current shortages and active construction; expired stale resource directives and funding bridges whose physical plan became affordable.
+- [x] Added one bounded same-sitting correction call for entirely deferred slates, with fresh evidence, ownership/resource guards, reset protection and no deterministic public fallback.
+- [x] Resumed only the Council's original selected motions when a started remedy clears the constraint, preserving approval caps and department boundaries.
+- [x] Added test:cabinet-remedy covering stale/in-flight directives, oversized reports, all-deferred correction, real construction completion, funding-bridge expiry, one-motion caps, wrong-resource motions and refusal without automatic spending.
+- [x] Ran a provider-mocked 12-day remedy chain against real planning, financing and construction: 11 upgrades/acquisitions advanced, zero empty remedy streaks, and a clean economy audit. Cabinet, Council flow/authority, resource-land, land-funding and prompt regressions passed; the production build passed.
+- [x] Prepared the verified Cabinet remedy fix and updated BuildContracts for local commit and GitHub push; preserve the preceding STABLE checkpoint.

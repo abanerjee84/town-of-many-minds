@@ -21,6 +21,9 @@ export class MayorSystem {
 
   review(motions = [], context = {}) {
     const required = context.requiredAction?.intent || null;
+    const resource = context.requiredAction?.resource;
+    const approvalLimit = Number.isFinite(context.maxApprovals)
+      ? Math.max(0, Math.min(this.maxApprovals, context.maxApprovals)) : this.maxApprovals;
     const priorityIntents = Array.isArray(context.priorityIntents) ? context.priorityIntents : [];
     const approved = [];
     const rejected = [];
@@ -52,7 +55,8 @@ export class MayorSystem {
         rejected.push({ ...motion, status: 'mayor_rejected', mayorReason: 'department already submitted a motion this sitting' });
         continue;
       }
-      if (required && motion.intent !== required) {
+      if (required && (motion.intent !== required ||
+        (required === 'UPGRADE_RESOURCE' && resource && motion.params?.resource && motion.params.resource !== resource))) {
         deferred.push({ ...motion, status: 'mayor_deferred', mayorReason: `mandatory remedy ${required} takes priority` });
         continue;
       }
@@ -64,8 +68,8 @@ export class MayorSystem {
         });
         continue;
       }
-      if (approved.length >= this.maxApprovals) {
-        deferred.push({ ...motion, status: 'mayor_deferred', mayorReason: `approval limit is ${this.maxApprovals}` });
+      if (approved.length >= approvalLimit) {
+        deferred.push({ ...motion, status: 'mayor_deferred', mayorReason: `approval limit is ${approvalLimit}` });
         continue;
       }
       seenDepartments.add(motion.department);

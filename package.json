@@ -54,6 +54,7 @@
     ,"test:speed": "node scripts/_speed_check.mjs"
     ,"test:bus-stuck": "node scripts/_bus_stuck_check.mjs"
     ,"test:cabinet": "node scripts/_cabinet_check.mjs"
+    ,"test:cabinet-remedy": "node scripts/_cabinet_remedy_check.mjs"
     ,"test:developer-independence": "node scripts/_developer_independence_check.mjs"
     ,"test:performance": "node scripts/_performance_check.mjs"
     ,"test:performance-stress": "node scripts/_performance_stress_check.mjs"
