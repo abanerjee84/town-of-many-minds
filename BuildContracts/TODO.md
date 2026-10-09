@@ -1,6 +1,13 @@
 ﻿# Construction and metropolis roadmap
 
-Updated 2026-10-04 after the catalogue-wide industrial-planning audit.
+Updated 2026-10-09 with the public documentation pass; prior measured failures remain below.
+
+## Current sprint (2026-10-09, public documentation)
+
+- [x] Drafted README and guides for setup, controls, governance, construction, economics/jobs/production, mobility, society/environment, architecture, kits, evaluation, testing, deployment and known limitations.
+- [x] Added documentation generation/check commands for settings, intent routes/remits, catalogues, rule files/base prices/build times, and npm scripts.
+- [x] Captured and visually inspected the paused seed-1337 preview. Checked 23 Markdown files, five generated references, 61 intents, 81 blocks and 16 settings with zero link/freshness faults; production build passed.
+- [x] Prepared the documentation commit/publication for the existing GitHub repository; retain unrelated scratch diagnostics outside the commit.
 
 ## Completed in the developer-independence pass
 

@@ -80,6 +80,9 @@
     ,"test:spatial-traffic": "node scripts/_spatial_traffic_check.mjs"
     ,"test:performance-meter": "node scripts/_performance_meter_check.mjs"
     ,"test:private-route-retry": "node scripts/_private_route_retry_check.mjs"
+    ,"docs:generate": "node scripts/docs.mjs"
+    ,"docs:check": "node scripts/docs.mjs --check"
+    ,"docs:preview": "node scripts/docs-preview.mjs"
   },
   "dependencies": {
     "three": "^0.169.0"
