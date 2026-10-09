@@ -194,6 +194,7 @@ const descriptions = {
   growthRules:'Progression/priority gates, density and planning limits',
   incidentRules:'Incident spawn/response and scene time windows',
   industryCatalog:'Factory types, commodity inventories, recipes and production rates',
+  industryDemand:'Commodity customer profiles, shared demand ranking, buffers, persistence and input finance',
   kpiRules:'Retained observations and UI scoring targets',
   lifecycleRules:'Ages, education/housing admission, arrivals and campaigns',
   performance:'Render/agent/UI budgets, geometry, caches and retries',

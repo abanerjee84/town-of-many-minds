@@ -1,6 +1,10 @@
 import { events } from '../core/events.js';
 import { commodityPrice, priceChart } from './priceChart.js';
 import catalog from '../data/industryCatalog.json' with { type: 'json' };
+import demandRules from '../data/industryDemand.json' with { type: 'json' };
+import buildTimeChart from '../data/buildtime.json' with { type: 'json' };
+import { assessIndustrialDemand } from './industryDemand.js';
+import { CELL_KIND, CELL, SIM } from '../core/config.js';
 
 /**
  * Phase 6 — industry & trade. Factories produce the materials construction
@@ -47,7 +51,6 @@ export const COMMODITIES = Object.freeze(catalog.commodities.slice());
 // commodity, but it is excluded from factory-balancing and export surplus
 // loops so a refinery does not compete with itself for a phantom producer.
 const RAW_INPUTS = new Set(['crude_oil']);
-const PRODUCIBLE_COMMODITIES = COMMODITIES.filter((key) => FACTORY_TYPES.some((factory) => factory.product === key));
 
 const BASE_PRICE = Object.freeze(Object.fromEntries(
   Object.entries(priceChart().commodity || {}).map(([key, row]) => [key, Number(row.base) || 1])
@@ -99,6 +102,9 @@ export class IndustrySystem {
     this.history = [];
     // Phase 17 — written only by the innovation ladder's `output` lever.
     this.outputBonus = 0;
+    this.demandHistory = [];
+    this.pressureSince = {};
+    this.lastConsumption = { requested: 0, fulfilled: 0, spent: 0 };
   }
 
   /** Trade log line: shown in the event log and kept for the Trade modal. */
@@ -210,6 +216,7 @@ export class IndustrySystem {
         this.town.economy?._adjustExpectedInventory(firm.id, k, -used);
       }
     }
+    this.recordDemandFlow('construction', mats);
     return true;
   }
 
@@ -222,6 +229,7 @@ export class IndustrySystem {
    * bit once a second caller appeared, but is wrong on its face.
    */
   refund(mats) {
+    this.recordDemandFlow('construction', Object.fromEntries(Object.entries(mats).map(([key, qty]) => [key, -qty])));
     for (const [k, v] of Object.entries(mats)) {
       this.stocks[k] = Math.min(CAPACITY[k] || Infinity, (this.stocks[k] || 0) + v);
     }
@@ -301,131 +309,198 @@ export class IndustrySystem {
     return worst;
   }
 
-  /**
-   * Demand for a product that is consumed by the town or by another works.
-   * Goods have a direct resident/shop demand; every other demand is derived
-   * from the live input recipes and the rated output of downstream factories.
-   * Raw inputs deliberately remain import-only and never become phantom local
-   * factory candidates.
-   */
-  productDemand(key) {
-    if (!key || RAW_INPUTS.has(key)) return 0;
-    let demand = key === 'goods' ? this.goodsDemand() : 0;
-    for (const building of this.factories()) {
-      const downstream = this.typeOf(building);
-      const perUnit = INPUTS[downstream.product]?.[key] || 0;
-      if (perUnit > 0) demand += this.factoryProductionRate(building, { includeBonus: false }) * perUnit;
-    }
-    return Math.max(0, demand);
+  /** Record settled material draws and sales; proposals are not customer orders. */
+  recordDemandFlow(source, quantities) {
+    let row = this.demandHistory.find((entry) => entry.day === this.day && entry.source === source);
+    if (!row) { row = { day: this.day, source, quantities: {} }; this.demandHistory.push(row); }
+    for (const [key, value] of Object.entries(quantities)) row.quantities[key] = (row.quantities[key] || 0) + (Number(value) || 0);
+    this.demandHistory = this.demandHistory.filter((entry) => entry.day > this.day - demandRules.historyDays);
   }
 
-  /** Rated local capacity for one product, independent of current staffing. */
+  /** Concrete daily requests, bounded by the buyer's wallet. Retail goods use the existing shopping path. */
+  consumptionOrders({ forecast = false } = {}) {
+    const economy = this.town.economy;
+    if (!economy) return [];
+    const orders = [];
+    const prices = Object.fromEntries(COMMODITIES.map((key) => [key, priceFor(this.town, key)]));
+    const government = { sector: 'government', id: 'government' };
+    const reserve = economy.requiredPublicReserve?.(0) || 0;
+    const publicBudget = Math.max(0, (economy._account(government)?.balance || 0) - reserve);
+    const add = (buyer, profile, units, source, impact = source, budget = Infinity) => {
+      const balance = economy._account(buyer)?.balance || 0;
+      const available = Math.max(0, Math.min(balance, budget, buyer?.sector === 'government' ? publicBudget : Infinity));
+      const rows = Object.entries(profile || {}).map(([product, rate]) => ({ product, quantity: Math.max(0, rate * units) }));
+      const cost = rows.reduce((sum, row) => sum + row.quantity * prices[row.product], 0);
+      const factor = cost > 0 ? Math.min(1, available / cost) : 0;
+      const publicNeed = forecast && buyer?.sector === 'government';
+      for (const row of rows) if (row.quantity * factor > 0 || (publicNeed && row.quantity > 0)) orders.push({ ...row,
+        quantity: row.quantity * (publicNeed ? 1 : factor), affordableQuantity: row.quantity * factor,
+        buyer, source, impact: demandRules.sourceImpact[impact] || 0 });
+    };
+    for (const citizen of this.town.pedestrians?.citizens || []) {
+      const p = citizen.p;
+      if (!p || p.age < 16) continue;
+      const budget = Math.max(demandRules.minimumHouseholdBudget, Math.max(0, p.disposableIncome || 0) * demandRules.householdBudgetShare);
+      add({ sector: 'household', id: p.id }, demandRules.household, 1, 'households', 'households', budget);
+    }
+    for (const firm of economy.businesses || []) {
+      if (!firm.open || !firm.building || firm.id === 'contractor' || firm.building.purpose === 'civic') continue;
+      const buyer = firm.operatorSector === 'government' ? government : { sector: 'business', id: firm.id };
+      const profile = demandRules.business[firm.type === 'industry' ? 'industry' : firm.type === 'office' ? 'office' : firm.type === 'lodging' ? 'lodging' : 'retail'];
+      add(buyer, profile, Math.max(1, firm.building.floors || 1), 'business');
+    }
+    for (const building of this.town.buildings || []) {
+      if (building.purpose === 'civic') {
+        const facility = building.facility || building.kind;
+        const impact = ['clinic', 'hospital'].includes(facility) ? 'health' : ['school', 'college', 'university'].includes(facility) ? 'education' : 'maintenance';
+        add(economy.ownerAccount(building) || government, demandRules.civic[facility] || demandRules.civic.default,
+          Math.max(1, building.floors || 1), 'services', impact);
+      }
+      add(economy.ownerAccount(building), demandRules.buildingMaintenance, Math.max(1, building.footprint?.length || 1), 'maintenance');
+    }
+    add(government, demandRules.roadMaintenance, this.town.grid?.kindCounts?.[CELL_KIND.ROAD] || 0, 'maintenance');
+    for (const slot of this.town.vehicles?.slots || []) if (slot.owner && !slot.scrapped)
+      add(slot.owner, demandRules.vehicleMaintenance, 1, 'maintenance');
+    // Several assets can share one wallet. Limit the combined basket, not each asset independently.
+    const totals = new Map();
+    for (const row of orders) {
+      const id = `${row.buyer.sector}:${row.buyer.id}`;
+      totals.set(id, (totals.get(id) || 0) + row.quantity * prices[row.product]);
+    }
+    for (const row of orders) {
+      const id = `${row.buyer.sector}:${row.buyer.id}`;
+      const budget = row.buyer.sector === 'government' ? publicBudget : economy._account(row.buyer)?.balance || 0;
+      const factor = Math.min(1, Math.max(0, budget) / Math.max(1e-9, totals.get(id)));
+      if (forecast && row.buyer.sector === 'government') row.affordableQuantity = row.quantity * factor;
+      else row.quantity *= factor;
+    }
+    return orders;
+  }
+
+  /** Purchases consume seller inventory and settle through the audited economy ledger. */
+  settleConsumption() {
+    const economy = this.town.economy;
+    const sellers = [economy._account('contractor')?.object, ...(economy.businesses || []).filter((firm) => firm.open && firm.type === 'industry')].filter(Boolean);
+    const summary = { requested: 0, fulfilled: 0, spent: 0 };
+    for (const order of this.consumptionOrders()) {
+      summary.requested += order.quantity;
+      let remaining = order.quantity;
+      for (const seller of sellers) {
+        if (remaining <= 1e-6) break;
+        if (order.buyer.sector === 'business' && order.buyer.id === seller.id) continue;
+        const price = priceFor(this.town, order.product);
+        const balance = economy._account(order.buyer)?.balance || 0;
+        const reserve = order.buyer.sector === 'government' ? economy.requiredPublicReserve(0) : 0;
+        const quantity = Math.min(remaining, Math.max(0, balance - reserve) / price, seller.inventory?.[order.product] || 0);
+        if (quantity * price < 0.01) continue;
+        const result = economy.purchase({ buyer: order.buyer, seller: { sector: 'business', id: seller.id },
+          commodity: order.product, quantity, unitPrice: price, taxable: order.buyer.sector !== 'government' });
+        if (!result.ok) continue;
+        remaining -= result.quantity; summary.fulfilled += result.quantity; summary.spent += result.total;
+        if (order.buyer.sector === 'business') {
+          const buyer = economy._account(order.buyer)?.object;
+          if (buyer) buyer.inputExpense = (buyer.inputExpense || 0) + result.total;
+        }
+      }
+    }
+    this.lastConsumption = summary;
+    return summary;
+  }
+
+  /** One context for all outputs. Read-only reports never advance shortage age or call full town statistics. */
+  demandBoard() {
+    const supply = {}, leadDays = {};
+    const time = buildTimeChart.types.factory;
+    const minArea = Math.min(...FACTORY_SIZES.map(([w, d]) => w * d));
+    const orders = this.consumptionOrders({ forecast: true });
+    orders.push({ product: 'goods', quantity: this.goodsDemand(), source: 'households', impact: demandRules.sourceImpact.households });
+    for (const row of this.demandHistory) {
+      if (row.day <= this.day - demandRules.historyDays) continue;
+      const window = Math.min(demandRules.historyDays, Math.max(1, this.day));
+      for (const [product, quantity] of Object.entries(row.quantities)) if (quantity > 0)
+        orders.push({ product, quantity: quantity / window, source: row.source, impact: demandRules.sourceImpact[row.source] || 0 });
+    }
+    const utility = this.town.utilities?.electricityState?.().serviceFactor ?? 1;
+    for (const def of FACTORY_TYPES) {
+      leadDays[def.product] = time.base * (1 + time.area * (minArea - 1)) * (1 + time.floors * (def.floors - 1)) * buildTimeChart.defaults.maxFactor / 24;
+      supply[def.product] = { stock: this.totalStock(def.product), rated: 0, effective: 0, pending: 0, pendingLeadDays: 0, constraints: [],
+        importBenefit: Math.max(0, (priceFor(this.town, def.product, 'import') - priceFor(this.town, def.product)) / Math.max(1, priceFor(this.town, def.product, 'import'))) };
+    }
+    const inputPool = Object.fromEntries(COMMODITIES.map((key) => [key, this.totalStock(key)]));
+    inputPool.food = Math.max(0, (this.town.resources?.levels?.food || 0) - (this.town.resources?.demandNow?.(this.town)?.food || 0));
+    let publicInputBudget = Math.max(0, (this.town.economy?.treasury || 0) - (this.town.economy?.requiredPublicReserve?.(0) || 0));
+    for (const building of this.factories().slice().sort((a, b) => String(a.id).localeCompare(String(b.id)))) {
+      const key = this.typeOf(building).product, row = supply[key];
+      const rated = this.factoryProductionRate(building);
+      const firm = this.town.economy?.businessesById?.get(building.businessId);
+      const labour = this.factoryLabourFactor(firm);
+      const capital = Math.min(1, Math.max(0, firm?.fixedCapital || 0) / Math.max(1, rated * demandRules.capitalPerDailyOutput));
+      row.rated += rated;
+      if (labour < 0.99) row.constraints.push('staff/training');
+      if (capital < 0.99) row.constraints.push('capital');
+      if (utility < 0.99) row.constraints.push('electricity');
+      let materials = 1;
+      let inputCost = 0;
+      for (const [input, perUnit] of Object.entries(INPUTS[key] || {})) {
+        const available = inputPool[input] || 0;
+        const factor = Math.min(1, available / Math.max(1e-9, rated * perUnit));
+        if (factor < 0.99) row.constraints.push(`input:${input}`);
+        materials = Math.min(materials, factor);
+        const missing = Math.max(0, rated * perUnit - (firm?.inventory?.[input] || 0));
+        inputCost += missing * (demandRules.primaryInputPrices[input] || priceFor(this.town, input));
+      }
+      const publicFirm = firm?.operatorSector === 'government';
+      const publicFloat = publicFirm ? Math.min(publicInputBudget, Math.max(0, inputCost - (firm.cash || 0))) : 0;
+      publicInputBudget -= publicFloat;
+      const cashFactor = inputCost > 0 ? Math.min(1, (Math.max(0, firm?.cash || 0) + publicFloat) / inputCost) : 1;
+      if (cashFactor < 0.99) row.constraints.push('working capital');
+      const effective = rated * Math.max(0, Math.min(labour, capital, utility, materials, cashFactor));
+      row.effective += effective;
+      for (const [input, perUnit] of Object.entries(INPUTS[key] || {})) inputPool[input] = Math.max(0, (inputPool[input] || 0) - effective * perUnit);
+    }
+    for (const project of this.town.growth?.projects || []) {
+      const plan = project.plan;
+      const def = plan?.type === 'factory' && FACTORY_TYPES.find((row) => row.id === plan.factory);
+      const target = plan?.target;
+      const key = def?.product || (target?.purpose === 'industrial' && ['upgrade', 'wing', 'tierup'].includes(plan.type) ? this.typeOf(target)?.product : null);
+      if (!key || !supply[key]) continue;
+      const row = supply[key];
+      // Conservative shell dimensions use the renderer's smallest jittered lot shell.
+      const cols = plan.footprint?.cols || 3, rows = plan.footprint?.rows || 3;
+      const shell = Math.max(3.5, cols * CELL - 0.95) * Math.max(3.4, rows * CELL - 0.95);
+      row.pending += def ? RATE[key] * Math.max(0.1, shell * def.floors * 1.6 / FACTORY_REFERENCE_CAPACITY)
+        : this.factoryProductionRate(target) / Math.max(1, target.floors || 1);
+      const days = Number.isFinite(project.remaining) ? project.remaining / (SIM.secondsPerGameMinute * 60 * 24) : (project.hours || 0) / 24;
+      row.pendingLeadDays = Math.max(row.pendingLeadDays, days);
+    }
+    for (const row of Object.values(supply)) row.constraints = [...new Set(row.constraints)];
+    const ageDays = Object.fromEntries(Object.entries(this.pressureSince).map(([key, day]) => [key, Math.max(0, this.day - day)]));
+    return assessIndustrialDemand({ orders, supply, leadDays, ageDays }, catalog, demandRules);
+  }
+
+  productDemand(key) { return this.demandBoard().find((row) => row.product === key)?.demand || 0; }
   producerCapacity(key) {
-    return this.factories()
-      .filter((building) => this.typeOf(building)?.product === key)
+    return this.factories().filter((building) => this.typeOf(building)?.product === key)
       .reduce((sum, building) => sum + this.factoryProductionRate(building, { includeBonus: false }), 0);
   }
-
-  /**
-   * Explain the industrial pressure for every catalogue output. A row is
-   * actionable when a construction material is strained, or when a demanded
-   * product has insufficient stock/capacity. This keeps advanced plants out
-   * of the automatic queue when nothing consumes their output, while allowing
-   * a glassworks, refinery, chemical plant, or battery works to win when the
-   * dependency chain actually needs it.
-   */
-  producerPressure(key) {
-    if (!key || RAW_INPUTS.has(key) || !CAPACITY[key]) return null;
-    const stock = this.totalStock(key);
-    const capacity = CAPACITY[key];
-    const ratio = stock / Math.max(1, capacity);
-    const demand = this.productDemand(key);
-    const producer = this.producerCapacity(key);
-    const stockStress = clamp01((STRAIN_GATE - ratio) / STRAIN_GATE);
-    const demandGap = demand > 0 ? clamp01((demand - producer) / Math.max(1, demand)) : 0;
-    const coverDays = demand > 0 ? stock / demand : Infinity;
-    const coverStress = demand > 0 ? clamp01((7 - coverDays) / 7) : 0;
-    const construction = MATERIAL_KEYS.includes(key);
-    // A missing advanced producer is not, by itself, a reason to build a
-    // plant while the store still carries weeks of stock. For non-material
-    // outputs, require actual stock/cover pressure or an existing producer
-    // whose rated capacity is demonstrably below live demand. Construction
-    // materials retain their stronger emergency gate because every build
-    // consumes them directly.
-    const actionable = construction
-      ? stockStress > 0 || demandGap > 0
-      : demand > 0 && (stockStress > 0 || coverStress > 0 || (producer > 0 && demandGap > 0));
-    if (!actionable) return null;
-    const missingProducer = producer <= 0;
-    const priority = Math.min(3,
-      stockStress * 1.7 +
-      demandGap * 1.1 +
-      coverStress * 0.8 +
-      (missingProducer ? 0.2 : 0) +
-      (stock <= 0 ? 1 : 0)
-    );
-    return {
-      product: key,
-      stock: Math.round(stock),
-      capacity,
-      ratio: Math.round(ratio * 1000) / 1000,
-      demand: Math.round(demand * 100) / 100,
-      producerCapacity: Math.round(producer * 100) / 100,
-      coverDays: Number.isFinite(coverDays) ? Math.round(coverDays * 10) / 10 : null,
-      stockStress: Math.round(stockStress * 1000) / 1000,
-      demandGap: Math.round(demandGap * 1000) / 1000,
-      missingProducer,
-      priority: Math.round(priority * 1000) / 1000,
-      reason: stock <= 0
-        ? `${key} stock is empty`
-        : stockStress > 0
-          ? `${key} stock is ${Math.round(ratio * 100)}% of capacity`
-          : demandGap > 0
-            ? `${key} demand exceeds rated local output`
-            : `${key} has ${Math.round(coverDays)} days of cover`
-    };
-  }
-
-  /**
-   * Ranked industrial candidates across the complete factory catalogue.
-   * `mostUrgentProducer()` returns the product for planner compatibility;
-   * this snapshot is used by reports and regression probes.
-   */
-  producerPressureSnapshot(limit = FACTORY_TYPES.length) {
-    return FACTORY_TYPES
-      .map((factory) => this.producerPressure(factory.product))
-      .filter(Boolean)
-      .sort((a, b) => b.priority - a.priority || a.ratio - b.ratio || a.product.localeCompare(b.product))
-      .slice(0, Math.max(1, limit));
-  }
-
+  producerPressure(key) { return this.demandBoard().find((row) => row.product === key && row.actionable) || null; }
+  producerPressureSnapshot(limit = FACTORY_TYPES.length) { return this.demandBoard().filter((row) => row.actionable).slice(0, Math.max(1, limit)); }
   mostUrgentProducer() {
-    return this.producerPressureSnapshot(1)[0]?.product || null;
+    return this.demandBoard().find((row) => row.actionable && ['build_factory', 'expand_capacity'].includes(row.remedy))?.product || null;
   }
-
-  /**
-   * Demand-driven pick for a commission with no pinned type: the most urgent
-   * output across the complete catalogue, else a BALANCED pick — the product
-   * with the fewest works producing it (ties → table order). Never a fixed
-   * default.
-   */
-  commissionProduct() {
-    // Use the same complete-catalogue pressure board as growth and Council
-    // evidence. The old path returned the first missing construction row and
-    // then stopped considering non-material factories after the first works.
-    const urgent = this.mostUrgentProducer();
-    if (urgent) return urgent;
-    const counts = {};
-    for (const key of PRODUCIBLE_COMMODITIES) counts[key] = 0;
-    for (const b of this.factories()) {
-      const key = this.typeOf(b).product;
-      if (counts[key] != null) counts[key]++;
+  commissionProduct() { return this.mostUrgentProducer(); }
+  updateDemandPersistence() {
+    for (const row of this.demandBoard()) {
+      if (row.actionable) this.pressureSince[row.product] ??= this.day;
+      else delete this.pressureSince[row.product];
     }
-    let best = PRODUCIBLE_COMMODITIES[0];
-    for (const key of PRODUCIBLE_COMMODITIES) {
-      if (counts[key] < counts[best]) best = key;
-    }
-    return best;
+  }
+  serialize() { return { demandHistory: this.demandHistory.map((row) => ({ ...row, quantities: { ...row.quantities } })),
+    pressureSince: { ...this.pressureSince }, lastConsumption: { ...this.lastConsumption } }; }
+  restore(state) {
+    this.demandHistory = (state?.demandHistory || []).map((row) => ({ ...row, quantities: { ...row.quantities } }));
+    this.pressureSince = { ...state?.pressureSince };
+    this.lastConsumption = { requested: 0, fulfilled: 0, spent: 0, ...state?.lastConsumption };
   }
 
   /**
@@ -568,6 +643,7 @@ export class IndustrySystem {
     if (!exported.ok) return exported;
     const gain = exported.revenue;
     this.exported += gain;
+    this.recordDemandFlow('exports', { [key]: n });
     this.note(`Sold ${n} ${LABEL[key].toLowerCase()} for $${gain.toLocaleString('en-US')}.`);
     return { ok: true, qty: n, cost: gain };
   }
@@ -634,10 +710,15 @@ export class IndustrySystem {
       // than receiving a second invisible food supply.
       if (key === 'food') {
         const resource = this.town.resources;
-        const available = Math.max(0, Number(resource?.levels?.food) || 0);
-        const moved = Math.min(remaining, available);
+        const available = Math.max(0, (Number(resource?.levels?.food) || 0) - (resource?.demandNow?.(this.town)?.food || 0));
+        const price = demandRules.primaryInputPrices.food;
+        const moved = Math.min(remaining, available, Math.max(0, firm.cash || 0) / price);
         if (moved > 0) {
+          const paid = economy.transfer({ from: { sector: 'business', id: firm.id }, to: 'contractor', amount: moved * price,
+            category: 'purchase', metadata: { commodity: key, quantity: moved, intermediate: true } });
+          if (!paid.ok) return;
           resource.levels.food -= moved;
+          firm.inputExpense += moved * price;
           firm.inventory[key] = (firm.inventory[key] || 0) + moved;
           economy?._adjustExpectedInventory(firm.id, key, moved);
           remaining -= moved;
@@ -647,35 +728,32 @@ export class IndustrySystem {
       // inventory and economy import path as a manual commodity purchase, but
       // only tops up the amount this refinery actually needs for today's run.
       if (remaining > 1e-9 && RAW_INPUTS.has(key)) {
-        const imported = this.manualBuy(key, Math.min(Math.ceil(remaining), 180));
+        const price = priceFor(this.town, key, 'import');
+        const quantity = Math.min(remaining, CAPACITY[key], Math.max(0, firm.cash || 0) / price);
+        const imported = economy.importGoods({ sector: 'business', id: firm.id }, key, quantity, price);
         if (imported.ok) {
-          const moved = Math.min(remaining, imported.qty);
-          this.stocks[key] -= moved;
-          firm.inventory[key] = (firm.inventory[key] || 0) + moved;
-          economy?._adjustExpectedInventory(firm.id, key, moved);
-          remaining -= moved;
+          this.imported += imported.cost;
+          remaining -= imported.quantity;
         }
       }
       // The contractor storehouse is the public material buffer. It is used
       // before peer inventories so imported seed stock and local works share a
       // single physical flow rather than three disconnected silos.
-      const fromStore = Math.min(remaining, this.stocks[key] || 0);
+      const price = priceFor(this.town, key);
+      const fromStore = Math.min(remaining, this.stocks[key] || 0, Math.max(0, firm.cash || 0) / price);
       if (fromStore > 0) {
-        this.stocks[key] -= fromStore;
-        firm.inventory[key] = (firm.inventory[key] || 0) + fromStore;
-        economy?._adjustExpectedInventory(firm.id, key, fromStore);
-        remaining -= fromStore;
+        const trade = economy.buyInventory({ buyer: { sector: 'business', id: firm.id }, seller: { sector: 'business', id: 'contractor' },
+          commodity: key, quantity: fromStore, unitPrice: price });
+        if (trade.ok) remaining -= trade.quantity;
       }
       if (remaining <= 1e-9) return;
       for (const source of industrialFirms) {
         if (source === firm || remaining <= 1e-9) continue;
-        const moved = Math.min(remaining, source.inventory[key] || 0);
+        const moved = Math.min(remaining, source.inventory[key] || 0, Math.max(0, firm.cash || 0) / price);
         if (moved <= 0) continue;
-        source.inventory[key] -= moved;
-        firm.inventory[key] = (firm.inventory[key] || 0) + moved;
-        economy?._adjustExpectedInventory(source.id, key, -moved);
-        economy?._adjustExpectedInventory(firm.id, key, moved);
-        remaining -= moved;
+        const trade = economy.buyInventory({ buyer: { sector: 'business', id: firm.id }, seller: { sector: 'business', id: source.id },
+          commodity: key, quantity: moved, unitPrice: price });
+        if (trade.ok) remaining -= trade.quantity;
       }
     };
     for (const building of this.factories()) {
@@ -688,15 +766,28 @@ export class IndustrySystem {
       // consume and produce like the smallest baseline factory.
       const ratedOutput = this.factoryProductionRate(building);
       const labour = this.factoryLabourFactor(firm);
-      const capital = Math.min(1, (firm.fixedCapital || 0) / Math.max(1, ratedOutput * 800));
+      const capital = Math.min(1, (firm.fixedCapital || 0) / Math.max(1, ratedOutput * demandRules.capitalPerDailyOutput));
       const needs = INPUTS[key] || {};
+      const runnableOutput = ratedOutput * Math.max(0, Math.min(labour, capital, utilityFactor));
+      // Public plants have no private startup float. Cover their measured input bill
+      // as ordinary operating procurement, within reserve, rather than giving free inputs.
+      if (firm.operatorSector === 'government') {
+        const bill = Object.entries(needs).reduce((sum, [input, perUnit]) => sum +
+          Math.max(0, runnableOutput * perUnit - (firm.inventory[input] || 0)) *
+          (demandRules.primaryInputPrices[input] || priceFor(this.town, input, RAW_INPUTS.has(input) ? 'import' : 'local')), 0);
+        const room = Math.max(0, economy.treasury - economy.requiredPublicReserve(0));
+        const amount = Math.min(room, Math.max(0, bill - (firm.cash || 0)));
+        if (amount >= 0.01) economy.transfer({ from: 'government', to: { sector: 'business', id: firm.id }, amount,
+          category: 'government_procurement', metadata: { purpose: 'factory_inputs', businessId: firm.id } });
+      }
       for (const [input, perUnit] of Object.entries(needs))
-        supplyInput(firm, input, ratedOutput * perUnit);
+        supplyInput(firm, input, runnableOutput * perUnit);
       let materials = 1;
       for (const [input, perUnit] of Object.entries(needs))
         materials = Math.min(materials, (firm.inventory[input] || 0) / Math.max(1e-6, ratedOutput * perUnit));
       const factor = Math.max(0, Math.min(labour, capital, materials, utilityFactor));
-      const made = ratedOutput * factor * this.rng.float(0.9, 1.1);
+      const made = Math.min(ratedOutput * factor * this.rng.float(0.9, 1.1),
+        ...Object.entries(needs).map(([input, perUnit]) => (firm.inventory[input] || 0) / Math.max(1e-9, perUnit)));
       const consumed = Object.fromEntries(Object.entries(needs).map(([input, perUnit]) => [input, made * perUnit]));
       firm.productionFactor = factor;
       firm.utilityFactor = utilityFactor;
@@ -706,6 +797,8 @@ export class IndustrySystem {
         this.note(`${firm.name} production reduced to ${Math.round(factor * 100)}% by labour, inputs, capital or utilities.`);
       firm.lastConstraintBand = band;
     }
+    this.settleConsumption();
+    this.updateDemandPersistence();
     const goodsProducer = economy?.businesses?.find((firm) =>
       firm.type === 'industry' && this.typeOf(firm.building)?.product === 'goods' && (firm.inventory.goods || 0) > 0);
     if (goodsProducer) {
@@ -728,6 +821,7 @@ export class IndustrySystem {
         const sold = economy.exportGoods({ sector: 'business', id: firm.id }, key, qty, priceFor(this.town, key, 'export'));
         if (!sold.ok) continue;
         this.exported += sold.revenue;
+        this.recordDemandFlow('exports', { [key]: sold.quantity });
         this.note(`${firm.name} exported ${sold.quantity} ${LABEL[key].toLowerCase()} for $${Math.round(sold.revenue).toLocaleString('en-US')}.`);
       }
     }
@@ -795,6 +889,8 @@ export class IndustrySystem {
     const revenue = factories.reduce((s, b) => s + this.revenuePerDay(b), 0);
     return {
       commodities,
+      demandBoard: this.demandBoard(),
+      consumption: { ...this.lastConsumption },
       factories: factories.length,
       revenue: Math.round(revenue),
       goods: {

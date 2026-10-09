@@ -30,6 +30,7 @@ Run from the repository root. Browser checks generally need Vite running and `AP
 | `npm run test:factory-site` | `node scripts/_factory_site_regression.mjs` |
 | `npm run test:factory-production` | `node scripts/_factory_production_check.mjs` |
 | `npm run test:industry-planning` | `node scripts/_industry_planning_check.mjs` |
+| `npm run test:industry-demand` | `node scripts/_industry_demand_check.mjs && node scripts/_industry_demand_integration_check.mjs` |
 | `npm run test:staffing` | `node scripts/_staffing_regression.mjs` |
 | `npm run test:industry-expansion` | `node scripts/_industry_expansion_check.mjs` |
 | `npm run test:society` | `node scripts/_society_transport_check.mjs` |

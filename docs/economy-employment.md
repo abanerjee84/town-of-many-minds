@@ -1,5 +1,7 @@
 # Economy, employment and production
 
+Factory selection now uses a shared demand assessment across all products. See [industrial demand](industry-demand.md) for customer profiles, paid consumption, supply-chain forecasting, pending capacity and remedies.
+
 ## Who pays and who decides
 
 The government, households, private businesses, developer, contractor, bank and foreign investors have separate economic roles. `EconomySystem.transfer()` records named movements between accounts; treasury growth is not inferred from a single state's project price.

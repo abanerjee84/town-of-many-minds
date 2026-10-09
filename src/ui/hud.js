@@ -89,7 +89,7 @@ function renderTrade(ind, history = []) {
   if (!ind || !ind.commodities) return '';
   return Object.entries(ind.commodities)
     .map(
-      ([key, c]) => `<div class="trade-row" title="${esc(c.label)}: ${c.stock}/${c.capacity} in store">
+      ([key, c]) => `<div class="trade-row" title="${esc(c.label)}: ${c.stock}/${c.capacity} in store${esc((() => { const row = ind.demandBoard?.find((item) => item.product === key); return row ? `; demand ${row.demand}/day, usable ${row.effectiveCapacity}/day, ${row.coverDays ?? '—'} stock days; ${row.reason}` : ''; })())}">
         <span class="t-name">${esc(c.label)}</span>
         <b class="t-stock">${c.stock}/${c.capacity}</b>
         ${renderSparkline(history.map((row) => row.commodities?.[key]).filter((v) => v != null))}

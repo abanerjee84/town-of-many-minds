@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "bufferDays": 7,
+  "historyDays": 14,
+  "persistenceDays": 14,
+  "householdBudgetShare": 0.2,
+  "minimumHouseholdBudget": 4,
+  "capitalPerDailyOutput": 800,
+  "primaryInputPrices": { "food": 4 },
+  "recoveryCoverage": 0.95,
+  "weights": { "shortage": 0.4, "impact": 0.2, "dependency": 0.15, "importBenefit": 0.15, "persistence": 0.1 },
+  "household": { "cloth": 0.025, "furniture": 0.012, "packaged_food": 0.10, "electronics": 0.008, "batteries": 0.008, "paper": 0.015, "polymers": 0.008 },
+  "business": {
+    "office": { "software": 0.25, "paper": 0.2, "electronics": 0.02, "furniture": 0.02 },
+    "retail": { "software": 0.05, "paper": 0.06, "polymers": 0.04 },
+    "industry": { "machinery": 0.12, "software": 0.04 },
+    "lodging": { "cloth": 0.15, "furniture": 0.06, "chemicals": 0.08, "paper": 0.04 }
+  },
+  "civic": {
+    "clinic": { "medicine": 0.8, "chemicals": 0.10, "glass": 0.04 },
+    "hospital": { "medicine": 2, "chemicals": 0.25, "glass": 0.10, "electronics": 0.06 },
+    "school": { "paper": 0.4, "software": 0.04 },
+    "college": { "paper": 0.6, "software": 0.15, "electronics": 0.05 },
+    "university": { "paper": 0.8, "software": 0.3, "electronics": 0.10 },
+    "default": { "paper": 0.03, "software": 0.03 }
+  },
+  "roadMaintenance": { "cement": 0.004, "aggregate": 0.008, "steel": 0.001 },
+  "buildingMaintenance": { "lumber": 0.003, "glass": 0.002, "cement": 0.002 },
+  "vehicleMaintenance": { "refined_fuel": 0.08, "batteries": 0.01, "machinery": 0.004 },
+  "sourceImpact": { "households": 0.5, "business": 0.5, "health": 1, "education": 0.7, "maintenance": 0.6, "construction": 0.7, "exports": 0.3 }
+}

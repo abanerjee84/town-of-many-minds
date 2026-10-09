@@ -29,15 +29,18 @@ const result = await page.evaluate(() => {
   const originalFactoryRoom = t.growth.factoryRoom;
   const originalFactorySiteAvailable = t.growth.factorySiteAvailable;
   const originalMissingConstructionProduct = t.industry.missingConstructionProduct;
+  const originalUrgentProducer = t.industry.mostUrgentProducer;
   t.growth.factoryRoom = () => true;
   t.growth.factorySiteAvailable = () => false;
   t.industry.missingConstructionProduct = () => 'steel';
+  t.industry.mostUrgentProducer = () => 'steel';
   const frontierRanked = t.growth.ranked().slice(0, 12).map((row) => row.type);
   const frontierLand = window.planFor(t, 'land');
   const frontierQuote = frontierLand ? t.growth.quote(frontierLand) : null;
   t.growth.factoryRoom = originalFactoryRoom;
   t.growth.factorySiteAvailable = originalFactorySiteAvailable;
   t.industry.missingConstructionProduct = originalMissingConstructionProduct;
+  t.industry.mostUrgentProducer = originalUrgentProducer;
   // Also exercise the live governance boundary: if a model repeats a blocked
   // factory order, the rules fallback must enact ACQUIRE_LAND directly.
   const originalQuote = t.growth.quote;

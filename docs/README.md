@@ -11,6 +11,7 @@ These guides describe the checked-in implementation. Numeric reference tables co
 | [Council](council.md) | Minister remits, synthesis, Mayor review, provider adapter, correction and learning |
 | [World and construction](world-construction.md) | Acquired land, placement, footprints, housing, civic progression, archetypes |
 | [Economy and employment](economy-employment.md) | Money flows, public/private agency, jobs, training, production, FDI |
+| [Industry demand](industry-demand.md) | Commodity customers, supply chains, shared ranking, restoration and factory expansion |
 | [Mobility](mobility.md) | Congestion windows, network planning, roads, parking, buses and response fleets |
 | [Society and environment](society-environment.md) | Mood, approval, elections, crime, policies, resources, weather, forests |
 | [Evaluation and exports](evaluation.md) | KPI formulas and caveats, benchmarks, MapNow legend and saves |

@@ -103,7 +103,9 @@ export function registerBuiltinKits(registry) {
       routes: { BUILD_FACTORY: 'factory' }, planTypes: ['factory'],
       capabilities: { production: true, staffing: true, catalogue: true, builder: true, quote: true, placement: true, build: true },
       operations: catalogueOperations,
-      hooks: { render: buildingRenderer, stats: simpleStats('industry') }
+      hooks: { render: buildingRenderer, stats: simpleStats('industry'),
+        serialize: ({ town }) => town.industry?.serialize?.() || null,
+        restore: ({ town, state }) => { town.industry?.restore?.(state); return { ok: true }; } }
     },
     {
       id: 'civic', version: '1.0.0', apiVersion: 1, domains: ['civic'],

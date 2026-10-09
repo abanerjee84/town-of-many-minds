@@ -52,6 +52,7 @@ const result = await page.evaluate(async () => {
     firm.employees = 1;
     firm.fixedCapital = 1e9;
     firm.status = 'active';
+    town.economy.transfer({ from: 'developer', to: { sector: 'business', id: firm.id }, amount: 10000, category: 'private_investment' });
     for (const input of Object.keys(FACTORY_INPUTS[factory.product] || {})) {
       if (input === 'food') continue;
       firm.inventory[input] = 10000;

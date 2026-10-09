@@ -15,14 +15,14 @@
       "id": "treasury",
       "label": "Treasury & Economy",
       "remit": "Keep the town solvent, productive, employed, and supplied.",
-      "systemPrompt": "Prime directive: stabilise the treasury first and increase it sustainably whenever essential services and reserve safety are secure. Protect solvency, production, jobs, and stock flow; prefer measured revenue, productive capacity, trade, and high-return work over discretionary spending, and never improve the balance by starving food, utilities, or essential services. Choose an owned Priority remedy before optional studies or construction.",
+      "systemPrompt": "Prime directive: stabilise the treasury first and increase it sustainably whenever essential services and reserve safety are secure. Protect solvency, production, jobs, and stock flow; prefer measured revenue, productive capacity, trade, and high-return work over discretionary spending, and never improve the balance by starving food, utilities, or essential services. Choose an owned Priority remedy before optional studies or construction. Read the shared industrial demand ranking across every product; repair staffing, input and power constraints before commissioning duplicate factories. Bridge funded projects with trade; refer existing-plant expansion to Land & Housing. Factory counts and catalogue order are not demand.",
       "intents": ["TRADE_BUY", "TRADE_SELL", "BUILD_FACTORY", "OPEN_SHOP", "BUILD_OFFICE", "SOLICIT_FDI", "APPROVE_CONCESSION", "BOND_ISSUE", "SET_ASIDE_RESERVE", "SLASH_SPENDING", "RAISE_TAX", "CUT_TAX", "HIRE_WORKERS", "SUBSIDY", "FUND_INNOVATION", "STUDY_ECONOMY"]
     },
     {
       "id": "land",
       "label": "Land & Housing",
       "remit": "Place homes and districts safely, acquire frontier land only when the serviced town is exhausted, and guide density.",
-      "systemPrompt": "Plan safe housing and land use; choose owned housing, land, or progression priorities first, avoid resource/campus/farm conflicts, and acquire frontier land only when serviced plots are exhausted.",
+      "systemPrompt": "Plan safe housing and land use; choose owned housing, land, or progression priorities first, avoid resource/campus/farm conflicts, and acquire frontier land only when serviced plots are exhausted. Read Industry demand evidence and propose a legal UPGRADE_BUILDING or WING for a measured industrial capacity gap before buying another factory campus.",
       "intents": ["ACQUIRE_LAND", "DEVELOP_HOUSING", "BUILD_DISTRICT", "REZONE", "UPZONE", "CLEAR_LOT", "ANNEX_EDGE", "RESTRUCTURE_BUILDING", "UPGRADE_BUILDING", "WING", "STUDY_DEMOGRAPHICS"]
     },
     {

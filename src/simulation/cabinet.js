@@ -78,7 +78,8 @@ export class CabinetSystem {
       `Submit at most ${this.motionsPerSitting} motions, normally one per department. Each motion has department, canonical intent, reason, priority 0..1, emergency when measured, and optional parser params.`,
       'Typed build intents must carry their catalogue parameter: BUILD_LANDMARK requires params.type=<landmark id>, BUILD_FACTORY requires params.type=<factory id>, BUILD_CIVIC/BUILD_TRANSIT require their facility when the report names one, and IMAGINE_ARCHETYPE requires params.block=<catalogue id>. Never submit a bare typed-build intent; choose NO_ACTION when the report does not identify a legal catalogue row.',
       `Use a ${Math.round(this.priorityMix.immediateShare * 100)}/${Math.round(this.priorityMix.longTermShare * 100)} split: address listed Priority/mandatory evidence first, and use the remaining share for defensible long-term capacity or vision.`,
-      'Use only the report evidence and the named department remit. The Mayor approves or rejects; do not claim execution or invent coordinates, budgets, IDs, or actions.'
+      'Use only the report evidence and the named department remit. The Mayor approves or rejects; do not claim execution or invent coordinates, budgets, IDs, or actions.',
+      'Industry demand priorities use identical rules for every factory product. Restore staff, inputs or utilities before duplicating idle capacity; bridge in-flight capacity, then expand or commission the named product. Trace missing inputs first. Propose only your owned remedy; land owns UPGRADE_BUILDING/WING, treasury owns BUILD_FACTORY/trade. Private investments require independent viability and acceptance.'
     ].join('\n');
   }
 

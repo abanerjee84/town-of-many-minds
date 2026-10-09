@@ -44,7 +44,9 @@ export class ForeignInvestmentSystem {
     const economy = t.economy?.stats?.() || {};
     const society = t.society?.stats?.() || {};
     const industry = t.industry?.stats?.() || {};
-    const pressures = Object.values(industry.commodities || {}).map((row) => 1 - (Number(row.percent) || 0) / 100);
+    const pressures = (industry.demandBoard || [])
+      .filter((row) => row.actionable && ['build_factory', 'expand_capacity'].includes(row.remedy))
+      .map((row) => row.priority);
     return {
       population,
       treasury: Number(economy.treasury) || 0,
@@ -75,12 +77,13 @@ export class ForeignInvestmentSystem {
   _factoryId() {
     const urgent = this.town.industry?.mostUrgentProducer?.();
     const product = typeof urgent === 'string' ? urgent : urgent?.product;
-    return FACTORY_TYPES.find((row) => row.product === product)?.id || FACTORY_TYPES.find((row) => row.id === 'steelworks')?.id || FACTORY_TYPES[0]?.id;
+    return FACTORY_TYPES.find((row) => row.product === product)?.id || null;
   }
 
   _templatePlan(template, offer) {
     const t = this.town;
     if (template.planType === 'factory') {
+      if (!offer.factoryType) return null;
       return planFor(t, 'factory', {
         factory: offer.factoryType,
         owner: 'private',
@@ -120,7 +123,9 @@ export class ForeignInvestmentSystem {
     const plan = this._templatePlan(template, offer);
     if (!plan) {
       offer.feasible = false;
-      offer.reason = 'project type is not available in this build';
+      offer.reason = template.planType === 'factory' && !offer.factoryType
+        ? 'no measured factory capacity gap; restore or use existing supply first'
+        : 'project type is not available in this build';
       return offer;
     }
     plan.commissionedBy = 'developer';

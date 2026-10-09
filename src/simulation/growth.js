@@ -732,9 +732,9 @@ function landmarkPlan(town, lm, opts = {}) {
   const factory =
     lm.zone === ZONE.INDUSTRIAL
       ? FACTORY_TYPES.find((f) => f.id === opts.factory) ||
-        FACTORY_TYPES.find((f) => f.product === (town.industry?.commissionProduct?.() || 'lumber')) ||
-        FACTORY_TYPES[0]
+        FACTORY_TYPES.find((f) => f.product === town.industry?.commissionProduct?.())
       : null;
+  if (lm.zone === ZONE.INDUSTRIAL && !factory) return null;
   const plan = {
     type: lm.id,
     landmark: lm.id,
@@ -1031,14 +1031,12 @@ export function planFor(town, type, opts = {}) {
     }
     case 'factory': {
       // Phase 12 — a pinned type wins; a bare BUILD_FACTORY derives its works
-      // from live signals (strained commodity, else the balanced pick).
-      const derived =
-        (town.industry && town.industry.commissionProduct && town.industry.commissionProduct()) ||
-        'lumber';
+      // from the shared demand board; no customers means no automatic works.
+      const derived = town.industry?.commissionProduct?.();
       const def =
         FACTORY_TYPES.find((f) => f.id === opts.factory) ||
-        FACTORY_TYPES.find((f) => f.product === derived) ||
-        FACTORY_TYPES[0];
+        FACTORY_TYPES.find((f) => f.product === derived);
+      if (!def) return null;
       // A pinned footprint (the player tool, a council spec) is honoured as
       // given; otherwise the works carries a candidate LOT SIZES list and the
       // chooser in apply() picks on site quality, budget headroom and need.
@@ -1347,6 +1345,7 @@ export function planFor(town, type, opts = {}) {
         .sort((a, b) => buildingLoad(town, b) - buildingLoad(town, a));
       const target =
         strained[0] ||
+        g.factoryUpgradeTarget?.() ||
         g.progressionTarget?.() ||
         town.buildings.filter((b) => b.kind !== 'civic' && head(b)).sort((a, b) => (a.floors || 1) - (b.floors || 1))[0] ||
         null;
@@ -2177,13 +2176,20 @@ export class GrowthSystem {
     return !!plan && !!this.siteForFootprint(plan);
   }
 
+  factoryUpgradeTarget(product = null) {
+    const row = product ? this.town.industry?.producerPressure(product)
+      : this.town.industry?.demandBoard?.()?.find((entry) => entry.actionable && entry.remedy === 'expand_capacity');
+    if (!row || row.remedy !== 'expand_capacity') return null;
+    return (this.town.industry?.factories() || [])
+      .filter((building) => this.town.industry.typeOf(building)?.product === row.product && building.house &&
+        (building.floors || 1) < MAX_FLOORS && !this.pendingTargets.has(building))
+      .sort((a, b) => (a.floors || 1) - (b.floors || 1) || String(a.id).localeCompare(String(b.id)))[0] || null;
+  }
+
   factoryLandNeeded(opts = {}) {
-    const s = this.inputs();
     const industry = this.town.industry;
-    const noWorksAtMilestone = s.pop >= 80 && !this.town.buildings.some((b) => b.purpose === 'industrial');
-    const materialNeed = !!industry?.mostUrgentProducer?.() ||
-      !!industry?.missingConstructionProduct?.() || !!industry?.deficitProduct?.();
-    return this.factoryRoom() && (noWorksAtMilestone || materialNeed) && !this.factorySiteAvailable(opts);
+    const product = industry?.mostUrgentProducer?.();
+    return this.factoryRoom() && !!product && !this.factoryUpgradeTarget(product) && !this.factorySiteAvailable(opts);
   }
 
   /**
@@ -2575,11 +2581,10 @@ export class GrowthSystem {
     }
     if (type === 'factory') {
       const def = FACTORY_TYPES.find((row) => row.id === plan.factory);
-      const urgent = this.town.industry?.mostUrgentProducer?.() || this.town.industry?.missingConstructionProduct?.();
       const pressure = def?.product && this.town.industry?.producerPressure?.(def.product);
-      return urgent === def?.product || this.town.industry?.deficitProduct?.() === def?.product || Number(pressure?.priority) > 0.75
+      return pressure && ['build_factory', 'expand_capacity'].includes(pressure.remedy)
         ? { ok: true, reason: `measured demand for ${def?.product || 'industrial output'}` }
-        : { ok: false, reason: `no measured demand for ${def?.product || 'this works'}` };
+        : { ok: false, reason: pressure?.reason || `no measured demand for ${def?.product || 'this works'}` };
     }
     if (LANDMARKS[type]) {
       const lm = LANDMARKS[type];
@@ -3139,18 +3144,6 @@ export class GrowthSystem {
       const need = Math.min(1, (s.pop - 149) / 180);
       out.push({ type: 'civic', need, score: 16 + need, opts: { facility: 'university' }, amenity: false });
     }
-    // A first works campus is an economic progression rung once the settlement
-    // has enough people to staff it.  The explicit default keeps this path
-    // alive even while the initial stockpile is still above a shortage gate;
-    // the quote still enforces the real lot, cash, utility and material rules.
-    const industrialCount = this.town.buildings.filter((b) => b.purpose === 'industrial').length;
-    if (s.pop >= 80 && industrialCount === 0 && this.factoryRoom() && this.factorySiteAvailable()) {
-      const starter = this.town.industry?.mostUrgentProducer?.() ||
-        this.town.industry?.missingConstructionProduct?.() ||
-        this.town.industry?.deficitProduct?.() || 'lumber';
-      const def = FACTORY_TYPES.find((f) => f.product === starter) || FACTORY_TYPES[0];
-      out.push({ type: 'factory', need: 1, score: 15, opts: { factory: def.id }, amenity: false });
-    }
     // Park is AMENITY work: a real need, but never the fallback answer — a
     // settled town holds rather than inventing turf (see isAmenity).
     if (s.parks < s.pop * PARKS_PER_POP && this.findCell('park'))
@@ -3181,12 +3174,11 @@ export class GrowthSystem {
     // ran the town dry — see factoryRoom()). The IndustrySystem pressure board
     // keeps raw inputs import-only and follows live dependency demand.
     if (this.town.industry && this.factoryRoom()) {
-      const strained = this.town.industry.mostUrgentProducer?.() ||
-        (this.town.industry.factories().length === 0
-          ? this.town.industry.deficitProduct?.()
-          : null);
+      const strained = this.town.industry.mostUrgentProducer?.();
       const def = strained && FACTORY_TYPES.find((f) => f.product === strained);
-      if (def && this.factorySiteAvailable({ factory: def.id })) add('factory', 0.9, { factory: def.id });
+      const pressure = strained && this.town.industry.producerPressure(strained);
+      if (pressure?.remedy === 'expand_capacity' && this.factoryUpgradeTarget(strained)) add('upgrade', pressure.priority);
+      else if (def && this.factorySiteAvailable({ factory: def.id })) add('factory', pressure?.priority || 0.9, { factory: def.id });
     }
     // Landmark builds (LANDMARKS catalogue): every large block-acquire the
     // town currently wants, each firing at most once — see hasBuilding().
@@ -3391,8 +3383,7 @@ export class GrowthSystem {
         // identifies an actionable catalogue output. This intentionally
         // includes advanced/downstream products after the first works instead
         // of silently restricting growth to lumber, steel, and cement.
-        const strained = this.town.industry?.mostUrgentProducer?.() ||
-          (this.town.industry?.factories?.().length === 0 ? this.town.industry?.deficitProduct?.() : null);
+        const strained = this.town.industry?.mostUrgentProducer?.();
         return this.factoryRoom() && !!strained && this.factorySiteAvailable({ factory: strained && FACTORY_TYPES.find((f) => f.product === strained)?.id });
       }
       case 'resource': {
@@ -3522,8 +3513,7 @@ export class GrowthSystem {
       case 'restructure':
         return 'no occupied building has a safe higher floor to add';
       case 'factory': {
-        const strained = this.town.industry?.mostUrgentProducer?.() ||
-          (this.town.industry?.factories?.().length === 0 ? this.town.industry?.deficitProduct?.() : null);
+        const strained = this.town.industry?.mostUrgentProducer?.();
         if (!this.factoryRoom()) return 'no room — works already outnumber the workforce';
         if (!this.factorySiteAvailable()) return 'no acquired industrial campus — ACQUIRE_LAND first';
         return `industrial pressure is ${strained || 'healthy'}${strained ? ` — ${this.town.industry.producerPressure?.(strained)?.reason || 'producer needed'}` : ' — no strained or downstream-constrained product'}`;

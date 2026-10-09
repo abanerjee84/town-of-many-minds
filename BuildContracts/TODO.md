@@ -1,6 +1,17 @@
 ﻿# Construction and metropolis roadmap
 
-Updated 2026-10-09 with the public documentation pass; prior measured failures remain below.
+Updated 2026-10-10 with demand-led industrial planning; prior measured failures remain below.
+
+## Current sprint (2026-10-10, industrial demand)
+
+- [x] Added shared all-product demand scoring, JSON consumption profiles and weights, recipe dependency propagation, days-of-supply forecasts, and persistent-shortage evidence.
+- [x] Connected household, firm, public-service and asset-maintenance purchases to the money/inventory ledger; public supply procurement respects the operating reserve.
+- [x] Removed automatic factory-count balancing, the no-demand sawmill fallback and the foreign-investment steelworks fallback; restoration, pending capacity and expansion are separate remedies.
+- [x] Added Council evidence and an inspectable demand table in Trade; demand history is saved and rolled back with project state.
+- [x] Verified all 18 products and catalogue-order/scale/warehouse invariance in an 800-day controlled forecast, plus recipe propagation and cycle rejection. This is a fast demand regression, not an autonomous city/traffic soak.
+- [x] Seed-1337 integration passed paid consumption/inputs, money and inventory conservation, public reserve and food protection, idle-capacity duplicate rejection, industrial upgrade selection, pending-capacity bridging, foreign-investment demand selection/concessions, persistence, save/restore/rollback and Trade-table rendering. Visually inspected the table.
+- [x] Industry planning/expansion/production/site, economy (five seeds), fiscal funding, agency boundary, independent developers, service sector, Council authority, Cabinet/remedy, prompt budget, kit registry, performance boundaries and UI checks passed. Production build and 24-file documentation checks passed; the existing bundle-size warning remains.
+- [x] Prepared the verified industrial-demand implementation for commit and publication; unrelated scratch diagnostics remain outside the commit.
 
 ## Current sprint (2026-10-09, public documentation)
 

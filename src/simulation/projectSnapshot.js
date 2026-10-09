@@ -43,7 +43,8 @@ export function snapshotProjectWorld(town) {
     } : null,
     utilityLevels: { ...town.utilities?.expansionLevels },
     industry: town.industry ? { stocks: { ...town.industry.stocks }, imported: town.industry.imported,
-      exported: town.industry.exported, historyLength: town.industry.history.length } : null,
+      exported: town.industry.exported, historyLength: town.industry.history.length,
+      demandState: town.industry.serialize?.() } : null,
     economy: economy ? {
       ids: { ...economy.ids }, accounts: Object.fromEntries(Object.entries(economy.accounts).map(([key, account]) => [key, own(account)])),
       capital: { ...economy.capital }, period: copyPeriod(economy.period),
@@ -93,6 +94,7 @@ export function restoreProjectWorld(town, state) {
     town.industry.imported = state.industry.imported;
     town.industry.exported = state.industry.exported;
     town.industry.history.length = state.industry.historyLength;
+    town.industry.restore?.(state.industry.demandState);
   }
   if (state.economy) {
     const economy = town.economy;

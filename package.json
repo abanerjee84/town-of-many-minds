@@ -30,6 +30,7 @@
     "test:factory-site": "node scripts/_factory_site_regression.mjs",
     "test:factory-production": "node scripts/_factory_production_check.mjs",
     "test:industry-planning": "node scripts/_industry_planning_check.mjs",
+    "test:industry-demand": "node scripts/_industry_demand_check.mjs && node scripts/_industry_demand_integration_check.mjs",
     "test:staffing": "node scripts/_staffing_regression.mjs",
     "test:industry-expansion": "node scripts/_industry_expansion_check.mjs",
     "test:society": "node scripts/_society_transport_check.mjs",

@@ -760,12 +760,15 @@ export class Interaction {
         .join('') || '<div class="h-empty">No construction blocks match this town.</div>';
     } else {
       const list = [...(this.town.industry?.history || [])].reverse();
-      title.textContent = 'Trade history';
-      body.innerHTML = list.length
+      title.textContent = 'Industry demand & trade';
+      const board = this.town.industry?.demandBoard?.() || [];
+      const table = `<div class="industry-board"><table><caption>Factory demand assessment · units per game day</caption><thead><tr><th scope="col">Product</th><th scope="col">Demand</th><th scope="col">Usable</th><th scope="col">Pending</th><th scope="col">Stock days</th><th scope="col">Priority</th><th scope="col">Remedy</th></tr></thead><tbody>${board.map((row) =>
+        `<tr title="${esc(`${row.reason}; unfunded public demand ${row.unfundedPublicDemand}/day; sources: ${Object.keys(row.sources).join(', ') || 'none'}; prerequisites: ${row.prerequisites.map((input) => input.product).join(', ') || 'none'}`)}"><th scope="row">${esc(row.product)}</th><td>${row.demand}</td><td>${row.effectiveCapacity}</td><td>${row.pendingCapacity}</td><td>${row.coverDays ?? '—'}</td><td>${Math.round(row.priority * 100)}%</td><td>${esc(row.remedy.replaceAll('_', ' '))}</td></tr>`).join('')}</tbody></table></div>`;
+      body.innerHTML = table + (list.length
         ? list
             .map((h) => `<div class="h-row"><b>Day ${h.day ?? '?'}</b>${esc(h.text)}</div>`)
             .join('')
-        : '<div class="h-empty">No trade activity yet this run.</div>';
+        : '<div class="h-empty">No trade activity yet this run.</div>');
     }
     $('insp-modal').classList.remove('hidden');
   }

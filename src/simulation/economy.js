@@ -865,13 +865,14 @@ export class EconomySystem {
     const requested = Math.max(0, Number(quantity) || 0);
     const price = finiteAmount(unitPrice || (amount && requested ? amount / requested : amount));
     if (!price || !requested) return { ok: false, reason: 'invalid_purchase' };
-    const qty = Math.min(requested, available, Math.floor(buyerAccount.balance / price));
+    const qty = Math.min(requested, available, buyerAccount.balance / price);
     if (qty <= 0) return { ok: false, reason: available <= 0 ? 'inventory_shortage' : 'insufficient_funds' };
     const total = Math.round(qty * price * 100) / 100;
     const salesRate = taxable ? ECON.tax.sales * this.policyTaxScale() : 0;
     const tax = Math.round((total * salesRate / (1 + salesRate)) * 100) / 100;
     const net = total - tax;
-    const sale = this.transfer({ from: buyerRef, to: sellerRef, amount: net, category: 'purchase', metadata: { buyerId: buyerAccount.id, sellerId: sellerAccount.id, commodity, quantity: qty, unitPrice: price } });
+    const category = buyerAccount.sector === SECTOR.GOVERNMENT ? 'government_procurement' : 'purchase';
+    const sale = this.transfer({ from: buyerRef, to: sellerRef, amount: net, category, metadata: { buyerId: buyerAccount.id, sellerId: sellerAccount.id, commodity, quantity: qty, unitPrice: price } });
     if (!sale.ok) return sale;
     const taxTx = tax > 0 ? this.transfer({ from: buyerRef, to: 'government', amount: tax, category: 'sales_tax', metadata: { taxpayerId: buyerAccount.id, sellerId: sellerAccount.id, commodity, quantity: qty } }) : null;
     if (taxTx && !taxTx.ok) return taxTx;

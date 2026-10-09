@@ -693,7 +693,7 @@ const CABINET_REPORT_PREFIXES = Object.freeze({
     'Intent map:', 'Construction:', 'Warnings:', 'Last decision:', 'MANDATORY COUNCIL REMEDY:'
   ],
   treasury: ['Economy:', 'Employment:', 'Industry:', 'Staff:', 'Primary resources:', 'Stocks:', 'Trade:', 'Foreign investment:', 'SOLICIT_FDI', 'APPROVE_CONCESSION', 'HIRE_WORKERS', 'TRADE_BUY', 'TRADE_SELL', 'BOND_ISSUE', 'FUND_INNOVATION'],
-  land: ['Society:', 'Settlers:', 'Civic load:', 'Design opportunity:', 'Connectivity:'],
+  land: ['Society:', 'Settlers:', 'Industry:', 'Civic load:', 'Design opportunity:', 'Connectivity:'],
   infrastructure: ['Congestion average', 'Road planning:', 'Services:', 'Connectivity:'],
   services: ['Society:', 'Weather:', 'Emergency:', 'Services:', 'Industry:', 'Staff:', 'Utilities:', 'Electricity:', 'Primary resources:', 'Waste flow:'],
   society: ['Society:', 'Weather:', 'Settlers:', 'Civic load:', 'Tourism:', 'Design opportunity:', 'Research:', 'Schemes:', 'Laws:', 'Policy effects:'],
@@ -1762,7 +1762,7 @@ export class GovernanceSystem {
           return `Stocks: ${rows
             .map(([k, c]) => `${k} ${c.stock}/${c.capacity} (${c.percent}%) buy $${c.buy} sell $${c.sell}`)
             .join(' · ')} · default buy ${defBuy} · default sell ${fullest ? fullest[0] : 'goods'}` +
-            (factoryNeed ? ` · factory priority ${factoryNeed.product} (${factoryNeed.reason})` : ' · factory priorities balanced');
+            (factoryNeed ? ` · factory priority ${factoryNeed.product} (${factoryNeed.reason})` : ' · forecast industrial demand covered');
         })()
       : '';
     // The short HUD summary is not enough for an LLM to plan a town. These
@@ -1880,7 +1880,9 @@ export class GovernanceSystem {
         : '',
       stationLine,
       ind
-        ? `Industry: ${ind.factories} works · materials ${MATERIAL_KEYS.map((k) => `${k} ${ind.commodities[k].stock}`).join(', ')} · goods ${ind.goods.stock} (factor ×${ind.goods.factor})`
+        ? `Industry: ${ind.factories} works · materials ${MATERIAL_KEYS.map((k) => `${k} ${ind.commodities[k].stock}`).join(', ')} · goods ${ind.goods.stock} (factor ×${ind.goods.factor})` +
+          ` · unfunded public supply ${(ind.demandBoard || []).reduce((sum, row) => sum + row.unfundedPublicDemand, 0).toFixed(2)} units/d` +
+          ` · demand priorities ${(ind.demandBoard || []).filter((row) => row.actionable).slice(0, 5).map((row) => `${row.product}: demand ${row.demand}/d usable ${row.effectiveCapacity}/d pending ${row.pendingCapacity}/d stock ${row.coverDays}d score ${row.priority} remedy ${row.remedy}; ${row.reason}; inputs ${row.prerequisites.map((input) => `${input.product} ${input.demand}/d${input.local ? '' : ' import/resource'}`).join(', ') || 'none'}`).join(' | ') || 'covered'}`
         : '',
       staff
         ? `Staff: ${CREW_ROLES.map((r) => `${SITE_CREW[r].label} ${staff.staff[r] || 0}/${staff.want[r] || 0}`).join(' · ')} · businesses ${staff.biz?.have ?? 0}/${staff.biz?.need ?? 0} · civic ${staff.civic?.filled ?? 0}/${staff.civic?.need ?? 0}${staff.gap ? ` · gap ${staff.gap}` : ''}`
