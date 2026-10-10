@@ -1638,10 +1638,12 @@ export class GovernanceSystem {
     const resLine = rs
       ? Object.entries(rs.types)
           .map(
-            ([k, v]) =>
-              `${k} ${v.percent}%${v.shortage ? ' DRY' : ''} ${v.production}/${v.demand}${
+            ([k, v]) => {
+              const recovery = v.deficit ? t.resources.staffingRecovery?.(k) : null;
+              return `${k} ${v.percent}%${v.shortage ? ' DRY' : ''} ${v.production}/${v.demand}${
                 v.production < v.demand ? ' DEFICIT' : ''
-              }`
+              }${recovery ? ` [${recovery.detail}]` : ''}`;
+            }
           )
           .join(' · ')
       : '';
@@ -1675,6 +1677,8 @@ export class GovernanceSystem {
         ` · neighbourhoods ${society.neighbourhoods.length} · open crimes ${society.crimes.open} · court backlog ${society.crimes.backlog}` +
         ` · active laws ${society.laws.length}${society.mayor ? ` · mayor ${society.mayor}` : ''}`
       : '';
+    const recoveryLine = (rs?.strained || []).map(resource => t.resources.staffingRecovery?.(resource))
+      .filter(Boolean).map(row => `${row.detail}; ${row.feasible ? 'HIRE_WORKERS (local matching first)' : !row.funded ? 'restore operator payroll funding; no unfunded hires' : 'training or housing for qualified recruits required'}`).join(' · ');
     // Phase 16 — the derived band and the pull, read once and used by both the
     // Population and the Settlers lines. `lcs` is the system (it owns the
     // campaign calendar); `lc` above is its stats().
@@ -1823,7 +1827,7 @@ export class GovernanceSystem {
       unemploymentRate(t) >= (trainingRow.needs?.unemployment || 0) && eco.treasury >= (trainingRow.cost || 0);
     const highUnemploymentNoVacancy = unemploymentRate(t) >= UNEMPLOYMENT_REMEDY_GATE && !(staff?.gap > 0);
     const directLine = [
-      `HIRE_WORKERS ${staff?.gap ? `needed ${staff.gap}` : highUnemploymentNoVacancy ? `blocked: no vacancy at ${Math.round(unemploymentRate(t) * 100)}% unemployment` : 'no measured gap'}`,
+      `HIRE_WORKERS ${staff?.gap ? `needed ${staff.gap}` : highUnemploymentNoVacancy ? `blocked: no vacancy at ${Math.round(unemploymentRate(t) * 100)}% unemployment` : 'no measured gap'}${recoveryLine ? ` · ${recoveryLine}` : ''}`,
       `WORKFORCE_TRAINING ${trainingAvailable ? `${trainingEligible} eligible residents` : trainingRunning ? 'already running' : 'not currently eligible'}`,
       `ATTRACT_SETTLERS ${st?.spareBeds > 0 && st?.openings > 0 ? 'available' : 'wait for beds/posts'}`,
       `TRADE_BUY ${rs?.strained?.length ? `consider ${rs.strained.join('/')}` : 'no primary deficit'}`,
@@ -2223,7 +2227,7 @@ export class GovernanceSystem {
         ((resourceEmergency.kind === 'upgrade' || resourceEmergency.kind === 'site') && parsed.intent === 'UPGRADE_RESOURCE' && sameResource);
       if (!allowed) {
         decision.status = 'blocked';
-        decision.detail = `${resourceEmergency.resource} capacity emergency — ${resourceEmergency.intent} takes priority over ${parsed.intent}`;
+        decision.detail = `${resourceEmergency.resource} ${resourceEmergency.kind === 'staff' ? 'output' : 'capacity'} emergency — ${resourceEmergency.intent} takes priority over ${parsed.intent}`;
         this.requiredAction = {
           intent: resourceEmergency.intent,
           resource: resourceEmergency.resource,
@@ -2567,6 +2571,8 @@ export class GovernanceSystem {
       // Never retry the unaffordable physical remedy from the generic fallback
       // path; execute the explicit bridge that can unlock it.
       chosen = this.enact(`INTENT: ${this.requiredAction.intent}`, 'rules');
+    } else if (emergency?.kind === 'staff') {
+      chosen = this.enact('INTENT: HIRE_WORKERS', 'rules');
     } else if (emergency?.kind === 'upgrade') {
       chosen = this.enact(`INTENT: UPGRADE_RESOURCE resource=${emergency.resource}`, 'rules');
     } else if (emergency?.kind === 'land') {
@@ -2810,16 +2816,16 @@ export class GovernanceSystem {
     return null;
   }
 
-  /** HIRE_WORKERS — newcomers in for the staff gaps at the sites and in the
-   *  businesses. Never a shuffle of existing townsfolk (the user rule): every
-   *  recruit is an arrival, credentialed for the role via credentialFloor. */
+  /** HIRE_WORKERS matches willing idle locals before backstopping funded
+   * vacancies with newcomers. Existing employees keep their own jobs. */
   hire(decision) {
     const t = this.town;
-    // Owners hire their own staff from the town's residents (EconomySystem
-    // `hireResidents`, run on every `assignEmployees`). By the time the council
-    // is asked, those posts are already filled or unfunded, so this is a
-    // BACKSTOP: it only reaches for an immigrant when the private sector could
-    // not fill the gap itself, and it says so.
+    // Refresh willing local matching now. The explicit newcomer loop below
+    // owns this action's recruitment limit; owner census calls remain independent.
+    const eco = t.economy;
+    const localBefore = new Set((t.pedestrians?.citizens || []).filter(c => !c.work).map(c => c.p.id));
+    eco?.assignEmployees?.({ allowResourceImmigration: false });
+    const localsHired = (t.pedestrians?.citizens || []).filter(c => localBefore.has(c.p.id) && c.work && c.p.employmentStatus === 'employed').length;
     const need = this.staffNeed();
     if (!need) {
       decision.status = 'rejected';
@@ -2831,20 +2837,19 @@ export class GovernanceSystem {
       CREW_ROLES.map((r) => `${SITE_CREW[r].label} ${n.staff[r] || 0}/${n.want[r] || 0}`).join(' · ');
     if (!need.gap) {
       const unemployment = unemploymentRate(t);
-      decision.status = unemployment >= UNEMPLOYMENT_REMEDY_GATE ? 'rejected' : 'noop';
-      decision.detail = unemployment >= UNEMPLOYMENT_REMEDY_GATE
+      decision.status = localsHired ? 'done' : unemployment >= UNEMPLOYMENT_REMEDY_GATE ? 'rejected' : 'noop';
+      decision.detail = localsHired ? `matched ${localsHired} qualified local residents to funded vacancies — ${crewLine(need)}` : unemployment >= UNEMPLOYMENT_REMEDY_GATE
         ? `no staffed vacancy can absorb local joblessness (${Math.round(unemployment * 100)}% unemployed) — use ENACT_SCHEME scheme=workforce_training when eligible or create measured job capacity`
         : `every post is filled — ${crewLine(need)}, businesses ${need.biz?.have ?? 0}/${need.biz?.need ?? 0}, civic ${need.civic?.filled ?? 0}/${need.civic?.need ?? 0}`;
       this.record(decision);
       return decision;
     }
 
-    const eco = t.economy;
     let hired = 0;
     while (hired < 3) {
       const liveCivic = t.lifecycle?.civicStaffing ? t.lifecycle.civicStaffing() : { rows: [], open: 0 };
       // Worst site shortfall, biggest first; the businesses are the fallback.
-      const gaps = CREW_ROLES.map((r) => [r, Math.max(0, need.want[r] - (need.staff[r] || 0))]);
+      const gaps = CREW_ROLES.map((r) => [r, eco?.resourcePayrollCanExpand?.(SITE_CREW[r].job) ? Math.max(0, need.want[r] - (need.staff[r] || 0)) : 0]);
       gaps.sort((a, b) => b[1] - a[1]);
       const [topRole, gapSite] = gaps[0] || [];
       // Worst business shortfall the OWNER could fund — the council only
@@ -2852,7 +2857,7 @@ export class GovernanceSystem {
       let gapBiz = 0;
       let bizJob = null;
       if (eco && eco.businesses) {
-        eco.assignEmployees();
+        eco.assignEmployees({ allowResourceImmigration: false });
         for (const z of eco.businesses) {
           const n = z.staffNeed ?? eco.staffNeeded(z.building);
           const g = eco.ownerCanPay && !eco.ownerCanPay(z) ? 0 : Math.max(0, n - z.employees);
@@ -2868,7 +2873,7 @@ export class GovernanceSystem {
         }
       }
       const civicRow = liveCivic.rows
-        .filter((row) => row.open > 0)
+        .filter((row) => row.open > 0 && (!eco?.publicPayrollCanExpand || eco.publicPayrollCanExpand(row.building)))
         .sort((a, b) => b.open - a.open)[0];
       const gapCivic = civicRow?.open || 0;
       const civicJob = civicRow
@@ -2889,7 +2894,7 @@ export class GovernanceSystem {
       hired++;
     }
 
-    decision.status = hired ? 'done' : 'rejected';
+    decision.status = hired || localsHired ? 'done' : 'rejected';
     if (hired) {
       const fresh = this.staffNeed();
       if (fresh) {
@@ -2901,7 +2906,12 @@ export class GovernanceSystem {
     }
     decision.detail = hired
       ? `hired ${hired} newcomer${hired === 1 ? '' : 's'} from neighbouring towns — ${crewLine(need)}, businesses ${need.biz?.have ?? 0}/${need.biz?.need ?? 0}, civic ${need.civic?.filled ?? 0}/${need.civic?.need ?? 0} staffed`
-      : 'no vacant homes for newcomers';
+      : localsHired ? `matched ${localsHired} qualified local residents to funded vacancies — ${crewLine(this.staffNeed())}`
+      : ['energy', 'food', 'fuel'].some(resource => { const recovery = t.resources?.staffingRecovery?.(resource); return recovery && !recovery.funded; })
+        ? 'resource operator cannot fund additional payroll — restore operating cash first'
+        : 'no funded eligible recruitment with vacant housing; inspect staff funding, qualifications and beds';
+    const unresolved = ['energy', 'food', 'fuel'].map(resource => t.resources?.staffingRecovery?.(resource)).filter(Boolean);
+    if (unresolved.length) decision.detail += ` · unresolved: ${unresolved.map(row => row.detail).join('; ')}`;
     this.record(decision);
     return decision;
   }

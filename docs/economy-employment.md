@@ -28,6 +28,8 @@ Unemployment is a labour-force measure, not total residents minus total building
 
 The employment pipeline uses local matching, education/job requirements, retraining, business hiring, public/site/civic staffing and explicit workforce-training schemes. Wage affordability and employer arrears can prevent hiring into physically available capacity. Inspect the Employment and Staff evidence for jobless residents, private vacancies, site/civic gaps and training eligibility.
 
+`HIRE_WORKERS` first matches qualified idle locals through the employer staffing pass, then backstops remaining fundable vacancies with housed newcomers. Resource crews are paid by the contractor operator; its cash and cumulative wage commitments govern their recruitment, rather than the town's public reserve. Lost site output produces staffing evidence before more generating capacity is considered; unfunded payroll or missing credentials/housing remains explicit. A partial hiring success still reports unresolved primary-resource gaps.
+
 `HIRE_WORKERS` addresses a fundable unfilled staffing gap. It cannot solve unemployment when all eligible posts are filled. Unemployment remedies can include viable offices, industrial production, needed public services, subsidies or `workforce_training`. `OPEN_SHOP` is appropriate only when there is unmet retail demand; repeatedly opening shops into a saturated market is not a general employment policy.
 
 Offices create service-sector desks and business activity. Government offices supply public staff capacity. Civic operations, utilities, food/resource sites, tourism and foreign projects create other work channels. Empty capacity and staffed operating capacity are deliberately separate statistics.

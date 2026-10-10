@@ -2205,6 +2205,12 @@ export class GrowthSystem {
     const candidates = resourceHint ? [resourceHint] : strained;
     for (const resource of candidates) {
       if (!['energy', 'food', 'fuel'].includes(resource) || !strained.includes(resource)) continue;
+      const recovery = rs.staffingRecovery?.(resource);
+      if (recovery) {
+        if (recovery.feasible) return { resource, kind: 'staff', intent: 'HIRE_WORKERS', detail: recovery.detail };
+        // More idle capacity cannot cure unpaid/absent qualified labour.
+        continue;
+      }
       if (!rs.producerCapacityShortfall(resource)) continue;
       if (this.projects.some((project) => project.plan?.type === 'resource' && project.plan?.resource === resource)) continue;
       if (rs.upgradeCost?.(resource) > 0) {
@@ -3396,6 +3402,7 @@ export class GrowthSystem {
         return rs
           .stats()
           .strained.some((k) =>
+            !rs.staffingRecovery?.(k) &&
             (k === 'water' || rs.producerCapacityShortfall?.(k)) &&
             (rs.upgradeCost(k) > 0 || rs.producerSiteRoom?.(k))
           );
@@ -3519,7 +3526,11 @@ export class GrowthSystem {
         return `industrial pressure is ${strained || 'healthy'}${strained ? ` — ${this.town.industry.producerPressure?.(strained)?.reason || 'producer needed'}` : ' — no strained or downstream-constrained product'}`;
       }
       case 'resource':
-        return 'no strained resource left to upgrade';
+        {
+          const recovery = this.town.resources?.stats?.().strained
+            ?.map(resource => this.town.resources.staffingRecovery?.(resource)).find(Boolean);
+          return recovery ? `${recovery.detail} — restore staffing before capacity upgrades` : 'no strained resource left to upgrade';
+        }
       case 'upgrade':
         if (!crewsFree) return 'no spare crew or savings for filler work';
         if (this.civicEvolutionTarget()) return 'a civic facility has reached its population-earned evolution threshold';

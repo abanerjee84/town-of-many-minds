@@ -2,6 +2,14 @@
 
 Updated 2026-10-10 with demand-led industrial planning; prior measured failures remain below.
 
+## Current sprint (2026-10-10, zero-output resource recovery)
+
+- [x] Reproduced zero energy output with spare installed capacity, a $3,634 treasury, qualified local residents and a funded contractor. The resource hiring guard checked the public reserve although the contractor pays these wages.
+- [x] Resource hiring now checks the actual operator's cumulative payroll; occupied/retired/disconnected posts cannot mask vacancies or create overstaffing. Orphan civic re-posting respects public payroll safeguards.
+- [x] Added a feasible staffing remedy and finance/skills/housing evidence for primary output deficits. HIRE_WORKERS matches eligible idle locals before immigration and reports unresolved resource gaps after partial hiring.
+- [x] Deterministic recovery passed 0→590/day, next-day energy storage recovery, exact per-site crews, paid contractor wages, no immigration/new sites, a six-call Cabinet sitting, unfunded/qualification barriers, cumulative wage limits and clean ledgers.
+- [x] Related economy, staffing, employment/training, fiscal/agency, independent developer, Council/Cabinet, resource/land, industry, performance and prompt checks passed. SRS/economy documentation updated; build and documentation checks passed. Prepared the verified recovery fix for commit/publication.
+
 ## Current sprint (2026-10-10, industrial demand)
 
 - [x] Added shared all-product demand scoring, JSON consumption profiles and weights, recipe dependency propagation, days-of-supply forecasts, and persistent-shortage evidence.

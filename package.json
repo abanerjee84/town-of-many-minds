@@ -32,6 +32,7 @@
     "test:industry-planning": "node scripts/_industry_planning_check.mjs",
     "test:industry-demand": "node scripts/_industry_demand_check.mjs && node scripts/_industry_demand_integration_check.mjs",
     "test:staffing": "node scripts/_staffing_regression.mjs",
+    "test:energy-recovery": "node scripts/_energy_recovery_check.mjs",
     "test:industry-expansion": "node scripts/_industry_expansion_check.mjs",
     "test:society": "node scripts/_society_transport_check.mjs",
     "test:agriculture": "node scripts/_agricultural_setback_check.mjs",

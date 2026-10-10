@@ -1324,7 +1324,7 @@ export class CitizenSystem {
    * take an UNPLACED local whose schooling covers the role, else hire a
    * newcomer through the same door `governance.hire()` uses.
    */
-  staffWorkforce() {
+  staffWorkforce({ allowImmigration = true } = {}) {
     const resources = this.town.resources;
     if (!resources) return;
     const want = Object.values(SITE_CREW);
@@ -1339,7 +1339,7 @@ export class CitizenSystem {
       // their old site disappeared or a new site was added.
       let have = this.citizens.filter((c) =>
         c.work?.kind === 'site' && c.work.site?.work === w.work &&
-        c.p.job?.work === w.work && c.p.employmentStatus === 'employed'
+        c.p.job?.work === w.work && c.work.site.connected && c.p.age >= 18 && c.p.age < 66
       ).length;
       let guard = 0;
       while (have < target && guard++ < 50) {
@@ -1359,26 +1359,25 @@ export class CitizenSystem {
         );
         if (recruit) {
           const economy = this.town.economy;
-          if (economy?.publicPayrollCanExpand && !economy.publicPayrollCanExpand()) break;
+          if (economy?.resourcePayrollCanExpand && !economy.resourcePayrollCanExpand(w.job)) break;
           const previous = recruit.p.job?.id;
           if (!setJob(recruit.p, w.job, this.rng)) break;
           this.assignWork(recruit);
           if (economy?.lastHiring) {
             economy.lastHiring.local++;
             if (previous !== w.job) economy.lastHiring.retrained++;
-            economy.lastHiring.public++;
-            economy.recordPublicHire?.();
+            economy.lastHiring.private++;
           }
           have++;
         } else {
+          if (!allowImmigration) break;
           const job = jobById(w.job);
           const economy = this.town.economy;
-          if (economy?.publicPayrollCanExpand && !economy.publicPayrollCanExpand()) break;
+          if (economy?.resourcePayrollCanExpand && !economy.resourcePayrollCanExpand(w.job)) break;
           if (!job || !this.town.lifecycle?.immigrate?.({ job })) break;
           if (economy?.lastHiring) {
             economy.lastHiring.imported++;
-            economy.lastHiring.public++;
-            economy.recordPublicHire?.();
+            economy.lastHiring.private++;
           }
           have++;
         }

@@ -33,6 +33,8 @@ const WAGES = {
   millworker: 30000, metallurgist: 41000, cementworker: 34000, assembler: 31000
 };
 
+export const jobAnnualWage = (jobId) => WAGES[jobId] || 30000;
+
 const JOB_SKILLS = {
   baker: ['baking', 'hygiene'], barista: ['hospitality', 'speed'],
   shopkeeper: ['sales', 'bookkeeping'], chef: ['cooking', 'hygiene'],

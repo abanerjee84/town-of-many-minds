@@ -2,7 +2,7 @@ import { events } from '../core/events.js';
 import { CELL_KIND, ZONE } from '../core/config.js';
 import { ECON, PUBLIC_PROJECT_TYPES, PRIVATE_PROJECT_TYPES, PUBLIC_PROGRAM_TYPES, SECTOR, TRANSACTION_CATEGORIES } from './economicConfig.js';
 import { qualifies, qualifiedJobs, jobById } from '../kits/citizens/personality.js';
-import { setJob } from '../kits/citizens/citizenProfile.js';
+import { setJob, jobAnnualWage } from '../kits/citizens/citizenProfile.js';
 import { basePrice } from './priceChart.js';
 
 export const TICKET = 16;
@@ -1042,14 +1042,19 @@ export class EconomySystem {
     let reposted = 0;
     for (const citizen of ped.citizens || []) {
       const p = citizen.p;
-      if (!p || p.age < 18 || p.age >= 66 || p.job?.id === 'retired') continue;
+      if (!p || p.age < 18 || p.age >= 66 || p.job?.id === 'retired' || citizen.work) continue;
       const kind = p.job?.work;
       let post = null;
       if (kind === 'farm' || kind === 'power' || kind === 'fuel') {
+        if (!this.resourcePayrollCanExpand(p.job.id, p.income)) continue;
         post = this.town.resources?.workplace?.(kind) || null;
       } else if (kind === 'civic') post = ped.pickGapBuilding(['civic', 'shop'], citizen);
       else if (kind === 'park') post = ped.pickGapBuilding(['park'], citizen);
       if (!post) continue;
+      if (post.purpose === 'civic' || post.kind === 'park') {
+        if (!this.publicPayrollCanExpand(post)) continue;
+        this.recordPublicHire(post);
+      }
       citizen.work = post;
       citizen.routeGoalKey = null;
       reposted++;
@@ -1202,6 +1207,22 @@ export class EconomySystem {
     this.publicHiringCommitted += this.publicDailyWage(building);
   }
 
+  /** Resource operators pay site crews from the contractor ledger, including
+   * posts reserved earlier in this pass. Public reserve policy is unrelated. */
+  resourcePayrollCanExpand(jobId, income = null) {
+    const payer = this._account('contractor');
+    const lift = 1 + (this.policyStaffPay || 0);
+    let committed = 0;
+    for (const c of this.town.pedestrians?.citizens || []) {
+      if (c.p?.age < 18 || c.p?.age >= 66 || c.p?.job?.id === 'retired' ||
+          !c.work?.site?.connected || c.work.site.work !== c.p?.job?.work) continue;
+      committed += Math.max(ECON.wages.minimumAnnual, c.p.income || 0) / 365 * lift;
+    }
+    const annual = income ?? Math.ceil(jobAnnualWage(jobId) * 1.15);
+    const wage = Math.max(ECON.wages.minimumAnnual, annual) / 365 * lift;
+    return !!payer && payer.balance + 1e-8 >= committed + wage;
+  }
+
   /**
    * An owner hires out of its own pocket. A business that cannot cover one more
    * day's wage does not advertise the post — the vacancy is real but unfunded,
@@ -1294,13 +1315,29 @@ export class EconomySystem {
     return hired;
   }
 
-  assignEmployees() {
+  assignEmployees({ allowResourceImmigration = true } = {}) {
     this.syncEntities();
     this.lastHiring = { local: 0, retrained: 0, imported: 0, public: 0, private: 0 };
     this.publicHiringCommitted = 0;
+    // Old saves can have multiple workers at a one-person turbine while
+    // another turbine has nobody. Retain legal posts and release only stale
+    // or excess pointers before matching the genuine vacancies below.
+    const resourceSeats = new Map();
+    const resources = this.town.resources;
+    for (const c of this.town.pedestrians?.citizens || []) {
+      const site = c.work?.site;
+      if (!site) continue;
+      const count = resourceSeats.get(site) || 0;
+      if (!resources?.sites?.includes(site) || !site.connected || c.p?.age < 18 || c.p?.age >= 66 ||
+          c.p?.job?.work !== site.work || count >= resources.siteCrew(site)) {
+        c.work = null;
+        c.routeGoalKey = null;
+        c.p.employmentStatus = c.p.age >= 18 && c.p.age < 66 && c.p.job?.id !== 'retired' ? 'unemployed' : 'not_in_labor_force';
+      } else resourceSeats.set(site, count + 1);
+    }
     // New resource sites can appear after the founding pass. Give their
     // public crews a chance to claim idle locals before the business census.
-    this.town.pedestrians?.staffWorkforce?.();
+    this.town.pedestrians?.staffWorkforce?.({ allowImmigration: allowResourceImmigration });
     this.staffPublicCivic();
     const citizens = this.town.pedestrians?.citizens || [];
     const byBuilding = new Map(this.businesses.map((b) => [b.building, b]));

@@ -18,6 +18,9 @@ const result = await page.evaluate(() => {
     // placement geometry.
     resources.demandNow = () => ({ water: 42, energy: 180, food: 500, fuel: 70 });
     for (const site of resources.sites) if (site.kind === 'farm') site.level = farmLevel;
+    // Capacity acquisition is a separate failure mode from a higher tier's
+    // unfilled crew. Staff the real tier before measuring required land.
+    t.economy.assignEmployees();
     resources._prodSig = null;
     resources.levels.food = 0;
   };

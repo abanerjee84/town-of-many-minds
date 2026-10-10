@@ -6,6 +6,7 @@ import { events } from '../../core/events.js';
 import { resourceSiteBuildingConflict } from '../../placement/siteRules.js';
 import { basePrice, quotePrice } from '../../simulation/priceChart.js';
 import rules from '../../data/resourceRules.json' with { type: 'json' };
+import { qualifies } from '../citizens/personality.js';
 
 /**
  * Resource Kit: the town's three primary resources — water, energy and food —
@@ -723,7 +724,13 @@ export class ResourceSystem {
    * the citizen state machine walks to `doorWorld` and steps inside it.
    */
   workplace(kind) {
-    const pool = this.sites.filter((s) => s.work === kind && s.connected);
+    const posted = new Map();
+    for (const c of this.townRef?.pedestrians?.citizens || []) {
+      const site = c.work?.site;
+      if (!site || c.p?.age < 18 || c.p?.age >= 66 || c.p?.job?.work !== kind || c.p?.job?.id === 'retired') continue;
+      posted.set(site, (posted.get(site) || 0) + 1);
+    }
+    const pool = this.sites.filter((s) => s.work === kind && s.connected && (posted.get(s) || 0) < this.siteCrew(s));
     if (!pool.length) return null;
     const i = this.rr[kind] % pool.length;
     this.rr[kind] = i + 1;
@@ -768,6 +775,31 @@ export class ResourceSystem {
     const out = Object.fromEntries(CREW_ROLES.map((r) => [r, 0]));
     for (const [site, count] of this.activeSiteWorkers()) if (site.work in out) out[site.work] += count;
     return out;
+  }
+
+  /** Lost effective output needs staffing, not another unstaffed generator.
+   * Evidence is read-only and names finance/skills/housing prerequisites. */
+  staffingRecovery(resource) {
+    const sites = this.sites.filter((s) => s.connected && s.work && SITE_RESOURCE[s.kind] === resource);
+    const workers = this.activeSiteWorkers();
+    const need = sites.reduce((sum, s) => sum + this.siteCrew(s), 0);
+    const have = sites.reduce((sum, s) => sum + Math.min(this.siteCrew(s), workers.get(s) || 0), 0);
+    const gap = need - have;
+    const production = this.computeProduction()[resource] || 0;
+    const demand = this.townRef ? this.demandNow(this.townRef)[resource] || 0 : 0;
+    if (!gap || production >= demand) return null;
+    const role = sites[0]?.work, job = SITE_CREW[role]?.job;
+    const locals = (this.townRef?.pedestrians?.citizens || []).filter(c =>
+      c.p?.age >= 18 && c.p.age < 66 && c.p.job?.id !== 'retired' && !c.work &&
+      c.p.job?.work !== 'home' && c.p.job?.work !== 'road' &&
+      (c.p.employmentStatus === 'unemployed' || !c.p.employmentStatus) && qualifies(c.p.education?.level, job)
+    ).length;
+    const funded = !!this.townRef?.economy?.resourcePayrollCanExpand?.(job);
+    const beds = (this.townRef?.buildings || []).filter(b => b.kind === 'house').reduce((sum, b) => sum + (b.capacity || 0), 0);
+    const spareBeds = Math.max(0, beds - (this.townRef?.pedestrians?.citizens?.length || 0));
+    return { resource, role, job, have, need, gap, locals, spareBeds, funded,
+      detail: `${resource} output ${production}/${demand}; ${role} crew ${have}/${need}; operator payroll ${funded ? 'funded' : 'unfunded'}; ${locals} qualified idle locals, ${spareBeds} spare beds`,
+      feasible: funded && (locals > 0 || (spareBeds > 0 && (this.townRef?.pedestrians?.citizens?.length || 0) < SIM.maxCitizens)) };
   }
 
   /* ---------------------------------------------------------------- planning */

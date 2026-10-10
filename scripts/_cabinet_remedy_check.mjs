@@ -108,6 +108,9 @@ try {
 
     reset(true);
     for (const site of t.resources.sites) if (site.kind === 'farm') site.level = 3;
+    // Raising an agricultural tier also raises crew demand. Restore its crew
+    // before testing the separate capacity/land funding bridge.
+    t.economy.assignEmployees();
     t.resources._prodSig = null;
     const quote = t.growth.quote;
     let fundingBlocked = true;
@@ -131,7 +134,7 @@ try {
       t.clockDay = day;
       const turn = await sitting();
       const progress = turn.executions.filter(row => ['started', 'done', 'queued'].includes(row.status) &&
-        ['UPGRADE_RESOURCE', 'ACQUIRE_LAND', 'BOND_ISSUE'].includes(row.intent));
+        ['UPGRADE_RESOURCE', 'ACQUIRE_LAND', 'BOND_ISSUE', 'HIRE_WORKERS'].includes(row.intent));
       if (g.requiredAction && !progress.length) emptyStreak++; else emptyStreak = 0;
       maxEmptyStreak = Math.max(maxEmptyStreak, emptyStreak);
       progression.push({ day, remedy: progress, calls: turn.calls });
