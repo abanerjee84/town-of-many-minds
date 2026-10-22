@@ -35,4 +35,4 @@ The app requests five ministers concurrently before synthesis. Account for that 
 
 GitHub repository visibility and website deployment are separate operations. A public repository shares source/docs and their committed history; it does not deploy `dist/` or start a model service. There is currently no GitHub Pages publishing workflow in the repository.
 
-No `LICENSE` file is currently provided. Public visibility alone does not grant an open-source licence. Choose and add a licence before advertising licensed reuse rights.
+This repository is released under the [MIT License](../LICENSE). Public visibility alone does not grant an open-source licence, so the licence file is what actually grants reuse rights — keep it in place when publishing, mirroring or vendoring the source.

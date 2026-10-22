@@ -210,7 +210,6 @@ Two known failures remain, both pre-existing and unrelated to ordinary runs:
 - Large towns can advance the calendar faster than their bounded traffic budget; the performance chip reports the resulting lag.
 - The bus queue/refuelling regression is unresolved, and emergency-service coverage does not yet close its own shortfall.
 - A simulation Web Worker remains planned work.
-- Making this repository public does not introduce a software licence; no `LICENSE` file is currently supplied.
 
 ---
 
@@ -229,6 +228,14 @@ Two known failures remain, both pre-existing and unrelated to ordinary runs:
 - [Architecture and runtime](docs/architecture.md) · [Configuration and rule ownership](docs/configuration.md)
 - [Testing and regression selection](docs/testing.md) · [Deployment](docs/deployment.md) · [Troubleshooting](docs/troubleshooting.md)
 - [All documentation and reference tables](docs/README.md)
+
+---
+
+## Licence
+
+Released under the [MIT License](LICENSE). You may use, copy, modify, merge, publish, distribute, sublicense and sell copies of this software, provided the copyright notice and permission notice travel with every copy or substantial portion of it.
+
+Contributions are accepted under the same terms — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
