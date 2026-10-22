@@ -1406,8 +1406,6 @@ export class GovernanceSystem {
     this.requestSeq = (this.requestSeq || 0) + 1;
     this.activeRequestId = null;
     this.pending = false;
-    this.cache = new Map();
-    this.cacheKey = null;
     this.available = null;
     this.lastError = null;
     this.proxied = false;
@@ -1462,13 +1460,10 @@ export class GovernanceSystem {
     this.consecutiveFailures = 0;
     this.lastAborted = false;
     this.rulesOnly = false;
-    this.cache = new Map();
-    this.cacheKey = null;
     this.sittingSeq = 0;
     this.decisionSeq = 0;
     this.responseSeq = 0;
     this.staleReplies = 0;
-    this.cacheHits = 0;
     this.activeSittingId = null;
     this.lastCompletedSittingId = null;
     this.activeResponseId = null;
@@ -1978,7 +1973,7 @@ export class GovernanceSystem {
       status: 'rejected',
       detail: '',
       cost: 0,
-      _ledgerStart: t.economy?.ledger?.length || 0,
+      _ledgerSeq: t.economy?.ledgerSequence?.() ?? t.economy?.ledger?.length ?? 0,
       _learningBefore: learningBefore,
       raw: String(text || '').slice(0, 240),
       ...(motion ? {
@@ -2048,7 +2043,13 @@ export class GovernanceSystem {
       decision.detail = result.ok
         ? `${result.project.project} approved for ${result.project.investor} — $${Math.round(result.project.capital).toLocaleString('en-US')} committed`
         : `concession refused — ${result.reason}`;
-      decision.cost = result.ok ? 0 : 0;
+      // The council's own quoted cost is zero: a concession is funded by the
+      // investor, not the treasury. (This line used to read
+      // `result.ok ? 0 : 0` — two identical branches that read like a lost
+      // assignment.) The capital the investor committed is recorded alongside
+      // it so the report can show what the decision actually brought.
+      decision.cost = 0;
+      if (result.ok) decision.committedCapital = Math.round(result.project?.capital || 0);
       if (result.project) {
         decision.projectId = result.project.id;
         decision.offerId = result.project.offerId;
@@ -2537,7 +2538,7 @@ export class GovernanceSystem {
       departmentLabel: motion?.departmentLabel || null,
       mayor: status === 'mayor_deferred' ? 'deferred' : 'rejected',
       raw: String(motion?.raw || '').slice(0, 240),
-      _ledgerStart: this.town.economy?.ledger?.length || 0,
+      _ledgerSeq: this.town.economy?.ledgerSequence?.() ?? this.town.economy?.ledger?.length ?? 0,
       _learningBefore: measureCouncilState(this.town)
     };
     this.record(decision);
@@ -2808,9 +2809,14 @@ export class GovernanceSystem {
     const t = this.town;
     const pool = what === 'law' ? LAWS : SCHEMES;
     const taken = what === 'law' ? t.policy.laws.map((l) => l.id) : t.policy.active.map((s) => s.id);
+    // The ledger refuses a new discretionary government payment that would
+    // breach the operating reserve floor, so a row that merely clears
+    // `treasury < cost` is not affordable. Ask the economy's own rule, or the
+    // rules fallback keeps nominating a programme that cannot be paid for.
     for (const row of pool) {
       if (taken.includes(row.id)) continue;
       if (t.economy.treasury < row.cost) continue;
+      if (t.economy.canFundDiscretionary && !t.economy.canFundDiscretionary(row.cost).ok) continue;
       return row.id;
     }
     return null;
@@ -2820,12 +2826,21 @@ export class GovernanceSystem {
    * vacancies with newcomers. Existing employees keep their own jobs. */
   hire(decision) {
     const t = this.town;
-    // Refresh willing local matching now. The explicit newcomer loop below
-    // owns this action's recruitment limit; owner census calls remain independent.
     const eco = t.economy;
-    const localBefore = new Set((t.pedestrians?.citizens || []).filter(c => !c.work).map(c => c.p.id));
-    eco?.assignEmployees?.({ allowResourceImmigration: false });
-    const localsHired = (t.pedestrians?.citizens || []).filter(c => localBefore.has(c.p.id) && c.work && c.p.employmentStatus === 'employed').length;
+    // MEASURE BEFORE YOU MUTATE.
+    //
+    // `assignEmployees` is the town's whole hiring census, and it recomputes
+    // `economy.unemployment` as a side effect. Running it FIRST meant the
+    // council's HIRE_WORKERS order was judged against numbers it had just
+    // changed: with no measured Staff gap and joblessness above the remedy
+    // gate, the census seated a few locals, `localsHired` went positive, and
+    // the order came back 'done' — the exact opposite of what the Council
+    // brief promises ("HIRE_WORKERS imports workers only for a fundable Staff
+    // gap; it never solves resident unemployment"). It also wiped the
+    // unemployment reading the report needs to say `HIRE_WORKERS blocked`.
+    //
+    // So the gap and the joblessness rate are read first, and the census runs
+    // only once the order is allowed to proceed.
     const need = this.staffNeed();
     if (!need) {
       decision.status = 'rejected';
@@ -2833,13 +2848,26 @@ export class GovernanceSystem {
       this.record(decision);
       return decision;
     }
+    const unemployment = unemploymentRate(t);
     const crewLine = (n) =>
       CREW_ROLES.map((r) => `${SITE_CREW[r].label} ${n.staff[r] || 0}/${n.want[r] || 0}`).join(' · ');
+    if (!need.gap && unemployment >= UNEMPLOYMENT_REMEDY_GATE) {
+      // Nothing to hire into, and joblessness IS the measured emergency. The
+      // only honest answer is a refusal that names the real remedy.
+      decision.status = 'rejected';
+      decision.detail = `no staffed vacancy can absorb local joblessness (${Math.round(unemployment * 100)}% unemployed) — use ENACT_SCHEME scheme=workforce_training when eligible or create measured job capacity`;
+      this.record(decision);
+      return decision;
+    }
+    // Refresh willing local matching now. The explicit newcomer loop below
+    // owns this action's recruitment limit; owner census calls remain independent.
+    const localBefore = new Set((t.pedestrians?.citizens || []).filter(c => !c.work).map(c => c.p.id));
+    eco?.assignEmployees?.({ allowResourceImmigration: false });
+    const localsHired = (t.pedestrians?.citizens || []).filter(c => localBefore.has(c.p.id) && c.work && c.p.employmentStatus === 'employed').length;
     if (!need.gap) {
-      const unemployment = unemploymentRate(t);
-      decision.status = localsHired ? 'done' : unemployment >= UNEMPLOYMENT_REMEDY_GATE ? 'rejected' : 'noop';
-      decision.detail = localsHired ? `matched ${localsHired} qualified local residents to funded vacancies — ${crewLine(need)}` : unemployment >= UNEMPLOYMENT_REMEDY_GATE
-        ? `no staffed vacancy can absorb local joblessness (${Math.round(unemployment * 100)}% unemployed) — use ENACT_SCHEME scheme=workforce_training when eligible or create measured job capacity`
+      decision.status = localsHired ? 'done' : 'noop';
+      decision.detail = localsHired
+        ? `matched ${localsHired} qualified local residents to funded vacancies — ${crewLine(need)}`
         : `every post is filled — ${crewLine(need)}, businesses ${need.biz?.have ?? 0}/${need.biz?.need ?? 0}, civic ${need.civic?.filled ?? 0}/${need.civic?.need ?? 0}`;
       this.record(decision);
       return decision;
@@ -3015,7 +3043,16 @@ export class GovernanceSystem {
     decision.origin ||= ({ llm: 'LLM', rules: 'RULE', test: 'TEST', developer: 'DEVELOPER', system: 'SYSTEM' }[decision.source] || 'SYSTEM');
     decision.responseId ||= decision.origin === 'LLM' ? this.activeResponseId : null;
     decision.quotedCost ??= Number(decision.cost) || 0;
-    const rows = this.town.economy?.ledger?.slice(decision._ledgerStart ?? this.town.economy.ledger.length) || [];
+    // Select this decision's ledger rows by SEQUENCE, not by array index: the
+    // ledger is trimmed to a fixed length, so an index captured before the
+    // decision shifts under the mark as soon as the front is spliced off.
+    // That made a decision's own spend slice come back empty (or, before the
+    // cap was reached, another decision's rows), so `actualSpend`, the
+    // council card's spend line and the KPI `totalSpend` all drifted.
+    // `ledgerSequence()` is the seq the NEXT row will carry, so the rows from
+    // the mark onwards are the ones with `seq >= mark`.
+    const mark = decision._ledgerSeq;
+    const rows = (mark == null ? [] : (this.town.economy?.ledger || []).filter((tx) => tx.seq >= mark)) || [];
     const expense = (sector) => {
       const outgoing = rows.filter((tx) => tx.from?.sector === sector && !['project_reversal', 'reserve_allocation'].includes(tx.category))
         .reduce((n, tx) => n + tx.amount, 0);
@@ -3042,7 +3079,7 @@ export class GovernanceSystem {
     const learningAfter = measureCouncilState(this.town);
     this.town.kpi?.recordDecision?.(decision, learningBefore, learningAfter);
     delete decision._learningBefore;
-    delete decision._ledgerStart;
+    delete decision._ledgerSeq;
     this.lastDecision = decision;
     this.decisions.push(decision);
     if (this.decisions.length > 30) this.decisions.shift();
@@ -3115,10 +3152,11 @@ export class GovernanceSystem {
    *     against a town its reasoning never saw;
    *   • a **failure counter** with `ASK_FAIL_LIMIT`, pausing public autonomous
    *     construction rather than retrying a dead endpoint every slot;
-   *   • a bounded temperature plus a one-entry `(situationKey → decision)` cache,
-   *     with a one-entry situation cache so stable situations do not churn.
-   *     The default 0.15 adds small construction variation; set temperature=0
-   *     for exact provider replay in audits.
+   *   • a bounded temperature, with the previous reply kept only as an audit
+   *     artifact. There is deliberately NO reply cache: every configured slot
+   *     is a real sitting and asks the provider, even when the report has not
+   *     changed. The default 0.15 adds small construction variation; set
+   *     temperature=0 for exact provider replay in audits.
    *   • the **substitution** is returned alongside the choice, so the model's
    *     own motion is never silently replaced (see `substitute()`).
    */
@@ -3192,8 +3230,13 @@ export class GovernanceSystem {
         this.rulesOnly = false;
         this.llmCalls++;
         if (key) {
-          this.cache = new Map([[key, text]]);
-          this.cacheKey = key;
+          // The reply is kept as an AUDIT artifact only. There is deliberately
+          // no reply cache: every scheduled sitting asks the model, even when
+          // the report has not changed, and an earlier reply is never a fresh
+          // mandate. The cache this replaced was written and never read, so
+          // `cacheHits` was always 0 and the "(cached)" badge in the council
+          // card could never appear.
+          this.lastReplyKey = key;
         }
         decision = this.enact(text, 'llm');
         if (!(attempt === 0 && decision?.status === 'blocked' && decision.requiredAction)) break;
@@ -3773,7 +3816,10 @@ export class GovernanceSystem {
       rulesOnly: !!this.rulesOnly,
       consecutiveFailures: this.consecutiveFailures || 0,
       staleReplies: this.staleReplies || 0,
-      cacheHits: this.cacheHits || 0,
+      // There is no reply cache — every sitting asks the provider — so this is
+      // always 0. It is reported so the KPI panel does not imply a cache that
+      // does not exist.
+      cacheHits: 0,
       askTimeoutMs: ASK_TIMEOUT_MS,
       last: this.lastDecision
         ? {
@@ -3783,7 +3829,9 @@ export class GovernanceSystem {
             detail: this.lastDecision.detail,
             cost: this.lastDecision.cost,
             ms: this.lastDecision.ms,
-            cached: !!this.lastDecision.cached,
+            // No reply cache: a decision is never replayed from a previous
+            // sitting, so this is always false.
+            cached: false,
             // Phase 30 (S19b) — the motion the planner answered in place of
             // this one, when there was one.
             substituted: this.lastDecision.substituted || null

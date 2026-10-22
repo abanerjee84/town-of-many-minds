@@ -4,7 +4,10 @@ import { CELL_KIND } from '../src/core/config.js';
 import { roadComponents } from '../src/placement/placementController.js';
 import { chooseRoadExtension } from '../src/simulation/roadExtensionPlanner.js';
 import { GrowthSystem, planFor } from '../src/simulation/growth.js';
+import { quotePrice, basePrice, priceChart } from '../src/simulation/priceChart.js';
 import { TrafficSystem } from '../src/simulation/traffic.js';
+
+const chart = priceChart();
 
 const makeGrid = (linked) => {
   const g = new Grid(12, 10);
@@ -296,7 +299,16 @@ const trips = (from, to) => Array.from({ length: 8 }, () => ({ from, to, weight:
   town.growth = growth;
   const quoted = growth.quote(planFor(town, 'road'));
   assert.equal(quoted.ok, true);
-  assert.equal(quoted.quote.finalCost, quoted.plan.cells.length * 2000);
+  // Roads are priced by the MARKET CHART, not a flat 2000 a cell: the plan
+  // re-prices against the town's own housing pressure, congestion and fiscal
+  // runway (`priceChart.quotePrice`). The contract is therefore that the quote
+  // equals the chart quote for the selected run, and that the per-cell price
+  // stays inside the chart's bounded factor band around the base price.
+  assert.equal(quoted.quote.finalCost, quotePrice('construction.road', town, { quantity: quoted.plan.cells.length }));
+  const perCell = quoted.quote.finalCost / quoted.plan.cells.length;
+  const roadBase = basePrice('construction.road');
+  assert.ok(perCell >= roadBase * chart.defaults.minFactor && perCell <= roadBase * chart.defaults.maxFactor,
+    `road price ${perCell} is outside the chart band around ${roadBase}`);
   assert.deepEqual(quoted.cell, quoted.plan.cells[0]);
   const repeated = growth.quote(planFor(town, 'road'));
   assert.deepEqual(repeated.plan.cells, quoted.plan.cells);

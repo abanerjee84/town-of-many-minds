@@ -36,6 +36,14 @@ export const TRANSACTION_CATEGORIES = Object.freeze([
   // spending, or GDP; it only reconciles the opening balance after founding
   // fleet/assets have been booked.
   'opening_capitalization',
+  // A proprietor's opening equity injection into the firm they run. Like
+  // `opening_capitalization` this is a balance-sheet settlement, not revenue,
+  // expenditure or fixed investment, so it is deliberately absent from the
+  // period totals. It MUST be in this allowlist: the ledger rejects unknown
+  // categories, and a rejected injection left every private business in the
+  // founding town with no cash and no loan — the developer's money never
+  // reached the firm.
+  'capital_injection',
   'inheritance', 'pension', 'dividend', 'reserve_transfer',
   // External capital and concession flows are separate from ordinary private
   // investment so the treasury and KPI ledgers can attribute FDI outcomes.

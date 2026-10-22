@@ -227,8 +227,6 @@ const NEEDS = {
   treasury: (t) => (t.economy.treasury > 0 ? 1 : 0)
 };
 
-export const NEED_KEYS = Object.keys(NEEDS);
-
 /** Which of a row's `needs` are not met right now, by name. */
 export function unmetNeeds(row, town) {
   const needs = row && row.needs ? row.needs : {};
@@ -250,6 +248,7 @@ export class PolicySystem {
     this.jurisdiction = null;
     this.jurisdictionSig = null;
     this.lastSpend = 0;
+    this.unpaid = 0;
     this.lastDay = null;
   }
 
@@ -261,6 +260,7 @@ export class PolicySystem {
     this.jurisdiction = null;
     this.jurisdictionSig = null;
     this.lastSpend = 0;
+    this.unpaid = 0;
     this.lastDay = null;
     return this;
   }
@@ -334,13 +334,25 @@ export class PolicySystem {
     const short = unmetNeeds(row, t);
     if (short.length) return { ok: false, reason: `${row.label} needs ${short.join(' and ')}` };
     const cost = row.cost || 0;
-    if (t && t.economy && t.economy.treasury < cost) {
+    if (t && t.economy && t.economy.canFundDiscretionary) {
+      const affordable = t.economy.canFundDiscretionary(cost);
+      if (!affordable.ok) return { ok: false, reason: `${row.label} cannot be funded — ${affordable.reason}` };
+    } else if (t && t.economy && t.economy.treasury < cost) {
       return { ok: false, reason: `treasury ${Math.round(t.economy.treasury)} below ${cost} — ${row.label} costs ${cost}` };
     }
-    if (t && t.economy && cost) t.economy.transfer({
-      from: 'government', to: 'contractor', amount: cost,
-      category: 'government_procurement', metadata: { purpose: 'scheme', schemeId: row.id }
-    });
+    if (t && t.economy && cost) {
+      // A NEW discretionary commitment. The ledger refuses a government
+      // payment that would breach the operating reserve floor, and the result
+      // used to be thrown away: the scheme was enacted, its modifiers applied,
+      // and the town paid nothing for it. Ask the ledger and obey its verdict.
+      const paid = t.economy.transfer({
+        from: 'government', to: 'contractor', amount: cost,
+        category: 'government_procurement', metadata: { purpose: 'scheme', schemeId: row.id }
+      });
+      if (!paid.ok) {
+        return { ok: false, reason: `${row.label} cannot be funded — ${String(paid.reason || 'payment refused').replace(/_/g, ' ')}` };
+      }
+    }
     this.active.push({
       id: row.id,
       label: row.label,
@@ -382,13 +394,23 @@ export class PolicySystem {
     if (bad.length) return { ok: false, reason: `unknown effect${bad.length > 1 ? 's' : ''} ${bad.join(', ')}` };
     const t = this.townRef;
     const cost = row.cost || 0;
-    if (t && t.economy && t.economy.treasury < cost) {
+    if (t && t.economy && t.economy.canFundDiscretionary) {
+      const affordable = t.economy.canFundDiscretionary(cost);
+      if (!affordable.ok) return { ok: false, reason: `${row.label} cannot be funded — ${affordable.reason}` };
+    } else if (t && t.economy && t.economy.treasury < cost) {
       return { ok: false, reason: `treasury ${Math.round(t.economy.treasury)} below ${cost} — ${row.label} costs ${cost}` };
     }
-    if (t && t.economy && cost) t.economy.transfer({
-      from: 'government', to: 'contractor', amount: cost,
-      category: 'government_procurement', metadata: { purpose: 'law', lawId: row.id }
-    });
+    if (t && t.economy && cost) {
+      // Same rule as a scheme: a statute is a new discretionary commitment, so
+      // the ledger's refusal to fund it is the enactment's refusal.
+      const paid = t.economy.transfer({
+        from: 'government', to: 'contractor', amount: cost,
+        category: 'government_procurement', metadata: { purpose: 'law', lawId: row.id }
+      });
+      if (!paid.ok) {
+        return { ok: false, reason: `${row.label} cannot be funded — ${String(paid.reason || 'payment refused').replace(/_/g, ' ')}` };
+      }
+    }
     this.laws.push({ id: row.id, label: row.label, cost, effects: { ...row.effects } });
     this.recompute();
     events.emit('log', { kind: 'event', text: `${row.label} passes into law.` });
@@ -483,11 +505,24 @@ export class PolicySystem {
     const eco = t && t.economy;
     let spend = 0;
     for (const s of this.active) spend += s.per || 0;
-    this.lastSpend = spend;
-    if (eco && spend) eco.transfer({
-      from: 'government', to: 'contractor', amount: spend,
-      category: 'government_procurement', metadata: { purpose: 'programme_operations' }
-    });
+    let charged = 0;
+    if (eco && spend) {
+      // A RUNNING programme is an existing public obligation, exactly like
+      // payroll: the council already committed to it, so it must be settled
+      // rather than silently skipped when the discretionary runway gets thin.
+      // Without the opt-out the ledger refused the charge on the operating
+      // reserve floor and the town ran the programme for free.
+      const paid = eco.transfer({
+        from: 'government', to: 'contractor', amount: spend,
+        category: 'government_procurement',
+        metadata: { purpose: 'programme_operations', allowBelowOperatingFloor: true }
+      });
+      charged = paid.ok ? spend : 0;
+      this.unpaid = spend - charged;
+    } else {
+      this.unpaid = 0;
+    }
+    this.lastSpend = charged;
 
     const ended = [];
     for (const s of this.active) {
@@ -501,7 +536,7 @@ export class PolicySystem {
         events.emit('log', { kind: 'event', text: `${s.label} runs its course.` });
       }
     }
-    return { spend, ended: ended.map((s) => s.id) };
+    return { spend: charged, intended: spend, unpaid: this.unpaid, ended: ended.map((s) => s.id) };
   }
 
   /** The report line: what is running, what is law, what it is all worth. */
@@ -516,6 +551,8 @@ export class PolicySystem {
       })),
       laws: this.laws.map((l) => ({ id: l.id, label: l.label, cost: l.cost })),
       enacted: this.enacted.length,
+      dailySpend: this.lastSpend,
+      unpaid: this.unpaid,
       modifiers: { ...this.modifiers },
       jurisdiction: this.jurisdiction || { built: 0, held: 0, zoned: 0, ratio: 0 }
     };

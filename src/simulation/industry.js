@@ -648,51 +648,6 @@ export class IndustrySystem {
     return { ok: true, qty: n, cost: gain };
   }
 
-  /** One game day: produce, consume, then rebalance the storehouse by trade. */
-  runLegacyDay() {
-    for (const b of this.factories()) {
-      const key = this.typeOf(b).product;
-      const made = this.factoryProductionRate(b) * this.rng.float(0.9, 1.1);
-      this.stocks[key] = Math.min(CAPACITY[key], this.stocks[key] + made);
-    }
-
-    const demand = this.goodsDemand();
-    if (demand > 0) this.stocks.goods = Math.max(0, this.stocks.goods - demand);
-
-    // Surplus materials are exported for treasury income (never below 60%).
-    // Phase 12 — every consumer row rides the same rule; goods keeps its own
-    // import branch below (it is the staple the shops draw on, not a surplus).
-    for (const key of COMMODITIES) {
-      if (key === 'goods' || RAW_INPUTS.has(key)) continue;
-      const cap = CAPACITY[key];
-      if (this.stocks[key] <= cap * 0.85) continue;
-      const qty = Math.floor(this.stocks[key] - cap * 0.6);
-      if (qty < 1) continue;
-      const gain = Math.round(priceFor(this.town, key, 'export') * qty);
-      this.town.economy.transfer({ from: 'external', to: 'contractor', amount: gain, category: 'export', metadata: { commodity: key, quantity: qty } });
-      this.exported += gain;
-      this.stocks[key] -= qty;
-      this.note(`Exports: ${qty} ${LABEL[key].toLowerCase()} sold for $${gain.toLocaleString('en-US')}.`);
-    }
-
-    // Consumer goods fall back to imports — but only while funds allow it,
-    // so a broke town feels the shortage instead of papering over it.
-    const g = this.stocks.goods;
-    if (g < CAPACITY.goods * 0.2) {
-      const qty = Math.min(40, Math.floor(CAPACITY.goods * 0.5 - g));
-      const cost = Math.round(priceFor(this.town, 'goods', 'import') * qty);
-      const contractor = this.town.economy?._account?.('contractor');
-      if (qty > 0 && contractor && contractor.balance >= cost) {
-        const paid = this.town.economy.transfer({ from: 'contractor', to: 'external', amount: cost, category: 'import', metadata: { commodity: 'goods', quantity: qty } });
-        if (paid.ok) {
-          this.imported += cost;
-          this.stocks.goods = Math.min(CAPACITY.goods, g + qty);
-          this.note(`Imports: ${qty} goods bought for $${cost.toLocaleString('en-US')}.`);
-        }
-      }
-    }
-  }
-
   /** Day-boundary driver for the main loop — mirrors economy.update. */
   /** Stock-flow production: output is firm inventory until an actual sale. */
   runStockFlowDay() {

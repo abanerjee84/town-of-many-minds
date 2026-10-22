@@ -22,8 +22,6 @@ const LEDGER_CATEGORIES = new Set([...TRANSACTION_CATEGORIES, 'transfer', 'proje
  * the building instead of collapsing to 1 for anything small.
  */
 export const AREA_PER_STAFF = 15;
-/** @deprecated kept for callers that still name the old capacity divisor. */
-export const STAFF_UNIT = 70;
 export const ASSESS = { residential: 45000, commercial: 70000, industrial: 140000, civic: 220000, park: 15000 };
 export const SHOP_TIERS = {
   stall: { id: 'stall', label: 'market stall', cellCost: basePrice('commerce.stall', 4500), capacity: 70, sizes: [[1, 1]] },
@@ -683,6 +681,18 @@ export class EconomySystem {
     return sum + (this.householdCashLedger || 0) + (this.reserve || 0);
   }
   _resetExpectedMoney() { if (this.accounts) this.expectedMoney = this._moneyTotal(); }
+  /**
+   * The sequence number the NEXT ledger row will carry.
+   *
+   * The ledger is trimmed to a fixed length, so an ARRAY INDEX is not a stable
+   * way to say "the rows written from here on". Once the ledger reached its
+   * cap, every stored index shifted as the front was spliced off, and a
+   * decision's own spend slice came back empty — or, before the trim, the
+   * wrong rows entirely. The sequence number is monotonic and survives the
+   * trim, so a mark taken before the decision and compared afterwards always
+   * selects exactly that decision's transactions.
+   */
+  ledgerSequence() { return this.ids.transaction; }
   _adjustExpectedInventory(businessId, commodity, delta) {
     const key = `${businessId}:${commodity}`;
     this.inventoryExpected.set(key, (this.inventoryExpected.get(key) || 0) + delta);
@@ -799,8 +809,9 @@ export class EconomySystem {
     const toBefore = receiver.balance;
     payer.balance = fromBefore - value;
     receiver.balance = toBefore + value;
+    const seq = this.ids.transaction++;
     const transaction = {
-      id: `tx-${this.ids.transaction++}`, tick: this.lastDay,
+      id: `tx-${seq}`, seq, tick: this.lastDay,
       from: { sector: payer.sector, id: payer.id }, to: { sector: receiver.sector, id: receiver.id },
       amount: value, debit: value, credit: value, category, metadata,
       balances: { fromBefore, fromAfter: payer.balance, toBefore, toAfter: receiver.balance }
@@ -912,8 +923,13 @@ export class EconomySystem {
     if (building.ownerType === SECTOR.BUSINESS) return { sector: SECTOR.BUSINESS, id: building.ownerId };
     if (building.ownerType === SECTOR.HOUSEHOLD) {
       const household = (this.town.pedestrians?.households || []).find((h) => h.id === building.ownerId);
-      const citizen = household?.members?.[0];
-      return citizen ? { sector: SECTOR.HOUSEHOLD, id: citizen.p.id } : { sector: SECTOR.DEVELOPER, id: 'developer' };
+      const members = household?.members || [];
+      // The landlord is the first ADULT member, the same rule the household
+      // utility fee uses. Taking `members[0]` regardless of age credited a
+      // child's wallet with the rent and the property tax of a house the child
+      // does not own.
+      const citizen = members.find((member) => member?.p?.age >= 18) || members[0];
+      return citizen?.p?.id ? { sector: SECTOR.HOUSEHOLD, id: citizen.p.id } : { sector: SECTOR.DEVELOPER, id: 'developer' };
     }
     return { sector: SECTOR.DEVELOPER, id: 'developer' };
   }
@@ -1104,19 +1120,6 @@ export class EconomySystem {
       if (!idle.length) break;
     }
     return hired;
-  }
-
-  /** Workplace kinds this citizen's trade can be posted to, widest first. */
-  buildingKinds(p) {
-    switch (p?.job?.work) {
-      case 'shop': return ['shop', 'office', 'hotel', 'resort'];
-      case 'office': return ['office', 'shop', 'hotel', 'resort'];
-      case 'lodging': return ['hotel', 'resort'];
-      case 'civic': return ['civic', 'shop'];
-      case 'park': return ['park'];
-      case 'industry': return ['factory'];
-      default: return [];
-    }
   }
 
   /**
@@ -1448,11 +1451,17 @@ export class EconomySystem {
       if (p.employmentStatus === 'self_employed') {
         // No employer, no payroll run: a home/road trade is paid out of its own
         // account as trade income, taxed on the same terms as a wage.
+        //
+        // The GROSS goes into the wallet and the income tax comes back OUT of
+        // it, exactly as `payWage` does. Crediting the NET and then taxing the
+        // household again charged the income tax TWICE — 36% of a day's trade
+        // income instead of 18% — and left `disposableIncome` claiming more
+        // than the wallet actually held.
         const gross = Math.max(ECON.wages.minimumAnnual, p.income || 0) / 365 * lift;
         const tax = Math.round(gross * ECON.tax.income * this.policyTaxScale() * 100) / 100;
         const net = gross - tax;
         const paid = this.transfer({
-          from: 'external', to: { sector: SECTOR.HOUSEHOLD, id: p.id }, amount: net,
+          from: 'external', to: { sector: SECTOR.HOUSEHOLD, id: p.id }, amount: gross,
           category: 'wage', metadata: { workerId: p.id, gross, net, selfEmployed: true }
         });
         if (!paid.ok) continue;
@@ -1460,8 +1469,8 @@ export class EconomySystem {
           from: { sector: SECTOR.HOUSEHOLD, id: p.id }, to: 'government', amount: tax,
           category: 'income_tax', metadata: { taxpayerId: p.id, selfEmployed: true }
         });
-        if (taxTx.ok) p.taxPaid += tax;
-        p.grossIncome += gross; p.disposableIncome += net; this.period.wages += gross;
+        if (!taxTx.ok) continue;
+        p.grossIncome += gross; p.disposableIncome += net; p.taxPaid += tax; this.period.wages += gross;
         continue;
       }
       if (p.employmentStatus !== 'employed') continue;
@@ -2016,6 +2025,39 @@ export class EconomySystem {
     return { ok: true, amount, debt: Math.round(this.debt), bond };
   }
 
+  /**
+   * Amortise a loan out of the borrower's spare cash.
+   *
+   * `repayLoan` existed and was never called from anywhere: interest was
+   * charged every day and the principal only ever GREW, so a firm that
+   * borrowed stayed levered for the rest of the run and the interest drained
+   * the working capital it needed for payroll. Debt was a permanent tax with
+   * no exit.
+   *
+   * A borrower now pays down what it can clearly afford: a straight-line slice
+   * of the principal over the remaining term, and only out of cash that is
+   * left once a working buffer is set aside.
+   */
+  amortiseLoan(loan) {
+    const account = this._account(loan?.borrower);
+    if (!account || !loan || loan.outstandingPrincipal <= 0) return { ok: false, reason: 'invalid_loan' };
+    const object = account.object || {};
+    const dailyCost = (object.wageExpense || 0) + (object.inputExpense || 0) +
+      (object.utilityExpense || 0) + (object.rentExpense || 0);
+    // A firm keeps two days of running costs in hand; a household keeps the
+    // savings floor. Repaying into the ground is what turns a loan into a
+    // wage-arrears trap.
+    const buffer = account.sector === SECTOR.HOUSEHOLD
+      ? (ECON.banking?.liquidFloor || 400)
+      : Math.max(0, dailyCost) * 2;
+    const usable = account.balance - buffer;
+    if (usable <= 0) return { ok: false, reason: 'no_spare_cash' };
+    const termLeft = Math.max(1, (loan.maturityTick || this.lastDay + 1) - this.lastDay);
+    const slice = Math.min(loan.outstandingPrincipal, usable, loan.outstandingPrincipal / termLeft);
+    if (!(slice > 0)) return { ok: false, reason: 'no_spare_cash' };
+    return this.repayLoan(loan, slice);
+  }
+
   serviceDebt() {
     for (const loan of this.loans) {
       if (loan.outstandingPrincipal <= 0) continue;
@@ -2037,6 +2079,9 @@ export class EconomySystem {
         if (loan.status === 'arrears' && account && this.liquidWealth(account.object || {}) > interest * 30) {
           loan.status = 'current';
         }
+        // A loan that is being serviced is a loan that gets PAID OFF. Without
+        // this the principal never fell and the interest never stopped.
+        if (loan.status === 'current') this.amortiseLoan(loan);
       } else {
         loan.status = 'arrears';
       }
@@ -2188,6 +2233,28 @@ export class EconomySystem {
     const runway = burn * ECON.government.operatingRunwayDays;
     return Math.max(base, ECON.government.reserveOperatingFloor, Math.ceil(runway));
   }
+  /**
+   * Can the treasury take on a NEW discretionary commitment of this size?
+   *
+   * The ledger refuses a `government_procurement` payment that would breach
+   * the operating reserve floor, so a caller that only checks
+   * `treasury < cost` can promise a payment the ledger will then refuse — the
+   * programme starts, applies its modifiers, and the town never pays for it.
+   * This asks the ledger's own question, in the ledger's own terms, so every
+   * caller and the ledger agree.
+   */
+  canFundDiscretionary(cost) {
+    const value = finiteAmount(cost);
+    if (!value) return { ok: true, reason: '' };
+    if (this.treasury < value) {
+      return { ok: false, reason: `treasury ${Math.round(this.treasury)} below ${value}` };
+    }
+    const floor = ECON.government.reserveOperatingFloor;
+    if (this.treasury - value < floor) {
+      return { ok: false, reason: `treasury ${Math.round(this.treasury)} cannot fund ${value} and still hold the ${Math.round(floor)} operating reserve` };
+    }
+    return { ok: true, reason: '' };
+  }
   resolveProjectFinance(plan = {}, reserve = 0) {
     const financier = this.projectFinancier(plan);
     const policy = this.projectFinancePolicy(plan);
@@ -2256,10 +2323,6 @@ export class EconomySystem {
       ...(includeRows ? { rows } : {})
     };
   }
-  reconcileProject(projectId) {
-    const rows = this.projectTransactions(projectId);
-    return { projectId, debits: rows.reduce((n, tx) => n + tx.debit, 0), credits: rows.reduce((n, tx) => n + tx.credit, 0), transactions: rows };
-  }
   _reverseProjectTransfers(transactions, projectId) {
     for (const tx of [...transactions].reverse()) {
       const payer = this._account(tx.from), receiver = this._account(tx.to);
@@ -2280,7 +2343,7 @@ export class EconomySystem {
       if (tx.metadata?.physicalTrade && receiver.sector === SECTOR.EXTERNAL) this.period.imports -= recoverable;
       if (receiver.sector === SECTOR.EXTERNAL) this.expectedMoney += recoverable;
       if (payer.sector === SECTOR.EXTERNAL) this.expectedMoney -= recoverable;
-      this.ledger.push({ id: `tx-${this.ids.transaction++}`, tick: this.lastDay, from: tx.to, to: tx.from,
+      this.ledger.push({ id: `tx-${this.ids.transaction++}`, seq: this.ids.transaction - 1, tick: this.lastDay, from: tx.to, to: tx.from,
         amount: recoverable, debit: recoverable, credit: recoverable, category: 'project_reversal',
         metadata: { projectId, reversal: tx.id, recovered: recoverable, original: tx.amount,
           sunk: Math.max(0, tx.amount - recoverable) } });
@@ -2394,31 +2457,6 @@ export class EconomySystem {
     }
     return { ok: true, items, total: items.reduce((s, i) => s + i.total, 0) };
   }
-  compensateAcquisition(quote, plan) {
-    if (!quote?.ok) return quote || { ok: false, reason: 'invalid_quote' };
-    const financier = this.projectFinancier(plan);
-    if ((this._account(financier)?.balance || 0) < quote.total) return { ok: false, reason: 'insufficient_funds' };
-    const transactions = [];
-    for (const item of quote.items) {
-      if (item.propertyCompensation > 0) {
-        const payment = this.transfer({ from: financier, to: item.owner, amount: item.propertyCompensation,
-          category: 'acquisition_compensation', metadata: { projectId: plan.projectId, buildingId: item.buildingId, ownerId: item.owner.id } });
-        if (!payment.ok) return payment;
-        transactions.push(payment.transaction);
-      }
-      if (item.relocationCost > 0) {
-        const relocation = this.transfer({ from: financier, to: item.owner, amount: item.relocationCost, category: 'relocation_support', metadata: { projectId: plan.projectId, buildingId: item.buildingId } });
-        if (relocation.ok) transactions.push(relocation.transaction);
-      }
-      if (item.demolitionCost > 0) {
-        const demolition = this.transfer({ from: financier, to: 'contractor', amount: item.demolitionCost,
-          category: this.classifyProject(plan) === SECTOR.GOVERNMENT ? 'public_investment' : 'private_investment', metadata: { projectId: plan.projectId, buildingId: item.buildingId, component: 'demolition' } });
-        if (demolition.ok) transactions.push(demolition.transaction);
-      }
-    }
-    return { ok: true, total: quote.total, transactions };
-  }
-
   recordProduction(business, commodity, quantity, inputs = {}, unitValue = 0) {
     const b = typeof business === 'string' ? this.businessesById.get(business) : business;
     const qty = Math.max(0, Number(quantity) || 0);
@@ -2799,7 +2837,12 @@ export class EconomySystem {
         tourismTax: Math.round(p.categories.tourism_tax || 0),
         utilityFee: Math.round(p.categories.utility_fee || 0),
         permits: Math.round(p.categories.permit_fee || 0),
-        foreignInvestment: Math.round(p.categories.foreign_tax || 0)
+        // The capital an investor committed, not the tax the town took off it.
+        // FDI is booked under `foreign_investment`; `foreign_tax` is the
+        // investor's tax receipts, so this line was showing tax under a
+        // capital heading and mis-attributing the money in the breakdown.
+        foreignInvestment: Math.round(p.categories.foreign_investment || 0),
+        foreignTax: Math.round(p.categories.foreign_tax || 0)
       },
       governmentExpenditure: Math.round(p.governmentExpenditure), budgetBalance: Math.round(p.governmentRevenue - p.governmentExpenditure),
       wages: Math.round(p.wages), rent: Math.round(p.rent), spending: Math.round(p.spending),

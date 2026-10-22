@@ -2765,7 +2765,12 @@ export class TrafficSystem {
       live++;
       const c = v.currentCell();
       if (!c) continue;
-      const k = c[0] * 100 + c[1];
+      // Use the grid's own index so the key stays unique for any extent. The
+      // hard-coded stride of 100 happened to be collision-free only while the
+      // plate was exactly 100 wide: `x=1,y=100` and `x=2,y=0` collided, which
+      // merged two cells' vehicle counts and corrupted the `over` figure that
+      // drives the congestion metric and every road-investment gate.
+      const k = this.town.grid.idx(c[0], c[1]);
       counts.set(k, (counts.get(k) || 0) + 1);
     }
     let over = 0;

@@ -636,13 +636,21 @@ export class VehicleRegistry {
         }
         continue;
       }
-      if (!slot.holder) continue;
-      if (slot.holder.sector === SECTOR.GOVERNMENT) {
+      // OWNERSHIP carries the cost, not occupancy. The docstring above says a
+      // vehicle costs money to keep "whether or not it is being driven", but
+      // the `!slot.holder` guard skipped every owned-but-idle vehicle — and
+      // `releaseToMarketFrom` clears the holder while KEEPING the owner, which
+      // is exactly the moment it should still cost something. A household that
+      // simply stopped driving its car got it for free, and the fleet's cost
+      // fell on whoever happened to be holding the keys.
+      const party = slot.owner || slot.holder;
+      if (!party) continue;
+      if (party.sector === SECTOR.GOVERNMENT) {
         const t = ec.transfer({ from: 'government', to: 'external', amount: DAILY_UPKEEP, category: 'government_procurement', metadata: { vehicleId: slot.id, upkeep: true } });
         if (t.ok) upkeep += DAILY_UPKEEP;
         else unpaid += DAILY_UPKEEP;
       } else {
-        const citizen = this.citizenFor(slot.holder);
+        const citizen = this.citizenFor(party);
         if (!citizen) continue;
         const t = ec.transfer({ from: { sector: SECTOR.HOUSEHOLD, id: citizen.p.id }, to: 'external', amount: DAILY_UPKEEP, category: 'private_investment', metadata: { vehicleId: slot.id, upkeep: true } });
         if (t.ok) {

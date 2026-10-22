@@ -224,6 +224,16 @@ const NO_SITE = new Set([
 ]);
 
 /**
+ * How many finished projects the register keeps for the record. A project
+ * that has completed, failed or been blocked is history, not live state, and
+ * the register is serialised into every save — so it has to be bounded.
+ */
+const PROJECT_STATE_HISTORY = 60;
+
+/** Project states that mean "this order is over". */
+const PROJECT_STATE_TERMINAL = new Set(['COMPLETED', 'FAILED_ROLLED_BACK', 'BLOCKED', 'CANCELLED']);
+
+/**
  * Plan types that must never justify themselves by paving a new street: the
  * chain/kerb/brush sites are their own, and "no site" is a real answer for
  * them rather than a reason to expand the network.
@@ -1350,12 +1360,16 @@ export function planFor(town, type, opts = {}) {
         town.buildings.filter((b) => b.kind !== 'civic' && head(b)).sort((a, b) => (a.floors || 1) - (b.floors || 1))[0] ||
         null;
       if (!target) return null;
-      const kindCost = target.kind === 'shop' ? 7000 : target.kind === 'civic' ? 14000 : 5000;
       const plan = {
         type: 'upgrade',
         target,
         label: `${target.name || 'A building'} gains a floor`,
-        cost: dynamicCost(town, target.kind === 'civic' ? 'upgrade' : 'upgrade', 1, { fallback: kindCost }),
+        // One price, from the chart. This used to carry per-kind magic numbers
+        // ($14,000 civic, $7,000 shop, $5,000 other) as a `fallback`, but the
+        // chart already has a `construction.upgrade` row, so the fallback was
+        // unreachable and the two identical ternary arms were dead code. The
+        // chart is the single source of truth for construction prices.
+        cost: dynamicCost(town, 'upgrade', 1),
         materials: MATERIALS.upgrade,
         run: (_c, rec) => {
           const r = town.expandBuilding(rec, { floors: 1 });
@@ -1945,14 +1959,23 @@ export class GrowthSystem {
 
   inputs() {
     const t = this.town;
-    const homes = t.buildings.filter((b) => b.kind === 'house');
+    // This getter is read from the pricing path (`priceChart.townSignals` falls
+    // back to it) as well as from the planner, so it can be handed a town that
+    // is only partly built — a quoted plan, a saved run mid-load, a planner
+    // unit test. Every field below is therefore read defensively: an
+    // unguarded `t.buildings.filter` threw a TypeError straight out of
+    // `planFor`, so a road quote on a bare town crashed the order instead of
+    // quoting it.
+    const buildings = Array.isArray(t.buildings) ? t.buildings : [];
+    const citizens = t.pedestrians?.citizens || [];
+    const homes = buildings.filter((b) => b.kind === 'house');
     const capacity = homes.reduce((s, b) => s + (b.capacity || 2), 0);
-    this.officeCount = () => t.buildings.filter((b) => b.kind === 'office').length;
-    const pop = t.pedestrians.citizens.length;
-    const civicCount = t.buildings.filter((b) => b.kind === 'civic').length;
-    const parkCells = t.grid.countOf(CELL_KIND.PARK);
-    const shops = t.buildings.filter((b) => b.purpose === 'commercial').length;
-    const utilityStats = t.utilities ? t.utilities.stats() : null;
+    this.officeCount = () => buildings.filter((b) => b.kind === 'office').length;
+    const pop = citizens.length;
+    const civicCount = buildings.filter((b) => b.kind === 'civic').length;
+    const parkCells = t.grid?.countOf ? t.grid.countOf(CELL_KIND.PARK) : 0;
+    const shops = buildings.filter((b) => b.purpose === 'commercial').length;
+    const utilityStats = t.utilities?.stats ? t.utilities.stats() : null;
     if (utilityStats?.types) {
       // A network can be below rated capacity while still failing to serve
       // most of its connected demand. Saturation-only reporting hid a zero
@@ -1964,7 +1987,7 @@ export class GrowthSystem {
         .map(([kind]) => kind);
       utilityStats.strained = [...new Set([...(utilityStats.strained || []), ...coverageStrain])];
     }
-    const liveMobility = t.traffic ? t.traffic.mobilityStats() : null;
+    const liveMobility = t.traffic?.mobilityStats ? t.traffic.mobilityStats() : null;
     const congestionEvidence = t.governance?.congestionEvidence?.();
     const mobility = liveMobility && congestionEvidence
       ? { ...liveMobility, congestion: congestionEvidence.average, instantaneousCongestion: congestionEvidence.instantaneous }
@@ -1977,7 +2000,7 @@ export class GrowthSystem {
       civicCount,
       parks: parkCells,
       pressure: capacity ? pop / capacity : 0,
-      economy: t.economy ? t.economy.stats() : null,
+      economy: t.economy?.stats ? t.economy.stats() : null,
       tourism: t.economy?.tourismStats?.() || null,
       mobility,
       utilities: utilityStats
@@ -4693,6 +4716,13 @@ export class GrowthSystem {
     g.forEach((x, y, grid) => {
       if (grid.kindAt(x, y) !== CELL_KIND.EMPTY) return;
       if (t.buildingAt(x, y) || this.claims.has(`${x},${y}`) || t.resources?.ownsCell(x, y)) return;
+      // The anchor is the FIRST cell the order paves, so it has to be acquired
+      // land like the rest of the run. `roadRuns` adds the anchor unchecked
+      // (`cells = [anchor]`) and `roadSelectionValid` then requires every cell
+      // INCLUDING the anchor to be acquired — so a run anchored on the frontier
+      // was proposed here and thrown out by the validator, refusing a legal
+      // extension next door with "no eligible street extension".
+      if (t.perimeter && !t.perimeter.isAcquired(x, y)) return;
       let roads = 0;
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         if (grid.isRoad(x + dx, y + dy)) roads++;
@@ -5220,6 +5250,26 @@ export class GrowthSystem {
       reservedCells: [...(plan.cells || []), ...(plan.accessSpur || [])],
       reservedMaterials: plan.materials || {}, reason
     });
+    this.pruneProjectStates();
+  }
+
+  /**
+   * Keep the project register bounded.
+   *
+   * Every project ever started wrote an entry here and nothing ever removed
+   * one, so the Map grew for the life of the run — and `integrityState`
+   * serialises ALL of it into every save, so the save file grew with it.
+   * Live projects are kept for ever; finished ones are history, so only the
+   * recent tail is retained.
+   */
+  pruneProjectStates() {
+    const finished = [];
+    for (const row of this.projectStates.values()) {
+      if (PROJECT_STATE_TERMINAL.has(row.state)) finished.push(row);
+    }
+    const excess = finished.length - PROJECT_STATE_HISTORY;
+    if (excess <= 0) return;
+    for (const row of finished.slice(0, excess)) this.projectStates.delete(row.projectId);
   }
 
   apply(plan, dryRun = false) {

@@ -67,7 +67,13 @@ function isPriority(decision, before, town) {
   if (!PRIORITY_INTENTS.has(String(decision?.intent || '').toUpperCase())) return false;
   const emergency = safeCall(() => town.growth?.resourceEmergency?.(), null);
   if (emergency?.intent === decision.intent) return true;
-  const unemployment = finite(before?.unemployment);
+  // `before` comes from `measureCouncilState()`, which reports UNEMPLOYMENT as
+  // a PERCENTAGE (the same field `measureTown` divides by 100 for snapshots).
+  // Comparing that percentage against a fractional threshold made every
+  // priority intent count as a priority response from 0.2% unemployment
+  // upwards, so `priorityResponseRate` measured nothing at all. Normalise
+  // here, once, so both sides of the comparison are fractions.
+  const unemployment = finite(before?.unemployment) / 100;
   const congestion = finite(before?.congestion);
   const food = before?.foodReserve;
   return unemployment >= 0.2 || congestion >= 0.5 || (food != null && food < 0.25);
@@ -124,8 +130,11 @@ export class KpiSystem {
       priority,
       spend: round(decision.actualSpend ?? decision.cost, 2),
       detail: String(decision.detail || decision.reason || '').slice(0, 240),
-      before: before ? { unemployment: round(before.unemployment), congestion: round(before.congestion), foodReserve: before.foodReserve } : null,
-      after: after ? { unemployment: round(after.unemployment), congestion: round(after.congestion), foodReserve: after.foodReserve } : null
+      // `before`/`after` come from `measureCouncilState()`, which reports
+      // unemployment as a PERCENTAGE. Store it as the fraction the snapshot
+      // series uses, so one export never mixes 12.3 with 0.123.
+      before: before ? { unemployment: round(finite(before.unemployment) / 100), congestion: round(before.congestion), foodReserve: before.foodReserve } : null,
+      after: after ? { unemployment: round(finite(after.unemployment) / 100), congestion: round(after.congestion), foodReserve: after.foodReserve } : null
     });
     if (this.decisions.length > DECISION_LIMIT) this.decisions.splice(0, this.decisions.length - DECISION_LIMIT);
   }
