@@ -8,6 +8,7 @@ shots/
 *.png
 MapNow/latest.map.txt
 MapNow/history/
+scripts/_readme_probe.report.json
 before.json
 after.json
 _ext_stress.mjs

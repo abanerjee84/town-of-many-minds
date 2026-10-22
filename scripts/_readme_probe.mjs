@@ -8,6 +8,12 @@ import path from 'node:path';
 const APP_URL = process.env.APP_URL || 'http://localhost:5173';
 const ROOT = path.join(import.meta.dirname, '..');
 const ASSETS = path.join(ROOT, 'docs', 'assets');
+// `PROBE_NO_MODEL=1` reproduces the offline run: the provider is pointed at a
+// closed port so the council cannot be reached, which is the same failure the
+// app sees when no model server is running. Without it the probe talks to
+// whatever the /lm proxy is serving.
+const NO_MODEL = process.env.PROBE_NO_MODEL === '1';
+
 
 const browser = await chromium.launch({
   headless: true,
@@ -29,6 +35,19 @@ await page.waitForTimeout(4000);
 
 report.checks.loadingRemoved = (await page.$('#loading')) === null;
 report.checks.canvasPresent = !!(await page.$('#app canvas'));
+report.mode = NO_MODEL ? 'no-model' : 'live-model';
+
+if (NO_MODEL) {
+  await page.evaluate(() => {
+    const g = window.town.governance;
+    g.setProvider('openai-compatible', { endpoint: 'http://127.0.0.1:9/v1', model: 'probe-offline' });
+    // `setProvider` clears the flag; without this the direct-endpoint
+    // fallback would redirect the endpoint back to the live /lm proxy.
+    g.proxied = true;
+  });
+  report.checks.providerDisconnected = true;
+}
+
 
 const grabState = () => page.evaluate(() => {
   const txt = (id) => document.getElementById(id)?.textContent?.trim() ?? null;
@@ -155,6 +174,49 @@ await clickInPage('#modal-close');
 await page.waitForTimeout(400);
 
 report.state.final = await grabState();
+
+// A compact, citable snapshot of the facts the README quotes.
+report.facts = await page.evaluate(() => {
+  const t = window.town;
+  const eco = t.economy;
+  const gv = t.governance;
+  const stats = eco.stats();
+  const businesses = (eco.businesses || []).map((b) => ({ id: b.id, type: b.type, cash: Math.round(b.cash || 0), debt: Math.round(b.debt || 0) }));
+  return {
+    day: window.clock?.day,
+    time: window.clock?.timeString,
+    season: document.getElementById('stat-season')?.textContent?.trim(),
+    weather: document.getElementById('stat-weather')?.textContent?.trim(),
+    treasury: Math.round(eco.treasury),
+    taxRate: eco.taxRate ?? null,
+    unemployment: stats.unemployment,
+    congestion: Math.round((t.traffic?.mobilityStats?.().congestion ?? 0) * 100),
+    mood: document.getElementById('stat-mood')?.textContent?.trim(),
+    population: t.pedestrians?.citizens?.length,
+    households: t.pedestrians?.households?.length,
+    buildings: t.buildings?.length,
+    homes: t.buildings?.filter((b) => b.kind === 'house').length,
+    vehicles: t.vehicles?.slots?.filter((s) => !s.scrapped).length,
+    roadTiles: t.grid?.countOf?.(1) ?? null,
+    beds: document.getElementById('stat-beds')?.textContent?.trim(),
+    businessCash: businesses.reduce((s, b) => s + b.cash, 0),
+    businessDebt: businesses.reduce((s, b) => s + b.debt, 0),
+    developerCash: Math.round(eco.accounts.developer.cash),
+    bankLoans: Math.round(eco.accounts.bank.loans),
+    outstandingLoans: Math.round((eco.loans || []).reduce((s, l) => s + l.outstandingPrincipal, 0)),
+    rejectedTransactions: (eco.rejectedTransactions || []).map((r) => `${r.category}/${r.reason}`),
+    audit: (() => { const a = eco.audit(); return { ok: a.ok, unexpectedMoneyCreation: a.unexpectedMoneyCreation }; })(),
+    council: {
+      state: document.getElementById('council-state')?.textContent?.trim(),
+      sittings: document.getElementById('council-sittings')?.textContent?.trim(),
+      consecutiveFailures: gv.consecutiveFailures || 0,
+      rulesOnly: !!gv.rulesOnly,
+      decisionsRecorded: (gv.decisions || []).length,
+      kpiCounters: t.kpi?.counters ? { ...t.kpi.counters } : null,
+    }
+  };
+});
+
 report.consoleErrors = consoleErrors.slice(0, 20);
 
 fs.writeFileSync(path.join(ROOT, 'scripts', '_readme_probe.report.json'), JSON.stringify(report, null, 2));
